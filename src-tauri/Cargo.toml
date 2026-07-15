@@ -26,7 +26,7 @@ rusqlite = { version = "0.40.1", features = ["bundled"] }
 uuid = { version = "1.23.4", features = ["v4", "serde"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 directories = "6.0.0"
-fs4 = "0.12"
+fs4 = "1.1"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 similar = "2"
 # OS credential store (Windows Credential Manager / macOS Keychain / Secret Service).
