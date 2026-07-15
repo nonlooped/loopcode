@@ -151,6 +151,7 @@ fn mcp_stdio_and_http_dual_gate_fingerprint_reset() {
     assert!(!r.executed);
 
     // Dual-gate contract only — force fixture transport so CI does not spawn `npx`.
+    let _env = crate::support::env_guard();
     std::env::set_var("LOOPCODE_MCP_FIXTURE", "1");
     let r = mcp_call(&db, &stdio.id, "tools/list", &json!({"x": 1}), Some("proj"), true).unwrap();
     std::env::remove_var("LOOPCODE_MCP_FIXTURE");

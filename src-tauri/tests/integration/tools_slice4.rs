@@ -245,6 +245,7 @@ fn web_fetch_fixture_and_approval() {
         GrantScope::AllowOnce,
     )
     .unwrap();
+    let _env = crate::support::env_guard();
     std::env::set_var("LOOPCODE_FETCH_FIXTURE", "fixture-body");
     let ok = rt
         .propose_tool(

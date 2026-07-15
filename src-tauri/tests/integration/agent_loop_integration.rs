@@ -412,6 +412,7 @@ fn mcp_dual_gate_then_real_http_path() {
     grant_mcp_server_trust(&db, &cfg.id, Some("proj")).unwrap();
 
     // Without fixture env, call attempts real HTTP and returns transport_error (no server).
+    let _env = crate::support::env_guard();
     std::env::remove_var("LOOPCODE_MCP_FIXTURE");
     let r = mcp_call(&db, &cfg.id, "t", &json!({}), Some("proj"), true).unwrap();
     assert!(
