@@ -47,29 +47,16 @@ pub fn resolve_shell_host() -> ShellHost {
     }
 }
 
+#[cfg(windows)]
 fn command_on_path(name: &str) -> bool {
-    #[cfg(windows)]
-    {
-        Command::new("where")
-            .arg(name)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    }
-    #[cfg(not(windows))]
-    {
-        Command::new("which")
-            .arg(name)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    }
+    Command::new("where")
+        .arg(name)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 fn build_command(host: &ShellHost, script: &str, cwd: &Path) -> Command {
@@ -138,7 +125,7 @@ pub fn shell_exec(root: &Path, args: &Value) -> Result<Value, String> {
             Ok(Some(status)) => {
                 let stdout = take_pipe_bytes(child.stdout.take());
                 let stderr = take_pipe_bytes(child.stderr.take());
-                drop(job);
+                let _ = job;
                 return Ok(json!({
                     "status": "ok",
                     "exitCode": status.code(),
