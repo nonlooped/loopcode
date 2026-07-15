@@ -1,0 +1,47 @@
+[package]
+name = "loopcode"
+version = "1.0.0"
+description = "LoopCode — local AI coding agent"
+authors = ["Looped"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/loopcode/loopcode"
+default-run = "loopcode"
+
+[lib]
+name = "loopcode_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+uuid = { version = "1.23.4", features = ["v4", "serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+directories = "6.0.0"
+fs4 = "0.12"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+similar = "2"
+# OS credential store (Windows Credential Manager / macOS Keychain / Secret Service).
+# MIT OR Apache-2.0 — Category A. Features are platform-gated by the crate.
+keyring = { version = "3.6", default-features = false, features = [
+  "apple-native",
+  "windows-native",
+  "sync-secret-service",
+  "crypto-rust",
+] }
+arboard = "3.4"
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+  "Win32_Security",
+] }
