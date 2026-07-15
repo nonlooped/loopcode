@@ -60,13 +60,19 @@ pub struct KeyringSecretStore {
 
 impl KeyringSecretStore {
     pub fn new() -> Result<Self, String> {
-        // Construct a probe entry up front so unavailable platform backends fail
-        // closed to the explicit in-memory fallback below.
-        keyring::Entry::new("app.loopcode", "availability-probe")
+        // Constructing an entry never touches the platform backend; only a
+        // probe read makes unavailable backends (e.g. headless Linux without
+        // a Secret Service) fail closed to the explicit in-memory fallback.
+        let probe = keyring::Entry::new("app.loopcode", "availability-probe")
             .map_err(|e| e.to_string())?;
-        Ok(Self {
-            service: "app.loopcode".into(),
-        })
+        match probe.get_password() {
+            Err(
+                error @ (keyring::Error::PlatformFailure(_) | keyring::Error::NoStorageAccess(_)),
+            ) => Err(error.to_string()),
+            _ => Ok(Self {
+                service: "app.loopcode".into(),
+            }),
+        }
     }
 
     fn entry(&self, store_key: &str) -> Result<keyring::Entry, String> {

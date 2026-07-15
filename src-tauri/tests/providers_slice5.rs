@@ -19,7 +19,6 @@ use loopcode_lib::providers::probe::{
 use loopcode_lib::providers::ProviderAdapter;
 use loopcode_lib::security::secrets::SharedSecretStore;
 use serde_json::json;
-use std::fs;
 
 #[test]
 fn four_first_party_adapters_exist() {
@@ -288,7 +287,7 @@ fn connect_failure_fixture_not_ready() {
 }
 
 #[test]
-fn connect_reuses_saved_key_and_file_store_persists() {
+fn connect_reuses_saved_key() {
     let db = Database::open_in_memory().unwrap();
     let secrets = SharedSecretStore::memory();
     let key = "sk-saved-and-reused-key-ABC";
@@ -310,30 +309,6 @@ fn connect_reuses_saved_key_and_file_store_persists() {
     // Switching to another provider without a key still requires one.
     let missing = connect_first_party(&db, &secrets, "anthropic", "", Some(true));
     assert!(missing.is_err());
-
-    // File fallback survives process restart (re-open same path).
-    let dir = std::env::temp_dir().join(format!(
-        "lc-secrets-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    fs::create_dir_all(&dir).unwrap();
-    let store_a = loopcode_lib::security::secrets::default_secret_store(&dir);
-    store_a
-        .set("loopcode/provider/openai/api_key", key)
-        .unwrap();
-    drop(store_a);
-    let store_b = loopcode_lib::security::secrets::default_secret_store(&dir);
-    assert_eq!(
-        store_b
-            .get("loopcode/provider/openai/api_key")
-            .unwrap()
-            .as_deref(),
-        Some(key)
-    );
-    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]

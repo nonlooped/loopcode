@@ -9,7 +9,7 @@ use loopcode_lib::security::approval::{
     SECURITY_POLICY_VERSION,
 };
 use loopcode_lib::security::path::{classify_path, PathClass};
-use loopcode_lib::security::secrets::SharedSecretStore;
+use loopcode_lib::security::secrets::{default_secret_store, SharedSecretStore};
 use loopcode_lib::security::trust::{
     content_hash, grant_trust, invalidate_trust, is_trusted, TrustKind,
 };
@@ -311,6 +311,27 @@ fn secret_store_not_in_sqlite_or_export() {
         .unwrap();
     assert!(sec.payload_json.contains(store_key));
     assert!(!sec.payload_json.contains(plaintext));
+}
+
+#[test]
+fn default_secret_store_works_without_platform_keyring() {
+    let root = temp_dir("secstore");
+
+    // A prior build's plaintext fallback must be purged, never imported.
+    let legacy = root.join("secrets-fallback.json");
+    fs::write(&legacy, "{}").unwrap();
+
+    // Keyring where available, memory fallback otherwise (e.g. headless
+    // Linux CI without a Secret Service) — set/get/delete must work either way.
+    let store = default_secret_store(&root);
+    assert!(!legacy.exists(), "legacy plaintext fallback must be removed");
+
+    let store_key = "loopcode/test/backend-availability";
+    store.set(store_key, "probe-value").unwrap();
+    assert_eq!(store.get(store_key).unwrap().as_deref(), Some("probe-value"));
+    store.delete(store_key).unwrap();
+    assert_eq!(store.get(store_key).unwrap(), None);
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]

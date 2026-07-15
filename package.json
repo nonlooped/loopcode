@@ -1,7 +1,7 @@
 {
   "name": "loopcode",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "LoopCode — local AI coding agent",
   "license": "Apache-2.0",
   "type": "module",
