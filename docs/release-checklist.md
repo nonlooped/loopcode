@@ -10,7 +10,7 @@ cannot run here are left **open** with env notes—not faked.
 
 ## A. Automated one-OS gates (this environment)
 
-- [ ] `npm run release-gate` (or `npm test` + `npm run lint`) exits 0
+- [ ] `npm run release-gate` exits 0
 - [ ] Core unit/integration suites green (runtime, security, persistence/suspend, providers, cockpit, surfaces, extensibility, reliability, a11y)
 - [ ] Capability allowlist scan clean (`scripts/check-capabilities.mjs`)
 - [ ] SBOM Category X gate clean (`npm run sbom:check`)

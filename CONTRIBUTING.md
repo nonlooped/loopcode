@@ -22,7 +22,7 @@ npm test
 npm run tauri dev      # full app (Rust Core + WebView)
 npm run tauri build   # production desktop bundle
 npm run sbom          # CycloneDX SBOM → sbom/
-npm run release-gate  # npm test + lint
+npm run release-gate  # full RC validation gate
 ```
 
 ## Security

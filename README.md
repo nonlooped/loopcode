@@ -97,7 +97,7 @@ npm run build
 npm run lint    # TypeScript check + cargo clippy
 npm test        # TypeScript, frontend/Rust tests, capabilities, and SBOM license policy
 npm run test:unit
-npm run release-gate   # RC gate: npm test + lint + build
+npm run release-gate   # Full RC validation gate
 ```
 
 ## Release candidate

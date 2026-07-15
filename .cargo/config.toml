@@ -1,3 +1,4 @@
 # rust-lld ships with rustup and links substantially faster than MSVC link.exe.
+# Keep this at the repository root so Cargo loads it for root npm/CI commands.
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
