@@ -1,6 +1,3 @@
-# Minimal CI for Slice 0: lint + test on Windows (host OS family).
-# Multi-OS runners are deferred; see plan non-goals.
-
 name: CI
 
 on:
@@ -8,10 +5,61 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-test:
-    name: Lint & test
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Frontend tests
+        run: npm run test:web
+
+      - name: Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  release-gate:
+    name: Release gate (Windows)
+    needs: test
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -28,30 +76,24 @@ jobs:
         with:
           components: clippy
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Frontend production build
+        run: npm run build
 
-      - name: Test
-        run: npm test
+      - name: Release gate
+        run: npm run release-gate
 
-      - name: SBOM
-        run: npm run sbom
-
-      - name: Checksums
-        run: |
-          npm run build
-          npm run checksums
-
-      - name: Spot regression (RC)
-        run: npm run release:spot
-
-      - name: Upload SBOM artifact
+      - name: Upload release-gate artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-windows
+          name: release-gate-windows
           path: |
             sbom/loopcode-sbom.json
             dist-release/SHA256SUMS.txt
