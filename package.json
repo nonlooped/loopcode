@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
-    "@lobehub/icons-static-svg": "^1.91.0",
+    "@lobehub/icons-static-svg": "^1.93.0",
     "@streamdown/code": "^1.1.1",
     "@tabler/icons-react": "^3.44.0",
     "@tanstack/react-query": "^5.101.2",
@@ -36,18 +36,17 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "@cyclonedx/cdxgen": "^11.9.0",
+    "@cyclonedx/cdxgen": "^12.7.1",
     "@tailwindcss/vite": "^4.3.2",
     "@tauri-apps/cli": "^2",
-    "@types/diff": "^7.0.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "babel-plugin-react-compiler": "^1.0.0",
     "tailwindcss": "^4.3.2",
-    "typescript": "~5.6.2",
+    "typescript": "~7.0.2",
     "vite": "^8.1.4",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.10"
   },
   "allowScripts": {
     "esbuild@0.25.12": true

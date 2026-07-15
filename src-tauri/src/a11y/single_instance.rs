@@ -1,6 +1,6 @@
 //! Single-instance process lock — exclusive OS file lock held for process lifetime.
 
-use fs4::fs_std::FileExt;
+use fs4::FileExt;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -30,7 +30,7 @@ impl SingleInstanceGuard {
 
 impl Drop for SingleInstanceGuard {
     fn drop(&mut self) {
-        let _ = self.file.unlock();
+        let _ = FileExt::unlock(&self.file);
         // Best-effort cleanup so next primary can create a fresh file.
         let _ = fs::remove_file(&self.path);
     }
@@ -38,7 +38,7 @@ impl Drop for SingleInstanceGuard {
 
 /// Try to acquire an exclusive instance lock at `lock_path`.
 ///
-/// Uses `try_lock_exclusive` (LockFileEx on Windows / flock on Unix) so a second
+/// Uses `try_lock` (LockFileEx on Windows / flock on Unix) so a second
 /// acquire while the first guard is alive returns [`SecondaryAlreadyRunning`].
 pub fn acquire_single_instance(
     lock_path: &Path,
@@ -55,7 +55,7 @@ pub fn acquire_single_instance(
         .open(lock_path)
         .map_err(|e| format!("open single-instance lock: {e}"))?;
 
-    match file.try_lock_exclusive() {
+    match FileExt::try_lock(&file) {
         Ok(()) => {
             // We hold the exclusive lock for this process.
             file.set_len(0).map_err(|e| e.to_string())?;
