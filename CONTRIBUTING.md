@@ -9,7 +9,7 @@ agree it is licensed under Apache-2.0 (see Apache-2.0 §5).
 
 Do not introduce Category X dependencies (GPL/AGPL/LGPL, SSPL, field-of-use,
 etc.) into distributed artifacts. The release SBOM gate enforces this
-(`scripts/check-sbom-licenses.ps1`).
+(`scripts/check-sbom-licenses.mjs`).
 
 There is no CLA and no DCO sign-off requirement.
 
@@ -22,7 +22,7 @@ npm test
 npm run tauri dev      # full app (Rust Core + WebView)
 npm run tauri build   # production desktop bundle
 npm run sbom          # CycloneDX SBOM → sbom/
-npm run release-gate  # full RC gate before a tag
+npm run release-gate  # npm test + lint
 ```
 
 ## Security

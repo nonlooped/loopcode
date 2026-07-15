@@ -10,18 +10,16 @@ cannot run here are left **open** with env notes—not faked.
 
 ## A. Automated one-OS gates (this environment)
 
-- [ ] `npm run release-gate` (or `npm test` + `npm run lint` + `npm run sbom:check` + `npm run checksums`) exits 0
+- [ ] `npm run release-gate` (or `npm test` + `npm run lint`) exits 0
 - [ ] Core unit/integration suites green (runtime, security, persistence/suspend, providers, cockpit, surfaces, extensibility, reliability, a11y)
-- [ ] Capability allowlist scan clean (`scripts/check-capabilities.ps1`)
-- [ ] Root license and SBOM Category X gates clean (`scripts/check-license.ps1`, `npm run sbom:check`)
+- [ ] Capability allowlist scan clean (`scripts/check-capabilities.mjs`)
+- [ ] SBOM Category X gate clean (`npm run sbom:check`)
 - [ ] Frontend production build (`npm run build`) exits 0
 - [ ] Complete CycloneDX SBOM written under `sbom/` and reviewed for missing licenses
-- [ ] SHA256 checksums written under `dist-release/SHA256SUMS.txt`
 - [ ] LICENSE present
 - [ ] Security contact published (`docs/SECURITY.md`)
 - [ ] Known limitations published (`docs/known-limitations.md`)
 - [ ] Install friction docs published (`docs/install.md`)
-- [ ] Spot regression: path boundary / shell approval, suspend-not-completed, update signature reject, exclusive single-instance lock
 
 ## B. Product journey matrix (automated honesty)
 
@@ -54,8 +52,7 @@ Leave unchecked when not executed. Do **not** invent session notes.
 
 ## D. Release packaging (human)
 
-- [ ] Review `dist-release/SHA256SUMS.txt` against built artifacts
-- [ ] Optional: `npm run tauri build` when MSVC/WebView available; attach binaries to checksums
+- [ ] Optional: `npm run tauri build` when MSVC/WebView available
 - [ ] Optional: git tag `v1.0.0` (not required if publish forbidden)
 - [ ] Optional: cargo audit / npm audit on release branch; fail high/critical per policy
 

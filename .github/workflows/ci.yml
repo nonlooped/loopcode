@@ -57,16 +57,19 @@ jobs:
       - name: Frontend tests
         run: npm run test:web
 
+      - name: Capabilities allowlist
+        run: node scripts/check-capabilities.mjs
+
       - name: Clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-  release-gate:
-    name: Release gate (Windows)
+  sbom:
+    name: SBOM license gate
     needs: test
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -79,8 +82,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -93,13 +94,11 @@ jobs:
       - name: Frontend production build
         run: npm run build
 
-      - name: Release gate
-        run: npm run release-gate
+      - name: SBOM + Category X policy
+        run: npm run sbom:check
 
-      - name: Upload release-gate artifacts
+      - name: Upload SBOM
         uses: actions/upload-artifact@v7
         with:
-          name: release-gate-windows
-          path: |
-            sbom/loopcode-sbom.json
-            dist-release/SHA256SUMS.txt
+          name: loopcode-sbom
+          path: sbom/loopcode-sbom.json

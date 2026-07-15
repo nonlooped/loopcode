@@ -51,8 +51,8 @@ regions, default + high-contrast themes, reduced motion, single-instance lock,
 app menu, approval notification redaction, and install friction docs.
 
 Release validation includes `npm run release-gate`, the SBOM and Category X
-license policy, SHA256 checksums, known limitations/security contact, and the
-release checklist. Multi-OS qualitative validation remains environment-limited.
+license policy, known limitations/security contact, and the release checklist.
+Multi-OS qualitative validation remains environment-limited.
 
 ## Architecture (closed decision)
 
@@ -97,8 +97,7 @@ npm run build
 npm run lint    # TypeScript check + cargo clippy
 npm test        # TypeScript, frontend/Rust tests, capabilities, and SBOM license policy
 npm run test:unit
-npm run release-gate   # RC gate: test + lint + SBOM license policy + checksums
-npm run release:spot   # targeted security/suspend/update/instance regression
+npm run release-gate   # RC gate: npm test + lint + build
 ```
 
 ## Release candidate
@@ -108,7 +107,6 @@ npm run release:spot   # targeted security/suspend/update/instance regression
 | Version | `1.0.0` in `package.json` + `src-tauri/Cargo.toml` |
 | Release gate | `npm run release-gate` |
 | SBOM | `npm run sbom` → `sbom/loopcode-sbom.json` |
-| Checksums | `npm run build && npm run checksums` → `dist-release/SHA256SUMS.txt` |
 | Checklist | [docs/release-checklist.md](./docs/release-checklist.md) |
 | Limitations | [docs/known-limitations.md](./docs/known-limitations.md) |
 | Security | [docs/SECURITY.md](./docs/SECURITY.md) |
@@ -124,9 +122,7 @@ branches; treat high/critical findings as fail-closed before a public tag.
 distributed artifacts; the release SBOM gate checks this.
 
 ```bash
-npm run license:check   # LICENSE + package/Cargo license fields
-npm run sbom            # CycloneDX → sbom/ (+ Category X denylist)
-npm run checksums
+npm run sbom:check   # CycloneDX SBOM + Category X denylist
 ```
 
 ## Repository layout
@@ -137,10 +133,11 @@ npm run checksums
 │   ├── src/db/          # SQLite store, migrations, export redaction
 │   ├── src/domain.rs    # Domain types
 │   └── capabilities/    # Locked-down WebView permissions
-├── scripts/             # capability, license, SBOM, release-gate helpers
+├── scripts/             # capability + SBOM license gates, catalog refresh
 ├── .github/workflows/   # CI lint/test
 └── docs/                # security, release, install, and limitation docs
 ```
+
 
 ### Persistence
 

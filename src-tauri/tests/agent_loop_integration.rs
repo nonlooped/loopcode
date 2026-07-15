@@ -47,10 +47,7 @@ fn send_path_text_turn_completes_with_provider_not_mock() {
     let mut rt = AgentRuntime::new();
     rt.set_project_root_override(Some(root.clone()));
 
-    let body = openai_assistant_text_body(
-        "This is a demo project with a readme.",
-        "gpt-fixture",
-    );
+    let body = openai_assistant_text_body("This is a demo project with a readme.", "gpt-fixture");
     let transport = FixtureHttpTransport::single(200, body);
 
     let run = rt
@@ -106,10 +103,7 @@ fn provider_http_error_fails_run_not_hang() {
     let db = Database::open_in_memory().unwrap();
     let (chat_id, root) = open_chat_with_files(&db);
     let mut rt = AgentRuntime::new();
-    let transport = FixtureHttpTransport::single(
-        500,
-        r#"{"error":{"message":"server exploded"}}"#,
-    );
+    let transport = FixtureHttpTransport::single(500, r#"{"error":{"message":"server exploded"}}"#);
     let run = rt
         .start_run_with_provider(&db, &chat_id, Mode::Ask, Some("m"), "opencode")
         .unwrap();
@@ -133,7 +127,9 @@ fn provider_http_error_fails_run_not_hang() {
     assert_eq!(finished.status, RunStatus::Failed);
     assert_eq!(finished.adapter.as_deref(), Some("opencode"));
     let events = db.list_events(&chat_id, None).unwrap();
-    assert!(events.iter().any(|e| e.kind == kinds::ERROR || e.kind == kinds::RUN_FAILED));
+    assert!(events
+        .iter()
+        .any(|e| e.kind == kinds::ERROR || e.kind == kinds::RUN_FAILED));
 }
 
 #[test]
@@ -149,8 +145,7 @@ fn tool_loop_glob_real_fs() {
         "gpt-fixture",
         "call_ws_1",
     );
-    let final_body =
-        openai_assistant_text_body("The project contains readme.md.", "gpt-fixture");
+    let final_body = openai_assistant_text_body("The project contains readme.md.", "gpt-fixture");
     let transport = FixtureHttpTransport::new(vec![(200, tool_body), (200, final_body)]);
 
     let run = rt
@@ -195,12 +190,10 @@ fn cancel_during_delayed_model_request() {
     let (chat_id, root) = open_chat_with_files(&db);
     let mut rt = AgentRuntime::new();
     let flag = Arc::new(AtomicBool::new(false));
-    let transport = FixtureHttpTransport::single(
-        200,
-        openai_assistant_text_body("should not finish", "m"),
-    )
-    .with_delay(Duration::from_millis(400))
-    .with_cancel_flag(Arc::clone(&flag));
+    let transport =
+        FixtureHttpTransport::single(200, openai_assistant_text_body("should not finish", "m"))
+            .with_delay(Duration::from_millis(400))
+            .with_cancel_flag(Arc::clone(&flag));
 
     let run = rt
         .start_run_with_provider(&db, &chat_id, Mode::Ask, Some("m"), "openai")
@@ -260,8 +253,7 @@ fn product_cancel_via_runtime_cancel_mid_send_equivalent_turn() {
 
     let db = Arc::new(Mutex::new(Database::open_in_memory().unwrap()));
     let rt = Arc::new(Mutex::new(AgentRuntime::new()));
-    let flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let flags: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let (chat_id, root, run_id, cancel_flag) = {
         let db_g = db.lock().unwrap();
@@ -271,14 +263,13 @@ fn product_cancel_via_runtime_cancel_mid_send_equivalent_turn() {
         let run = rt_g
             .start_run_with_provider(&db_g, &chat_id, Mode::Ask, Some("m"), "openai")
             .unwrap();
-        db_g
-            .append_event(
-                &chat_id,
-                Some(&run.id),
-                "user_message",
-                &json!({"text": "hi"}).to_string(),
-            )
-            .unwrap();
+        db_g.append_event(
+            &chat_id,
+            Some(&run.id),
+            "user_message",
+            &json!({"text": "hi"}).to_string(),
+        )
+        .unwrap();
         let cancel_flag = Arc::new(AtomicBool::new(false));
         flags
             .lock()
@@ -299,12 +290,10 @@ fn product_cancel_via_runtime_cancel_mid_send_equivalent_turn() {
         reasoning: None,
     };
 
-    let transport = FixtureHttpTransport::single(
-        200,
-        openai_assistant_text_body("should never land", "m"),
-    )
-    .with_delay(Duration::from_millis(600))
-    .with_cancel_flag(Arc::clone(&cancel_flag));
+    let transport =
+        FixtureHttpTransport::single(200, openai_assistant_text_body("should never land", "m"))
+            .with_delay(Duration::from_millis(600))
+            .with_cancel_flag(Arc::clone(&cancel_flag));
 
     let db_w = Arc::clone(&db);
     let rt_w = Arc::clone(&rt);
@@ -362,13 +351,9 @@ fn mcp_http_transport_not_fixture_echo() {
     })
     .to_string();
     let t = FixtureHttpTransport::single(200, body);
-    let out = invoke_mcp_http_with_transport(
-        "https://mcp.local/rpc",
-        "demo.tool",
-        &json!({"q": 1}),
-        &t,
-    )
-    .unwrap();
+    let out =
+        invoke_mcp_http_with_transport("https://mcp.local/rpc", "demo.tool", &json!({"q": 1}), &t)
+            .unwrap();
     assert_eq!(out["fixture"], false);
     assert!(
         out.to_string().contains("real-mcp-payload"),
@@ -379,51 +364,23 @@ fn mcp_http_transport_not_fixture_echo() {
 #[test]
 fn mcp_stdio_real_echo_server() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let ps1 = manifest.join("assets/fixtures/mcp/echo_server.ps1");
-    let py = manifest.join("assets/fixtures/mcp/echo_server.py");
-
-    // Prefer PowerShell on Windows (always present); else Python.
-    let transport = if ps1.is_file()
-        && std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", "exit 0"])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false)
-    {
-        McpTransport::Stdio {
-            command: "powershell".into(),
-            args: vec![
-                "-NoProfile".into(),
-                "-ExecutionPolicy".into(),
-                "Bypass".into(),
-                "-File".into(),
-                ps1.display().to_string(),
-            ],
-            env_keys: vec![],
-        }
-    } else if py.is_file() {
-        let python = ["python3", "python", "py"].into_iter().find(|c| {
-            std::process::Command::new(c)
-                .arg("--version")
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-        });
-        let Some(py_bin) = python else {
-            panic!("no PowerShell or Python available to run MCP stdio fixture");
-        };
-        let args = if py_bin == "py" {
-            vec!["-3".into(), py.display().to_string()]
-        } else {
-            vec![py.display().to_string()]
-        };
-        McpTransport::Stdio {
-            command: py_bin.into(),
-            args,
-            env_keys: vec![],
-        }
-    } else {
-        panic!("MCP echo fixture scripts missing under assets/fixtures/mcp");
+    let mjs = manifest.join("assets/fixtures/mcp/echo_server.mjs");
+    assert!(
+        mjs.is_file(),
+        "MCP echo fixture missing: assets/fixtures/mcp/echo_server.mjs"
+    );
+    assert!(
+        std::process::Command::new("node")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false),
+        "node is required to run the MCP stdio fixture"
+    );
+    let transport = McpTransport::Stdio {
+        command: "node".into(),
+        args: vec![mjs.display().to_string()],
+        env_keys: vec![],
     };
 
     let out = invoke_mcp_transport(&transport, "echo", &json!({"hello": true}))
@@ -470,9 +427,9 @@ fn mcp_dual_gate_then_real_http_path() {
 
 #[test]
 fn timeline_projects_assistant_message() {
+    use chrono::Utc;
     use loopcode_lib::cockpit::project_timeline;
     use loopcode_lib::domain::{Event, Run};
-    use chrono::Utc;
 
     let events = vec![Event {
         id: "e1".into(),
@@ -487,7 +444,9 @@ fn timeline_projects_assistant_message() {
     let proj = project_timeline(&events, &runs, true, false, None);
     assert!(!proj.items.is_empty());
     assert!(
-        proj.items.iter().any(|i| i.body.contains("Hello from the model")),
+        proj.items
+            .iter()
+            .any(|i| i.body.contains("Hello from the model")),
         "timeline should show assistant text"
     );
 }
