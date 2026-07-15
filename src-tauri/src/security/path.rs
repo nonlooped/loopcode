@@ -160,7 +160,7 @@ fn has_parent_component(path: &Path) -> bool {
     path.components().any(|c| matches!(c, Component::ParentDir))
 }
 
-fn canonicalize_or_abs(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn canonicalize_or_abs(path: &Path) -> Result<PathBuf, String> {
     if path.exists() {
         path.canonicalize()
             .map(strip_unc)

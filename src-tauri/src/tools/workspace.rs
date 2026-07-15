@@ -1,6 +1,6 @@
 //! Real workspace glob/read/grep/write/patch tools.
 
-use crate::security::path::{classify_path, PathClass};
+use crate::security::path::{canonicalize_or_abs, classify_path, PathClass};
 use crate::tools::hash::{content_hash_bytes, content_hash_str};
 use crate::tools::linediff::{line_counts, lines_of};
 use serde_json::{json, Value};
@@ -56,9 +56,13 @@ pub fn workspace_glob(root: &Path, args: &Value) -> Result<Value, String> {
     if !search_root.is_dir() {
         return Err(format!("not a directory: {search_rel}"));
     }
+    // `resolve_in_root` canonicalizes (resolving symlinks, e.g. macOS's
+    // /var -> /private/var); match it here so strip_prefix in walk_glob
+    // doesn't silently fall back to absolute paths.
+    let canon_root = canonicalize_or_abs(root).unwrap_or_else(|_| root.to_path_buf());
 
     let mut matches = Vec::new();
-    walk_glob(root, &search_root, pattern, &mut matches)?;
+    walk_glob(&canon_root, &search_root, pattern, &mut matches)?;
     matches.sort();
     let capped = matches.len() > MAX_GLOB_MATCHES;
     matches.truncate(MAX_GLOB_MATCHES);
@@ -460,8 +464,12 @@ pub fn workspace_search(root: &Path, args: &Value) -> Result<Value, String> {
         Some(path) => resolve_in_root(root, path)?.0,
         None => root.to_path_buf(),
     };
+    // `resolve_in_root` canonicalizes (resolving symlinks, e.g. macOS's
+    // /var -> /private/var); match it here so strip_prefix in walk_search
+    // doesn't silently fall back to absolute paths.
+    let canon_root = canonicalize_or_abs(root).unwrap_or_else(|_| root.to_path_buf());
     walk_search(
-        root,
+        &canon_root,
         &search_root,
         &needle,
         case_insensitive,
