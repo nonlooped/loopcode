@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "body": {
+    "id": "resp_fixture",
+    "object": "response",
+    "status": "completed",
+    "model": "gpt-4o-mini",
+    "output": [
+      {
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          { "type": "output_text", "text": "pong" }
+        ]
+      }
+    ],
+    "usage": { "input_tokens": 5, "output_tokens": 1 }
+  }
+}

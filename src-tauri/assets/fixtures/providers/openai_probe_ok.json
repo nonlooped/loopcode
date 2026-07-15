@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "body": {
+    "id": "chatcmpl-fixture",
+    "object": "chat.completion",
+    "model": "gpt-4o-mini",
+    "choices": [
+      {
+        "index": 0,
+        "message": { "role": "assistant", "content": "pong" },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": { "prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6 }
+  }
+}
