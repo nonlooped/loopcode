@@ -17,7 +17,7 @@
     "test:web:watch": "vitest",
     "sbom": "node node_modules/@cyclonedx/cdxgen/bin/cdxgen.js --type nodejs --type rust --recurse --no-install-deps --fail-on-error --validate --spec-version 1.6 --output sbom/loopcode-sbom.json .",
     "sbom:check": "npm run sbom && node scripts/check-sbom-licenses.mjs",
-    "release-gate": "npm test && npm run lint && npm run build",
+    "release-gate": "npm test && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && vite build",
     "catalog:refresh": "node scripts/refresh-models-catalog.mjs"
   },
   "dependencies": {

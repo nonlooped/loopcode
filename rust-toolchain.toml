@@ -1,0 +1,5 @@
+# Pinned so CI cache keys (which embed the compiler version) stay stable
+# between Rust releases. Bump deliberately; keep ci.yml's toolchain in sync.
+[toolchain]
+channel = "1.97.0"
+components = ["clippy"]
