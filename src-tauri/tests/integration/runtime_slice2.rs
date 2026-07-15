@@ -270,7 +270,7 @@ fn crash_suspend_fixture_never_completed() {
 #[test]
 fn open_app_database_source_calls_reconcile() {
     // Structural: shipped entry uses AgentRuntime::reconcile_after_restart
-    let lib = include_str!("../src/lib.rs");
+    let lib = include_str!("../../src/lib.rs");
     assert!(
         lib.contains("reconcile_after_restart"),
         "open_app_database must call runtime reconcile_after_restart"

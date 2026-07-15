@@ -91,7 +91,7 @@ fn custom_profile_openai_chat_completions_distinct() {
     );
     assert!(req.body.get("messages").is_some());
     assert!(req.body.get("input").is_none());
-    let body = include_str!("../assets/fixtures/providers/openai_probe_ok.json");
+    let body = include_str!("../../assets/fixtures/providers/openai_probe_ok.json");
     let v: serde_json::Value = serde_json::from_str(body).unwrap();
     let status = v["status"].as_u64().unwrap() as u16;
     let body_s = v["body"].to_string();
@@ -130,7 +130,7 @@ fn custom_profile_openai_responses_distinct() {
         "Responses body must not use chat messages"
     );
 
-    let raw = include_str!("../assets/fixtures/providers/openai_responses_probe_ok.json");
+    let raw = include_str!("../../assets/fixtures/providers/openai_responses_probe_ok.json");
     let v: serde_json::Value = serde_json::from_str(raw).unwrap();
     let status = v["status"].as_u64().unwrap() as u16;
     let body_s = v["body"].to_string();
