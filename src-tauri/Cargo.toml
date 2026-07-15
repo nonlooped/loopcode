@@ -38,6 +38,10 @@ keyring = { version = "3.6", default-features = false, features = [
 arboard = "3.4"
 sha2 = "0.10"
 
+[target.'cfg(unix)'.dependencies]
+# Direct kill(2) for process-group termination (MIT OR Apache-2.0 — Category A).
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",

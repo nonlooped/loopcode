@@ -2218,6 +2218,7 @@ dependencies = [
  "directories",
  "fs4",
  "keyring",
+ "libc",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",

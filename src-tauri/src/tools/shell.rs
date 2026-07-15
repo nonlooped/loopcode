@@ -203,14 +203,15 @@ fn terminate_tree(child: &mut Child, job: Option<&JobGuard>) {
     }
     #[cfg(unix)]
     {
-        let pid = child.id();
-        // Negative PID = process group (set via process_group(0) at spawn).
-        let _ = Command::new("kill")
-            .args(["-TERM", &format!("-{pid}")])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        // Signal the whole group (set via process_group(0) at spawn) with a
+        // direct syscall. Never shell out to kill(1) here: without "--",
+        // procps parses "-<pid>" as an option cluster and keeps only the
+        // first digit, so "-1956" becomes kill(-1, …) — signalling every
+        // process the user owns.
+        let pgid = child.id() as libc::pid_t;
+        unsafe {
+            let _ = libc::kill(-pgid, libc::SIGTERM);
+        }
     }
     let _ = child.kill();
 }
