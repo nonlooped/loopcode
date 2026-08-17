@@ -42,6 +42,7 @@ export function workspaceSnapshot(
       updatedAt: thread.updatedAt,
       settled: thread.settled,
       projectId: thread.projectId ?? null,
+      providerSessionIds: providerSessionIds(thread),
     })),
     projects: projects.map((project) => ({ ...project })),
   };
@@ -137,7 +138,7 @@ function restoreThread(
       ...messages.map((message) => message.createdAt),
       ...tools.map((tool) => tool.createdAt),
     );
-  return {
+  const thread = {
     ...createThread(defaultWorkingFolder, null, catalogs),
     id,
     title,
@@ -150,6 +151,21 @@ function restoreThread(
     settled: value.settled === true,
     projectId: typeof value.projectId === "string" ? value.projectId : null,
   };
+  if (isObject(value.providerSessionIds)) {
+    for (const [profileId, sessionId] of Object.entries(value.providerSessionIds)) {
+      if (thread.providers[profileId] && typeof sessionId === "string" && sessionId) {
+        thread.providers[profileId].sessionId = sessionId;
+      }
+    }
+  }
+  return thread;
+}
+
+function providerSessionIds(thread: ThreadState) {
+  const entries = Object.entries(thread.providers).flatMap(([profileId, provider]) =>
+    provider.sessionId ? [[profileId, provider.sessionId] as const] : [],
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 function restoreMessage(value: unknown): TimelineMessage | undefined {

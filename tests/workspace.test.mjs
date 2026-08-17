@@ -73,7 +73,7 @@ void test("rejects invalid workspaces and drops orphaned project references", ()
   assert.equal(restored.threads[0].projectId, null);
 });
 
-void test("workspace snapshots exclude transient provider runtime state", () => {
+void test("workspace snapshots retain private session mappings but exclude transient runtime state", () => {
   const restored = restoreWorkspace(
     {
       version: 1,
@@ -95,9 +95,13 @@ void test("workspace snapshots exclude transient provider runtime state", () => 
     catalogs,
   );
   restored.threads[0].providers.codex.status = "running";
-  restored.threads[0].providers.codex.harnessId = "private";
+  restored.threads[0].providers.codex.harnessId = "transient-harness";
+  restored.threads[0].providers.codex.sessionId = "private-session";
 
   const snapshot = workspaceSnapshot(restored.threads, "thread-1", [], null);
+  const restarted = restoreWorkspace(snapshot, "C:\\default", catalogs);
   assert.equal("providers" in snapshot.threads[0], false);
-  assert.equal(JSON.stringify(snapshot).includes("private"), false);
+  assert.equal(JSON.stringify(snapshot).includes("transient-harness"), false);
+  assert.deepEqual(snapshot.threads[0].providerSessionIds, { codex: "private-session" });
+  assert.equal(restarted.threads[0].providers.codex.sessionId, "private-session");
 });

@@ -64,6 +64,7 @@ export interface PersistedThreadState {
   updatedAt: number;
   settled?: boolean;
   projectId?: string | null;
+  providerSessionIds?: Record<string, string>;
 }
 
 export interface PersistedProjectState {
@@ -95,6 +96,17 @@ export interface ModelOption {
 
 export type ReasoningOption = ModelOption;
 
+export interface ReasoningModelOption {
+  options: ReasoningOption[];
+  selectedId?: string;
+}
+
+export interface FastModeOption {
+  configId: string;
+  enabled: boolean;
+  description?: string;
+}
+
 export interface ProviderSessionState {
   status: ThreadStatus;
   harnessId?: string;
@@ -105,6 +117,12 @@ export interface ProviderSessionState {
   reasoningConfigId?: string;
   reasoningOptions: ReasoningOption[];
   selectedReasoningId?: string;
+  reasoningOptionsByModel?: Record<string, ReasoningModelOption>;
+  fastModeConfigId?: string;
+  fastModeModelId?: string;
+  fastModeOptionsByModel?: Record<string, FastModeOption>;
+  fastModeEnabled?: boolean;
+  fastModeDescription?: string;
   error?: string;
 }
 
@@ -120,6 +138,7 @@ export interface ConnectRequest {
   cwd: string;
   command: string;
   args: string[];
+  sessionId?: string;
 }
 
 export interface PermissionOption {
@@ -141,6 +160,12 @@ export interface ProviderModelCatalog {
   selectedModelId?: string;
   reasoningOptions: ReasoningOption[];
   selectedReasoningId?: string;
+  reasoningOptionsByModel?: Record<string, ReasoningModelOption>;
+  fastModeConfigId?: string;
+  fastModeModelId?: string;
+  fastModeOptionsByModel?: Record<string, FastModeOption>;
+  fastModeEnabled?: boolean;
+  fastModeDescription?: string;
   error?: string;
 }
 

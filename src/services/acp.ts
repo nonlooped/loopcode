@@ -50,6 +50,7 @@ export class AcpConnection {
   #connection?: acp.ClientConnection;
   #incoming?: ReadableStreamDefaultController<acp.AnyMessage>;
   #incomingClosed = false;
+  #loadingSession = false;
   #titleSessions = new Map<string, string[]>();
   #permissions = new Map<RpcId, PendingPermission>();
   #stopping = false;
@@ -94,7 +95,7 @@ export class AcpConnection {
       const initialized = await this.#context.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
         clientCapabilities: {
-          session: { configOptions: {} },
+          session: { configOptions: { boolean: {} } },
         },
         clientInfo: {
           name: "loopcode",
@@ -109,15 +110,47 @@ export class AcpConnection {
         );
       }
 
-      const session = await this.#context.request(acp.methods.agent.session.new, {
-        cwd: request.cwd,
-        mcpServers: [],
-      });
-      this.#sessionId = session.sessionId;
+      let sessionId: string;
+      let sessionState:
+        | acp.NewSessionResponse
+        | acp.LoadSessionResponse
+        | acp.ResumeSessionResponse;
+      if (request.sessionId) {
+        sessionId = request.sessionId;
+        this.#sessionId = sessionId;
+        if (initialized.agentCapabilities?.sessionCapabilities?.resume) {
+          sessionState = await this.#context.request(acp.methods.agent.session.resume, {
+            sessionId,
+            cwd: request.cwd,
+            mcpServers: [],
+          });
+        } else if (initialized.agentCapabilities?.loadSession) {
+          this.#loadingSession = true;
+          try {
+            sessionState = await this.#context.request(acp.methods.agent.session.load, {
+              sessionId,
+              cwd: request.cwd,
+              mcpServers: [],
+            });
+          } finally {
+            this.#loadingSession = false;
+          }
+        } else {
+          throw new Error("This agent cannot restore its previous session context");
+        }
+      } else {
+        const session = await this.#context.request(acp.methods.agent.session.new, {
+          cwd: request.cwd,
+          mcpServers: [],
+        });
+        sessionId = session.sessionId;
+        this.#sessionId = sessionId;
+        sessionState = session;
+      }
       this.#callbacks.ready({
         harnessId,
-        sessionId: session.sessionId,
-        ...readModelState(session),
+        sessionId,
+        ...readModelState(sessionState),
       });
       this.#callbacks.status("ready");
     } catch (error) {
@@ -166,6 +199,19 @@ export class AcpConnection {
         sessionId: this.#requireSessionId(),
         configId,
         value,
+      },
+    );
+    return readModelState(response);
+  }
+
+  async setBooleanConfigOption(configId: string, value: boolean) {
+    const response = await this.#requireContext().request(
+      acp.methods.agent.session.setConfigOption,
+      {
+        sessionId: this.#requireSessionId(),
+        configId,
+        value,
+        type: "boolean",
       },
     );
     return readModelState(response);
@@ -221,6 +267,7 @@ export class AcpConnection {
     this.#harnessId = undefined;
     this.#sessionId = undefined;
     this.#context = undefined;
+    this.#loadingSession = false;
     this.#connection?.close();
     this.#connection = undefined;
     this.#titleSessions.clear();
@@ -263,6 +310,7 @@ export class AcpConnection {
     this.#sessionId = undefined;
     this.#context = undefined;
     this.#connection = undefined;
+    this.#loadingSession = false;
     this.#titleSessions.clear();
     this.#cancelPermissions();
     if (!this.#incomingClosed) {
@@ -283,7 +331,7 @@ export class AcpConnection {
       }
       return;
     }
-    if (notification.sessionId === this.#sessionId) {
+    if (notification.sessionId === this.#sessionId && !this.#loadingSession) {
       this.#callbacks.update(notification.update);
     }
   }
