@@ -14,6 +14,9 @@ export interface AcpModelState {
   reasoningConfigId?: string;
   reasoningOptions: ModelOption[];
   selectedReasoningId?: string;
+  fastModeConfigId?: string;
+  fastModeEnabled?: boolean;
+  fastModeDescription?: string;
 }
 
 type ConfigState = Pick<
@@ -25,6 +28,7 @@ export function readModelState(value: ConfigState): AcpModelState {
   const configOptions = value.configOptions ?? [];
   const modelConfig = configOptions.find((option) => option.category === "model");
   const reasoningConfig = configOptions.find(isReasoningConfig);
+  const fastModeConfig = configOptions.find(isFastModeConfig);
 
   return {
     modelConfigId: modelConfig?.id,
@@ -34,6 +38,9 @@ export function readModelState(value: ConfigState): AcpModelState {
     reasoningOptions: configChoices(reasoningConfig),
     selectedReasoningId:
       reasoningConfig?.type === "select" ? reasoningConfig.currentValue : undefined,
+    fastModeConfigId: fastModeConfig?.id,
+    fastModeEnabled: fastModeConfig?.type === "boolean" ? fastModeConfig.currentValue : undefined,
+    fastModeDescription: fastModeConfig?.description ?? undefined,
   };
 }
 
@@ -54,4 +61,8 @@ function isReasoningConfig(option: SessionConfigOption) {
   if (category === "thought_level" || category === "thoughtlevel") return true;
   if (category !== "model_config") return false;
   return /reason|thought|effort/.test(`${option.id} ${option.name}`.toLowerCase());
+}
+
+function isFastModeConfig(option: SessionConfigOption) {
+  return option.type === "boolean" && /fast/.test(`${option.id} ${option.name}`.toLowerCase());
 }

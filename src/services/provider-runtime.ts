@@ -8,7 +8,10 @@ import type {
   ProviderSessionState,
   ThreadState,
 } from "../types/index.ts";
+import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { addMessage } from "../utils/messages.ts";
+import { discoverModelOptions } from "../utils/model-options.ts";
+import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
 import { AcpConnection, readModelState, type AcpModelState } from "./acp.ts";
 import { SessionUpdateHandler } from "./session-updates.ts";
 
@@ -74,17 +77,29 @@ export class ProviderRuntime {
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
       }
-      const selectedModelId = discovered.models.some(
-        (model) => model.id === discovered.selectedModelId,
-      )
-        ? discovered.selectedModelId
-        : discovered.models[0].id;
+      const advertisedModelId = discovered.selectedModelId;
+      const selectedModelId =
+        advertisedModelId && discovered.models.some((model) => model.id === advertisedModelId)
+          ? advertisedModelId
+          : discovered.models[0].id;
+      const { reasoningOptionsByModel, fastModeOptionsByModel } = await discoverModelOptions(
+        connection,
+        discovered,
+      );
+      const selectedReasoning = reasoningOptionsByModel[selectedModelId];
+      const selectedFastMode = fastModeOptionsByModel[selectedModelId];
       this.#catalogs[profile.id] = {
         status: "ready",
         models: discovered.models,
         selectedModelId,
-        reasoningOptions: discovered.reasoningOptions,
-        selectedReasoningId: discovered.selectedReasoningId,
+        reasoningOptions: selectedReasoning?.options ?? [],
+        selectedReasoningId: selectedReasoning?.selectedId,
+        reasoningOptionsByModel,
+        fastModeConfigId: selectedFastMode?.configId,
+        fastModeModelId: selectedFastMode ? selectedModelId : undefined,
+        fastModeOptionsByModel,
+        fastModeEnabled: selectedFastMode?.enabled,
+        fastModeDescription: selectedFastMode?.description,
       };
     } catch (error) {
       this.#catalogs[profile.id] = {
@@ -116,13 +131,10 @@ export class ProviderRuntime {
       ) {
         provider.selectedModelId = catalog.selectedModelId;
       }
-      provider.reasoningOptions = catalog.reasoningOptions;
-      if (
-        !provider.selectedReasoningId ||
-        !catalog.reasoningOptions.some((option) => option.id === provider.selectedReasoningId)
-      ) {
-        provider.selectedReasoningId = catalog.selectedReasoningId;
-      }
+      provider.reasoningOptionsByModel = catalog.reasoningOptionsByModel;
+      applyReasoningForSelectedModel(provider);
+      provider.fastModeOptionsByModel = catalog.fastModeOptionsByModel;
+      applyFastModeForSelectedModel(provider);
     }
   }
 
@@ -132,6 +144,8 @@ export class ProviderRuntime {
     const provider = thread.providers[profile.id];
     const selectedModelId = provider.selectedModelId;
     const requestedReasoningId = provider.selectedReasoningId;
+    const requestedFastModeEnabled = provider.fastModeEnabled;
+    const existingSessionId = provider.sessionId;
     if (!selectedModelId || !provider.models.some((model) => model.id === selectedModelId)) {
       this.#setError(
         thread,
@@ -145,7 +159,6 @@ export class ProviderRuntime {
     const token = crypto.randomUUID();
     this.#tokens.set(key, token);
     provider.harnessId = undefined;
-    provider.sessionId = undefined;
     provider.error = undefined;
     this.#setStatus(thread, profile.id, "connecting");
 
@@ -180,6 +193,9 @@ export class ProviderRuntime {
         ) {
           provider.selectedReasoningId = requestedReasoningId;
         }
+        if (requestedFastModeEnabled !== undefined && session.fastModeConfigId) {
+          provider.fastModeEnabled = requestedFastModeEnabled;
+        }
         sessionSelectedModelId = session.selectedModelId;
         provider.error = undefined;
       },
@@ -213,7 +229,12 @@ export class ProviderRuntime {
 
     this.#connections.set(key, connection);
     try {
-      await connection.connect({ cwd: thread.cwd, command: profile.command, args: profile.args });
+      await connection.connect({
+        cwd: thread.cwd,
+        command: profile.command,
+        args: profile.args,
+        sessionId: existingSessionId,
+      });
       if (!isCurrent()) {
         await connection.stop();
         return;
@@ -247,6 +268,18 @@ export class ProviderRuntime {
         }
         applyProviderConfigState(provider, reasoningState);
       }
+      const fastModeEnabled = requestedFastModeEnabled ?? provider.fastModeEnabled;
+      if (
+        fastModeEnabled !== undefined &&
+        provider.fastModeConfigId &&
+        provider.fastModeEnabled !== fastModeEnabled
+      ) {
+        const fastModeState = await connection.setBooleanConfigOption(
+          provider.fastModeConfigId,
+          fastModeEnabled,
+        );
+        applyProviderConfigState(provider, fastModeState);
+      }
       startupComplete = true;
       provider.error = undefined;
       this.#setStatus(thread, profile.id, "ready");
@@ -268,7 +301,11 @@ export class ProviderRuntime {
     const previousModelId = provider.selectedModelId;
     provider.selectedModelId = modelId;
     provider.error = undefined;
-    if (provider.status !== "ready" || !provider.modelConfigId) return;
+    if (provider.status !== "ready" || !provider.modelConfigId) {
+      applyReasoningForSelectedModel(provider);
+      applyFastModeForSelectedModel(provider);
+      return;
+    }
     try {
       const connection = this.connection(thread.id, profileId);
       if (!connection) throw new Error(`${profileById(profileId).label} is not connected`);
@@ -306,6 +343,29 @@ export class ProviderRuntime {
       const message = error instanceof Error ? error.message : String(error);
       provider.error = message;
       addMessage(thread, "error", `Could not change reasoning variant: ${message}`);
+    }
+  }
+
+  async selectFastMode(thread: ThreadState, enabled: boolean) {
+    const provider = thread.providers[thread.profileId];
+    if (!provider.fastModeConfigId) return;
+    const previousFastModeEnabled = provider.fastModeEnabled;
+    provider.fastModeEnabled = enabled;
+    provider.error = undefined;
+    if (provider.status !== "ready") return;
+    try {
+      const connection = this.connection(thread.id, thread.profileId);
+      if (!connection) throw new Error(`${profileById(thread.profileId).label} is not connected`);
+      const updated = await connection.setBooleanConfigOption(provider.fastModeConfigId, enabled);
+      if (updated.fastModeEnabled !== enabled) {
+        throw new Error(`${profileById(thread.profileId).label} did not apply Fast mode.`);
+      }
+      applyProviderConfigState(provider, updated);
+    } catch (error) {
+      provider.fastModeEnabled = previousFastModeEnabled;
+      const message = error instanceof Error ? error.message : String(error);
+      provider.error = message;
+      addMessage(thread, "error", `Could not change Fast mode: ${message}`);
     }
   }
 
@@ -364,9 +424,36 @@ export function applyProviderConfigState(provider: ProviderSessionState, state: 
   if (state.modelConfigId) provider.modelConfigId = state.modelConfigId;
   if (state.models.length > 0) provider.models = state.models;
   if (state.selectedModelId) provider.selectedModelId = state.selectedModelId;
-  if (state.reasoningConfigId) provider.reasoningConfigId = state.reasoningConfigId;
-  if (state.reasoningOptions.length > 0) provider.reasoningOptions = state.reasoningOptions;
-  if (state.selectedReasoningId) provider.selectedReasoningId = state.selectedReasoningId;
+  provider.reasoningConfigId = state.reasoningConfigId;
+  provider.reasoningOptions = state.reasoningOptions;
+  provider.selectedReasoningId = state.selectedReasoningId;
+  const modelId = state.selectedModelId ?? provider.selectedModelId;
+  if (modelId) {
+    provider.reasoningOptionsByModel = {
+      ...provider.reasoningOptionsByModel,
+      [modelId]: {
+        options: state.reasoningOptions,
+        selectedId: state.selectedReasoningId,
+      },
+    };
+  }
+  if (modelId) {
+    const fastModeOptionsByModel = { ...provider.fastModeOptionsByModel };
+    if (state.fastModeConfigId && state.fastModeEnabled !== undefined) {
+      fastModeOptionsByModel[modelId] = {
+        configId: state.fastModeConfigId,
+        enabled: state.fastModeEnabled,
+        description: state.fastModeDescription,
+      };
+    } else {
+      delete fastModeOptionsByModel[modelId];
+    }
+    provider.fastModeOptionsByModel = fastModeOptionsByModel;
+  }
+  provider.fastModeConfigId = state.fastModeConfigId;
+  provider.fastModeModelId = state.fastModeConfigId ? modelId : undefined;
+  provider.fastModeEnabled = state.fastModeEnabled;
+  provider.fastModeDescription = state.fastModeDescription;
 }
 
 export type { SessionUpdate };

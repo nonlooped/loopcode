@@ -34,6 +34,11 @@
   white-space: nowrap;
 }
 
+.reasoning-picker-trigger svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
 .reasoning-picker-trigger:disabled {
   cursor: default;
   opacity: 0.46;
@@ -63,6 +68,21 @@
   flex-direction: column;
   gap: 2px;
   padding: 2px 0;
+}
+
+.reasoning-menu-divider {
+  height: 1px;
+  margin: 4px 3px;
+  background: var(--line);
+}
+
+.reasoning-menu-label {
+  padding: 5px 8px 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .reasoning-option {

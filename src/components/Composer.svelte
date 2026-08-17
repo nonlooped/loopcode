@@ -15,6 +15,7 @@
   import ReasoningPicker from './ReasoningPicker.svelte';
   import { profileById } from '../config/providers';
   import type { ComposerImage, ModelOption, ProviderModelCatalog, ThreadState } from '../types';
+  import { fastModeAvailable } from '../utils/fast-mode';
   import { activeProvider, threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -31,6 +32,7 @@
     reconnect: () => void;
     selectModel: (profileId: string, model: ModelOption) => void;
     selectReasoning: (reasoningId: string) => void;
+    selectFastMode: (enabled: boolean) => void;
     activateProvider: (profileId: string) => void;
     retryDiscovery: (profileId: string) => void;
   }
@@ -178,12 +180,13 @@
             <ModelPicker thread={props.thread} catalogs={props.catalogs} choose={chooseModel} retryDiscovery={props.retryDiscovery} />
           {/if}
         </div>
-        {#if provider.reasoningOptions.length > 1}
+        {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider)}
           <ReasoningPicker
             {provider}
             open={reasoningPickerOpen}
             setOpen={(open) => { modelPickerOpen = false; reasoningPickerOpen = open; }}
             select={props.selectReasoning}
+            selectFastMode={props.selectFastMode}
           />
         {/if}
       </div>

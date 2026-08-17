@@ -1,4 +1,6 @@
 import { providerDefinitionById, providerDefinitions } from "../config/provider-definitions.ts";
+import { applyFastModeForSelectedModel } from "./fast-mode.ts";
+import { applyReasoningForSelectedModel } from "./reasoning-options.ts";
 import { newThreadTitle } from "./thread-title.ts";
 import type {
   ProviderModelCatalog,
@@ -12,13 +14,18 @@ export function createProviderState(
   catalogs: Record<string, ProviderModelCatalog>,
 ): ProviderSessionState {
   const catalog = catalogs[profileId];
-  return {
+  const provider: ProviderSessionState = {
     status: "disconnected",
     models: catalog?.models ?? [],
     selectedModelId: catalog?.selectedModelId,
     reasoningOptions: catalog?.reasoningOptions ?? [],
     selectedReasoningId: catalog?.selectedReasoningId,
+    reasoningOptionsByModel: catalog?.reasoningOptionsByModel,
+    fastModeOptionsByModel: catalog?.fastModeOptionsByModel,
   };
+  applyReasoningForSelectedModel(provider);
+  applyFastModeForSelectedModel(provider);
+  return provider;
 }
 
 export function createThread(

@@ -32,7 +32,7 @@ Tauri starts the frontend through `npm run dev`, which runs `vp dev`.
 
 At startup, LoopCode briefly connects to Codex, Claude, and OpenCode to discover their advertised models. It then stops those discovery harnesses and caches the model lists for the lifetime of the application. New and restored threads remain local and disconnected until their first prompt.
 
-A thread can be associated with the initial working folder or a folder added through the project menu. The first prompt starts only the selected provider, applies the selected model and reasoning option, and sends text and any attached images. Switching to a provider that has not yet been used remains local until the next prompt.
+A thread can be associated with the initial working folder or a folder added through the project menu. The first prompt starts only the selected provider, applies the selected model, reasoning option, and advertised Fast mode setting, and sends text and any attached images. Switching to a provider that has not yet been used remains local until the next prompt.
 
 After the first text prompt, LoopCode uses the selected model in a quiet secondary ACP session to generate a concise title. Title-session output never enters the visible transcript.
 
@@ -46,7 +46,7 @@ LoopCode persists:
 - Added projects and the selected project
 - The selected provider for each thread
 
-Harness process IDs, ACP session IDs, connection status, provider errors, and discovered runtime configuration remain private and transient. Restored threads always reconnect through fresh sessions.
+ACP session IDs are persisted as private per-provider thread metadata so agents can restore context after a restart. Harness process IDs, connection status, provider errors, and discovered runtime configuration remain transient. Agent-replayed history is not imported into LoopCode's visible transcript.
 
 ## Verification
 
@@ -64,7 +64,7 @@ cargo check --manifest-path src-tauri\Cargo.toml
 ## Current boundaries
 
 - LoopCode targets stable ACP v1. Experimental ACP v2 is not enabled.
-- Authentication flows, loading agent-owned sessions, MCP server injection, and non-model configuration UI are not implemented.
+- Authentication flows, loading agent-owned sessions, MCP server injection, and non-model configuration UI beyond advertised Fast mode are not implemented.
 - Permission requests are supported. LoopCode does not advertise filesystem or terminal client capabilities.
 - Citations and specialized rich tool renderers are not included.
 - Each active thread/provider pair owns its harness process; there is no cross-thread pooling, crash recovery, queue backpressure, or log export.

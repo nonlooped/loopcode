@@ -18,6 +18,14 @@ void test("reads model and reasoning selectors from typed ACP config options", (
         ],
       },
       {
+        id: "fast_mode",
+        name: "Fast mode",
+        category: "model_config",
+        type: "boolean",
+        currentValue: true,
+        description: "Faster responses at a higher cost.",
+      },
+      {
         id: "reasoning_effort",
         name: "Reasoning effort",
         category: "model_config",
@@ -50,5 +58,8 @@ void test("reads model and reasoning selectors from typed ACP config options", (
       { id: "medium", name: "Medium", description: undefined },
     ],
     selectedReasoningId: "medium",
+    fastModeConfigId: "fast_mode",
+    fastModeEnabled: true,
+    fastModeDescription: "Faster responses at a higher cost.",
   });
 });
