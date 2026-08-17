@@ -18,9 +18,12 @@
     background: transparent;
   }
 
-  .title-context,
-  .app-shell.sidebar-collapsed .title-context {
+  .title-context {
     padding-left: 160px;
+  }
+
+  .app-shell.sidebar-collapsed .title-context {
+    padding-left: 14px;
   }
 
   .workspace-grid {
@@ -50,8 +53,20 @@
 }
 
 @media (max-width: 680px) {
+  .app-shell.sidebar-collapsed .titlebar {
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+
+  .app-shell.sidebar-collapsed .window-chrome {
+    width: 120px;
+  }
+
   .title-context {
     padding-left: 124px !important;
+  }
+
+  .app-shell.sidebar-collapsed .title-context {
+    padding-left: 14px !important;
   }
 
   .traffic-controls {
@@ -93,8 +108,8 @@
     padding: 16px;
   }
 
-  .permission-actions button {
-    max-width: min(160px, 100%);
+  .permission-actions {
+    grid-template-columns: 1fr;
   }
 }
 

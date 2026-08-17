@@ -46,10 +46,12 @@
       <span class="title-copy"><strong>General</strong></span>
     {:else if selectedThread}
       {@const selectedProfile = profileById(selectedThread.profileId)}
-      <img class="title-provider-icon" src={selectedProfile.icon} alt="" />
-      <span class="title-copy">
-        <strong>{selectedThread.title}</strong>
-        <small>{#if selectedThread.cwd}{folderName(selectedThread.cwd)}{/if}</small>
+      <span class="title-thread-context">
+        <img class="title-provider-icon" src={selectedProfile.icon} alt="" />
+        <span class="title-copy">
+          <strong title={selectedThread.title}>{selectedThread.title}</strong>
+          <small title={selectedThread.cwd}>{#if selectedThread.cwd}{folderName(selectedThread.cwd)}{/if}</small>
+        </span>
       </span>
     {/if}
   </div>
