@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { AcpConnection } from "../src/services/acp.ts";
 
-function fakeTransport({ loadSession = false, resumeSession = false } = {}) {
+function fakeTransport({ loadSession = false, resumeSession = false, promptMode = "normal" } = {}) {
   let onEvent;
   let session = 0;
   const sent = [];
@@ -60,6 +60,11 @@ function fakeTransport({ loadSession = false, resumeSession = false } = {}) {
       } else if (message.method === "session/set_config_option") {
         reply(message.id, { configOptions });
       } else if (message.method === "session/prompt") {
+        if (promptMode === "pending") return;
+        if (promptMode === "error") {
+          replyError(message.id, -32603, "Internal error", { detail: "turn already active" });
+          return;
+        }
         onEvent({
           event: "rpc",
           data: {
@@ -68,10 +73,19 @@ function fakeTransport({ loadSession = false, resumeSession = false } = {}) {
               method: "session/update",
               params: {
                 sessionId: message.params.sessionId,
-                update: {
-                  sessionUpdate: "agent_message_chunk",
-                  content: { type: "text", text: "Done" },
-                },
+                update:
+                  promptMode === "active-tool"
+                    ? {
+                        sessionUpdate: "tool_call",
+                        toolCallId: "tool-1",
+                        title: "Editing files",
+                        kind: "edit",
+                        status: "in_progress",
+                      }
+                    : {
+                        sessionUpdate: "agent_message_chunk",
+                        content: { type: "text", text: "Done" },
+                      },
               },
             },
           },
@@ -85,6 +99,15 @@ function fakeTransport({ loadSession = false, resumeSession = false } = {}) {
   function reply(id, result) {
     queueMicrotask(() => {
       onEvent({ event: "rpc", data: { message: { jsonrpc: "2.0", id, result } } });
+    });
+  }
+
+  function replyError(id, code, message, data) {
+    queueMicrotask(() => {
+      onEvent({
+        event: "rpc",
+        data: { message: { jsonrpc: "2.0", id, error: { code, message, data } } },
+      });
     });
   }
 
@@ -232,6 +255,89 @@ void test("uses the official SDK to initialize, create a session, and route upda
     updates.map((update) => update.sessionUpdate),
     ["agent_message_chunk"],
   );
+});
+
+void test("blocks another prompt when ACP completes with a tool still active", async () => {
+  const fake = fakeTransport({ promptMode: "active-tool" });
+  const turnStatuses = [];
+  const errors = [];
+  const connection = new AcpConnection(
+    {
+      connectionStatus: () => {},
+      turnStatus: (status) => turnStatuses.push(status),
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: (error) => errors.push(error),
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  await assert.rejects(connection.prompt("First"), /tool call\(s\) still active/);
+  await assert.rejects(connection.prompt("Second"), /already has an active turn/);
+
+  assert.equal(fake.sent.filter((message) => message.method === "session/prompt").length, 1);
+  assert.deepEqual(turnStatuses, ["running", "blocked"]);
+  assert.equal(errors[0].scope, "turn");
+  assert.equal(errors[0].method, "session/prompt");
+});
+
+void test("cancellation does not release the active-turn guard before prompt completion", async () => {
+  const fake = fakeTransport({ promptMode: "pending" });
+  const connection = new AcpConnection(
+    {
+      connectionStatus: () => {},
+      turnStatus: () => {},
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  void connection.prompt("First");
+  await connection.cancel();
+  await assert.rejects(connection.prompt("Second"), /already has an active turn/);
+  assert.equal(fake.sent.filter((message) => message.method === "session/prompt").length, 1);
+  assert.equal(
+    fake.sent.some((message) => message.method === "session/cancel"),
+    true,
+  );
+});
+
+void test("preserves structured prompt errors without marking the connection unavailable", async () => {
+  const fake = fakeTransport({ promptMode: "error" });
+  const connectionStatuses = [];
+  const turnStatuses = [];
+  const errors = [];
+  const connection = new AcpConnection(
+    {
+      connectionStatus: (status) => connectionStatuses.push(status),
+      turnStatus: (status) => turnStatuses.push(status),
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: (error) => errors.push(error),
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  await assert.rejects(connection.prompt("Hello"), /Internal error/);
+
+  assert.deepEqual(connectionStatuses, ["connecting", "ready"]);
+  assert.deepEqual(turnStatuses, ["running", "failed"]);
+  assert.equal(errors[0].code, -32603);
+  assert.deepEqual(errors[0].data, { detail: "turn already active" });
 });
 
 void test("prefers resuming an existing session without replaying history", async () => {
@@ -410,6 +516,39 @@ void test("presents question tool input as an agent question", async () => {
   });
   const response = fake.sent.find((message) => message.id === 100 && "result" in message);
   assert.deepEqual(response.result, { outcome: { outcome: "selected", optionId: "sqlite" } });
+});
+
+void test("automatically approves permissions in full access mode without answering questions", async () => {
+  const fake = fakeTransport();
+  const requests = [];
+  const connection = new AcpConnection(
+    {
+      status: () => {},
+      ready: () => {},
+      update: () => {},
+      permission: (request) => requests.push(request),
+      permissionMode: () => "full",
+      stderr: () => {},
+      error: (message) => {
+        throw new Error(message);
+      },
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  fake.requestPermission();
+  fake.requestQuestion();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const permissionResponse = fake.sent.find((message) => message.id === 99 && "result" in message);
+  assert.deepEqual(permissionResponse.result, {
+    outcome: { outcome: "selected", optionId: "allow" },
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "question");
+  connection.cancelPermission(requests[0].requestId);
 });
 
 void test("returns permission decisions through the SDK request handler", async () => {

@@ -42,7 +42,8 @@ void test("restores valid workspaces and resets transient provider runtime state
 
   assert.equal(restored.selectedThreadId, "thread-1");
   assert.equal(restored.selectedProjectId, "project-1");
-  assert.equal(restored.threads[0].providers.codex.status, "disconnected");
+  assert.equal(restored.threads[0].providers.codex.connectionStatus, "disconnected");
+  assert.equal(restored.threads[0].providers.codex.turnStatus, "idle");
   assert.equal(restored.threads[0].providers.codex.selectedModelId, "model");
 });
 
@@ -94,7 +95,8 @@ void test("workspace snapshots retain private session mappings but exclude trans
     "C:\\default",
     catalogs,
   );
-  restored.threads[0].providers.codex.status = "running";
+  restored.threads[0].providers.codex.connectionStatus = "ready";
+  restored.threads[0].providers.codex.turnStatus = "running";
   restored.threads[0].providers.codex.harnessId = "transient-harness";
   restored.threads[0].providers.codex.sessionId = "private-session";
 

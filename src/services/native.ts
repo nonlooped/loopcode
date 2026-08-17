@@ -5,6 +5,8 @@ export interface LaunchRequest {
   command: string;
   args: string[];
   cwd: string;
+  profileId?: string;
+  threadId?: string;
 }
 
 export type BrokerEvent =
@@ -45,6 +47,14 @@ export function loadWorkspace(): Promise<unknown> {
 
 export function saveWorkspace(workspace: unknown): Promise<void> {
   return invoke("save_workspace", { workspace });
+}
+
+export function recordDiagnostic(level: string, eventName: string, fields: unknown): Promise<void> {
+  return invoke("record_diagnostic", { level, eventName, fields });
+}
+
+export function exportDiagnostics(): Promise<string | null> {
+  return invoke("export_diagnostics");
 }
 
 export function pickFolder(): Promise<string | null> {

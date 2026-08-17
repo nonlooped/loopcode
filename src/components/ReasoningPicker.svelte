@@ -29,7 +29,7 @@
     aria-expanded={props.open}
     aria-haspopup="menu"
     title={`Reasoning: ${selectedName}${fastModeEnabled ? ' · Fast mode' : ''}`}
-    disabled={props.provider.status === 'running' || props.provider.status === 'connecting'}
+    disabled={props.provider.turnStatus !== 'idle' || props.provider.connectionStatus === 'connecting'}
     onclick={() => props.setOpen(!props.open)}
   ><span>{selectedName}</span>{#if fastModeEnabled}<IconBolt class="fast-mode-indicator" size={13} stroke={1.9} aria-hidden="true" />{/if}</button>
   {#if props.open}

@@ -1,7 +1,15 @@
 import * as acp from "@agentclientprotocol/sdk";
 
 import { launchHarness, sendRpc, stopHarness, type BrokerEvent } from "./native.ts";
-import type { ConnectRequest, PermissionRequest, ThreadStatus } from "../types/index.ts";
+import type {
+  AcpErrorDetails,
+  ConnectRequest,
+  ConnectionStatus,
+  PermissionMode,
+  PermissionRequest,
+  ThreadStatus,
+  TurnStatus,
+} from "../types/index.ts";
 import { readModelState, type AcpModelState } from "../utils/model-state.ts";
 
 type RpcId = acp.JsonRpcId;
@@ -32,12 +40,15 @@ const nativeTransport: AcpTransport = {
 export type PromptImage = acp.ImageContent & { type: "image" };
 
 export interface AcpCallbacks {
-  status: (status: ThreadStatus) => void;
+  connectionStatus?: (status: ConnectionStatus) => void;
+  turnStatus?: (status: TurnStatus) => void;
+  status?: (status: ThreadStatus) => void;
   ready: (session: AcpSessionInfo) => void;
   update: (update: acp.SessionUpdate) => void;
   permission: (request: PermissionRequest) => void;
+  permissionMode?: () => PermissionMode;
   stderr: (line: string) => void;
-  error: (message: string) => void;
+  error: (error: AcpErrorDetails) => void;
   exited: (code: number | null) => void;
 }
 
@@ -59,6 +70,8 @@ export class AcpConnection {
   #titleSessions = new Map<string, string[]>();
   #permissions = new Map<RpcId, PendingPermission>();
   #elicitations = new Map<RpcId, PendingElicitation>();
+  #activeToolIds = new Set<string>();
+  #turnActive = false;
   #stopping = false;
 
   constructor(callbacks: AcpCallbacks, transport: AcpTransport = nativeTransport) {
@@ -71,7 +84,8 @@ export class AcpConnection {
   }
 
   async connect(request: ConnectRequest) {
-    this.#callbacks.status("connecting");
+    this.#emitConnectionStatus("connecting");
+    let method = "launch";
     try {
       const readable = new ReadableStream<acp.AnyMessage>({
         start: (controller) => {
@@ -80,7 +94,13 @@ export class AcpConnection {
       });
 
       this.#harnessId = await this.#transport.launch(
-        { command: request.command, args: request.args, cwd: request.cwd },
+        {
+          command: request.command,
+          args: request.args,
+          cwd: request.cwd,
+          profileId: request.profileId,
+          threadId: request.threadId,
+        },
         (event) => this.#receiveBrokerEvent(event),
       );
       const harnessId = this.#harnessId;
@@ -101,6 +121,7 @@ export class AcpConnection {
 
       this.#connection = client.connect({ readable, writable });
       this.#context = this.#connection.agent;
+      method = "initialize";
       const initialized = await this.#context.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
         clientCapabilities: {
@@ -129,12 +150,14 @@ export class AcpConnection {
         sessionId = request.sessionId;
         this.#sessionId = sessionId;
         if (initialized.agentCapabilities?.sessionCapabilities?.resume) {
+          method = "session/resume";
           sessionState = await this.#context.request(acp.methods.agent.session.resume, {
             sessionId,
             cwd: request.cwd,
             mcpServers: [],
           });
         } else if (initialized.agentCapabilities?.loadSession) {
+          method = "session/load";
           this.#loadingSession = true;
           try {
             sessionState = await this.#context.request(acp.methods.agent.session.load, {
@@ -149,6 +172,7 @@ export class AcpConnection {
           throw new Error("This agent cannot restore its previous session context");
         }
       } else {
+        method = "session/new";
         const session = await this.#context.request(acp.methods.agent.session.new, {
           cwd: request.cwd,
           mcpServers: [],
@@ -162,30 +186,50 @@ export class AcpConnection {
         sessionId,
         ...readModelState(sessionState),
       });
-      this.#callbacks.status("ready");
+      this.#emitConnectionStatus("ready");
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.#callbacks.error(message);
-      this.#callbacks.status("error");
+      this.#callbacks.error(errorDetails(error, "connection", method));
+      this.#emitConnectionStatus("error");
       await this.stop();
       throw error;
     }
   }
 
   async prompt(text: string, images: PromptImage[] = []) {
+    if (this.#turnActive) throw new Error("This ACP session already has an active turn");
     const context = this.#requireContext();
     const sessionId = this.#requireSessionId();
-    this.#callbacks.status("running");
+    this.#turnActive = true;
+    this.#activeToolIds.clear();
+    this.#emitTurnStatus("running");
+    let blockedReported = false;
     try {
       await context.request(acp.methods.agent.session.prompt, {
         sessionId,
         prompt: [...(text ? [{ type: "text" as const, text }] : []), ...images],
       });
-      this.#callbacks.status("ready");
+      if (this.#activeToolIds.size > 0) {
+        const error = new Error(
+          `ACP session/prompt completed with ${this.#activeToolIds.size} tool call(s) still active`,
+        );
+        this.#callbacks.error(errorDetails(error, "turn", "session/prompt"));
+        this.#emitTurnStatus("blocked");
+        blockedReported = true;
+        throw error;
+      }
+      this.#turnActive = false;
+      this.#emitTurnStatus("idle");
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.#callbacks.error(message);
-      this.#callbacks.status("error");
+      if (this.#activeToolIds.size > 0) {
+        if (!blockedReported) {
+          this.#callbacks.error(errorDetails(error, "turn", "session/prompt"));
+          this.#emitTurnStatus("blocked");
+        }
+        throw error;
+      }
+      this.#turnActive = false;
+      this.#callbacks.error(errorDetails(error, "turn", "session/prompt"));
+      this.#emitTurnStatus("failed");
       throw error;
     }
   }
@@ -195,7 +239,6 @@ export class AcpConnection {
     await this.#context.notify(acp.methods.agent.session.cancel, {
       sessionId: this.#sessionId,
     });
-    this.#callbacks.status("ready");
   }
 
   async setModel(configId: string, modelId: string) {
@@ -286,6 +329,8 @@ export class AcpConnection {
     this.#sessionId = undefined;
     this.#context = undefined;
     this.#loadingSession = false;
+    this.#turnActive = false;
+    this.#activeToolIds.clear();
     this.#connection?.close();
     this.#connection = undefined;
     this.#titleSessions.clear();
@@ -296,6 +341,18 @@ export class AcpConnection {
       this.#stopping = false;
       throw error;
     }
+  }
+
+  #emitConnectionStatus(status: ConnectionStatus) {
+    this.#callbacks.connectionStatus?.(status);
+    this.#callbacks.status?.(status);
+  }
+
+  #emitTurnStatus(status: TurnStatus) {
+    this.#callbacks.turnStatus?.(status);
+    if (status === "running") this.#callbacks.status?.("running");
+    else if (status === "blocked") this.#callbacks.status?.("error");
+    else this.#callbacks.status?.("ready");
   }
 
   #requireContext() {
@@ -318,7 +375,8 @@ export class AcpConnection {
       return;
     }
     if (event.event === "error") {
-      this.#callbacks.error(event.data.message);
+      this.#callbacks.error({ scope: "transport", message: event.data.message });
+      this.#emitConnectionStatus("error");
       return;
     }
 
@@ -329,6 +387,8 @@ export class AcpConnection {
     this.#context = undefined;
     this.#connection = undefined;
     this.#loadingSession = false;
+    this.#turnActive = false;
+    this.#activeToolIds.clear();
     this.#titleSessions.clear();
     this.#cancelInteractions();
     if (!this.#incomingClosed) {
@@ -339,6 +399,7 @@ export class AcpConnection {
   }
 
   #receiveSessionUpdate(notification: acp.SessionNotification) {
+    this.#trackToolUpdate(notification);
     const titleChunks = this.#titleSessions.get(notification.sessionId);
     if (titleChunks) {
       if (
@@ -354,13 +415,35 @@ export class AcpConnection {
     }
   }
 
+  #trackToolUpdate(notification: acp.SessionNotification) {
+    if (notification.sessionId !== this.#sessionId) return;
+    const update = notification.update;
+    if (update.sessionUpdate !== "tool_call" && update.sessionUpdate !== "tool_call_update") return;
+    if (update.status === "pending" || update.status === "in_progress") {
+      this.#activeToolIds.add(update.toolCallId);
+    } else if (update.status) {
+      this.#activeToolIds.delete(update.toolCallId);
+    }
+  }
+
   #requestPermission(requestId: RpcId, params: acp.RequestPermissionRequest) {
     if (this.#titleSessions.has(params.sessionId)) {
       return Promise.resolve<PermissionResponse>({ outcome: { outcome: "cancelled" } });
     }
+    const request = permissionFromAcp(requestId, params);
+    const allowedOptionId = preferredAllowOptionId(request);
+    if (
+      request.type === "permission" &&
+      this.#callbacks.permissionMode?.() === "full" &&
+      allowedOptionId
+    ) {
+      return Promise.resolve<PermissionResponse>({
+        outcome: { outcome: "selected", optionId: allowedOptionId },
+      });
+    }
     return new Promise<PermissionResponse>((resolve) => {
       this.#permissions.set(requestId, { resolve });
-      this.#callbacks.permission(permissionFromAcp(requestId, params));
+      this.#callbacks.permission(request);
     });
   }
 
@@ -409,6 +492,22 @@ export class AcpConnection {
   }
 }
 
+function errorDetails(
+  error: unknown,
+  scope: AcpErrorDetails["scope"],
+  method?: string,
+): AcpErrorDetails {
+  const details: AcpErrorDetails = {
+    scope,
+    method,
+    message: error instanceof Error ? error.message : String(error),
+  };
+  if (!isRecord(error)) return details;
+  if (typeof error.code === "number") details.code = error.code;
+  if ("data" in error) details.data = error.data;
+  return details;
+}
+
 function permissionFromAcp(
   requestId: RpcId,
   params: acp.RequestPermissionRequest,
@@ -451,6 +550,13 @@ function questionFromElicitation(params: acp.CreateElicitationRequest) {
       })),
     }),
   };
+}
+
+export function preferredAllowOptionId(request: PermissionRequest) {
+  return (
+    request.options.find((option) => option.kind === "allow_once")?.optionId ??
+    request.options.find((option) => option.kind?.startsWith("allow"))?.optionId
+  );
 }
 
 function requestDetail(rawInput: unknown) {

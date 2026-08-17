@@ -2,7 +2,10 @@ import type { SessionUpdate } from "@agentclientprotocol/sdk";
 
 import { profileById, profiles } from "../config/providers.ts";
 import type {
+  AcpErrorDetails,
+  ConnectionStatus,
   HarnessProfile,
+  PermissionMode,
   PermissionRequest,
   ProviderModelCatalog,
   ProviderSessionState,
@@ -13,6 +16,7 @@ import { addMessage } from "../utils/messages.ts";
 import { discoverModelOptions } from "../utils/model-options.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
 import { AcpConnection, readModelState, type AcpModelState } from "./acp.ts";
+import { recordDiagnostic } from "./native.ts";
 import { SessionUpdateHandler } from "./session-updates.ts";
 
 interface RuntimeHooks {
@@ -23,6 +27,7 @@ interface RuntimeHooks {
 export class ProviderRuntime {
   #catalogs: Record<string, ProviderModelCatalog>;
   #hooks: RuntimeHooks;
+  #permissionMode: PermissionMode = "restricted";
   #connections = new Map<string, AcpConnection>();
   #tokens = new Map<string, string>();
   #updates = new SessionUpdateHandler(applyProviderConfigState);
@@ -34,6 +39,10 @@ export class ProviderRuntime {
 
   connection(threadId: string, profileId: string) {
     return this.#connections.get(connectionKey(threadId, profileId));
+  }
+
+  setPermissionMode(mode: PermissionMode) {
+    this.#permissionMode = mode;
   }
 
   startTurn(threadId: string, profileId: string) {
@@ -59,7 +68,8 @@ export class ProviderRuntime {
     this.#catalogs[profile.id] = { status: "loading", models: [], reasoningOptions: [] };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
     const connection = new AcpConnection({
-      status: () => {},
+      connectionStatus: () => {},
+      turnStatus: () => {},
       ready: (session) => {
         discovered = session;
       },
@@ -145,11 +155,10 @@ export class ProviderRuntime {
     const requestedFastModeEnabled = provider.fastModeEnabled;
     const existingSessionId = provider.sessionId;
     if (!selectedModelId || !provider.models.some((model) => model.id === selectedModelId)) {
-      this.#setError(
-        thread,
-        profile.id,
-        `Choose an advertised ${profile.label} model before connecting.`,
-      );
+      this.#setError(thread, profile.id, {
+        scope: "connection",
+        message: `Choose an advertised ${profile.label} model before connecting.`,
+      });
       return;
     }
 
@@ -158,7 +167,8 @@ export class ProviderRuntime {
     this.#tokens.set(key, token);
     provider.harnessId = undefined;
     provider.error = undefined;
-    this.#setStatus(thread, profile.id, "connecting");
+    provider.errorDetails = undefined;
+    this.#setConnectionStatus(thread, profile.id, "connecting");
 
     const previousConnection = this.#connections.get(key);
     try {
@@ -176,9 +186,13 @@ export class ProviderRuntime {
     let connectionReportedError = false;
     let sessionSelectedModelId: string | undefined;
     const connection = new AcpConnection({
-      status: (status) => {
+      connectionStatus: (status) => {
         if (!isCurrent() || (status === "ready" && !startupComplete)) return;
-        this.#setStatus(thread, profile.id, status);
+        this.#setConnectionStatus(thread, profile.id, status);
+      },
+      turnStatus: (status) => {
+        if (!isCurrent()) return;
+        this.#setTurnStatus(thread, profile.id, status);
       },
       ready: (session) => {
         if (!isCurrent()) return;
@@ -196,6 +210,7 @@ export class ProviderRuntime {
         }
         sessionSelectedModelId = session.selectedModelId;
         provider.error = undefined;
+        provider.errorDetails = undefined;
       },
       update: (update) => {
         if (!isCurrent()) return;
@@ -208,12 +223,19 @@ export class ProviderRuntime {
           this.#hooks.permission({ threadId: thread.id, profileId: profile.id, request });
         }
       },
+      permissionMode: () => this.#permissionMode,
       stderr: () => {},
-      error: (message) => {
+      error: (error) => {
         if (!isCurrent()) return;
-        connectionReportedError = true;
-        this.#setError(thread, profile.id, message);
-        if (thread.profileId === profile.id) addMessage(thread, "error", message);
+        void recordDiagnostic("error", "acp.client.error", {
+          ...error,
+          profileId: profile.id,
+          threadId: thread.id,
+          harnessId: provider.harnessId,
+        }).catch(() => {});
+        if (error.scope !== "turn") connectionReportedError = true;
+        this.#setError(thread, profile.id, error);
+        if (thread.profileId === profile.id) addMessage(thread, "error", error.message);
       },
       exited: (code) => {
         if (!isCurrent()) return;
@@ -221,7 +243,8 @@ export class ProviderRuntime {
         const message =
           code === null ? "The harness exited." : `The harness exited with code ${code}.`;
         provider.error = message;
-        this.#setStatus(thread, profile.id, "stopped");
+        provider.errorDetails = { scope: "transport", message };
+        this.#setConnectionStatus(thread, profile.id, "stopped");
         if (thread.profileId === profile.id) addMessage(thread, "notice", message);
       },
     });
@@ -232,6 +255,8 @@ export class ProviderRuntime {
         cwd: thread.cwd,
         command: profile.command,
         args: profile.args,
+        profileId: profile.id,
+        threadId: thread.id,
         sessionId: existingSessionId,
       });
       if (!isCurrent()) {
@@ -281,7 +306,8 @@ export class ProviderRuntime {
       }
       startupComplete = true;
       provider.error = undefined;
-      this.#setStatus(thread, profile.id, "ready");
+      provider.errorDetails = undefined;
+      this.#setConnectionStatus(thread, profile.id, "ready");
       return connection;
     } catch (error) {
       if (!isCurrent()) return;
@@ -300,7 +326,11 @@ export class ProviderRuntime {
     const previousModelId = provider.selectedModelId;
     provider.selectedModelId = modelId;
     provider.error = undefined;
-    if (provider.status !== "ready" || !provider.modelConfigId) {
+    if (
+      provider.connectionStatus !== "ready" ||
+      provider.turnStatus !== "idle" ||
+      !provider.modelConfigId
+    ) {
       applyReasoningForSelectedModel(provider);
       applyFastModeForSelectedModel(provider);
       return;
@@ -326,7 +356,12 @@ export class ProviderRuntime {
     const previousReasoningId = provider.selectedReasoningId;
     provider.selectedReasoningId = reasoningId;
     provider.error = undefined;
-    if (provider.status !== "ready" || !provider.reasoningConfigId) return;
+    if (
+      provider.connectionStatus !== "ready" ||
+      provider.turnStatus !== "idle" ||
+      !provider.reasoningConfigId
+    )
+      return;
     try {
       const connection = this.connection(thread.id, thread.profileId);
       if (!connection) throw new Error(`${profileById(thread.profileId).label} is not connected`);
@@ -351,7 +386,7 @@ export class ProviderRuntime {
     const previousFastModeEnabled = provider.fastModeEnabled;
     provider.fastModeEnabled = enabled;
     provider.error = undefined;
-    if (provider.status !== "ready") return;
+    if (provider.connectionStatus !== "ready" || provider.turnStatus !== "idle") return;
     try {
       const connection = this.connection(thread.id, thread.profileId);
       if (!connection) throw new Error(`${profileById(thread.profileId).label} is not connected`);
@@ -396,22 +431,59 @@ export class ProviderRuntime {
     else connection.cancelPermission(requestId);
   }
 
-  #setStatus(thread: ThreadState, profileId: string, status: ProviderSessionState["status"]) {
-    thread.providers[profileId].status = status;
+  #setConnectionStatus(thread: ThreadState, profileId: string, status: ConnectionStatus) {
+    const provider = thread.providers[profileId];
+    const previousStatus = provider.connectionStatus;
+    provider.connectionStatus = status;
+    void recordDiagnostic("info", "acp.connection.status_changed", {
+      threadId: thread.id,
+      profileId,
+      harnessId: provider.harnessId,
+      previousStatus,
+      status,
+    }).catch(() => {});
     if (thread.profileId === profileId) thread.updatedAt = Date.now();
   }
 
-  #setError(thread: ThreadState, profileId: string, message: string) {
+  #setTurnStatus(
+    thread: ThreadState,
+    profileId: string,
+    status: ProviderSessionState["turnStatus"],
+  ) {
     const provider = thread.providers[profileId];
-    provider.status = "error";
-    provider.error = message;
+    const previousStatus = provider.turnStatus;
+    provider.turnStatus = status;
+    void recordDiagnostic("info", "acp.turn.status_changed", {
+      threadId: thread.id,
+      profileId,
+      harnessId: provider.harnessId,
+      previousStatus,
+      status,
+    }).catch(() => {});
+    if (status === "idle") {
+      provider.error = undefined;
+      provider.errorDetails = undefined;
+    }
+    if (thread.profileId === profileId) thread.updatedAt = Date.now();
+  }
+
+  #setError(thread: ThreadState, profileId: string, error: AcpErrorDetails) {
+    const provider = thread.providers[profileId];
+    if (error.scope === "turn")
+      provider.turnStatus = provider.turnStatus === "blocked" ? "blocked" : "failed";
+    else provider.connectionStatus = "error";
+    provider.error = error.message;
+    provider.errorDetails = error;
     if (thread.profileId === profileId) thread.updatedAt = Date.now();
   }
 
   #reportError(thread: ThreadState, profileId: string, error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    this.#setError(thread, profileId, message);
-    if (thread.profileId === profileId) addMessage(thread, "error", message);
+    const details: AcpErrorDetails = {
+      scope: "connection",
+      message: error instanceof Error ? error.message : String(error),
+    };
+    this.#setError(thread, profileId, details);
+    if (thread.profileId === profileId) addMessage(thread, "error", details.message);
   }
 }
 

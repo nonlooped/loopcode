@@ -1,5 +1,6 @@
+use crate::diagnostics::{Diagnostics, rpc_fields, safe_stderr};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::{
     collections::HashMap,
     path::Path,
@@ -8,6 +9,7 @@ use std::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
+    time::Instant,
 };
 use tauri::{AppHandle, Manager, State, ipc::Channel};
 use tokio::{
@@ -25,6 +27,14 @@ pub struct Broker {
 struct HarnessHandle {
     stdin: Arc<Mutex<ChildStdin>>,
     stop: mpsc::Sender<()>,
+    pending_requests: Arc<Mutex<HashMap<String, PendingRequest>>>,
+    profile_id: Option<String>,
+    thread_id: Option<String>,
+}
+
+struct PendingRequest {
+    method: String,
+    started_at: Instant,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +43,8 @@ pub struct LaunchRequest {
     command: String,
     args: Vec<String>,
     cwd: String,
+    profile_id: Option<String>,
+    thread_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -101,16 +113,36 @@ pub async fn launch_harness(
         broker.next_id.fetch_add(1, Ordering::Relaxed) + 1
     );
     let (stop, mut stop_rx) = mpsc::channel(1);
+    let pending_requests = Arc::new(Mutex::new(HashMap::new()));
+    let diagnostics = app.state::<Diagnostics>().inner().clone();
+    diagnostics.record(
+        "info",
+        "acp.harness.started",
+        json!({
+            "harnessId": harness_id,
+            "profileId": request.profile_id,
+            "threadId": request.thread_id,
+            "command": command_name,
+            "pid": child.id(),
+        }),
+    );
 
     broker.harnesses.lock().await.insert(
         harness_id.clone(),
         HarnessHandle {
             stdin: Arc::clone(&stdin),
             stop,
+            pending_requests: Arc::clone(&pending_requests),
+            profile_id: request.profile_id.clone(),
+            thread_id: request.thread_id.clone(),
         },
     );
 
     let stdout_events = on_event.clone();
+    let stdout_diagnostics = diagnostics.clone();
+    let stdout_harness_id = harness_id.clone();
+    let stdout_profile_id = request.profile_id.clone();
+    let stdout_thread_id = request.thread_id.clone();
     tauri::async_runtime::spawn(async move {
         let mut lines = BufReader::new(stdout).lines();
         loop {
@@ -118,19 +150,65 @@ pub async fn launch_harness(
                 Ok(Some(line)) if line.trim().is_empty() => {}
                 Ok(Some(line)) => match serde_json::from_str::<Value>(&line) {
                     Ok(message) => {
+                        let mut fields = rpc_fields(
+                            &stdout_harness_id,
+                            stdout_profile_id.as_deref(),
+                            stdout_thread_id.as_deref(),
+                            "agent_to_client",
+                            &message,
+                        );
+                        if message.get("method").is_none()
+                            && let Some(key) = request_key(&message)
+                            && let Some(pending) = pending_requests.lock().await.remove(&key)
+                            && let Value::Object(values) = &mut fields
+                        {
+                            values.insert("method".into(), json!(pending.method));
+                            values.insert(
+                                "durationMs".into(),
+                                json!(pending.started_at.elapsed().as_millis()),
+                            );
+                        }
+                        stdout_diagnostics.record(
+                            if message.get("error").is_some() {
+                                "error"
+                            } else {
+                                "debug"
+                            },
+                            "acp.rpc.received",
+                            fields,
+                        );
                         let _ = stdout_events.send(BrokerEvent::Rpc { message });
                     }
                     Err(error) => {
-                        let _ = stdout_events.send(BrokerEvent::Error {
-                            message: format!("The harness returned invalid ACP JSON: {error}"),
-                        });
+                        let message = format!("The harness returned invalid ACP JSON: {error}");
+                        stdout_diagnostics.record(
+                            "error",
+                            "acp.stdout.invalid_json",
+                            json!({
+                                "harnessId": stdout_harness_id,
+                                "profileId": stdout_profile_id,
+                                "threadId": stdout_thread_id,
+                                "lineLength": line.len(),
+                                "message": message,
+                            }),
+                        );
+                        let _ = stdout_events.send(BrokerEvent::Error { message });
                     }
                 },
                 Ok(None) => break,
                 Err(error) => {
-                    let _ = stdout_events.send(BrokerEvent::Error {
-                        message: format!("Could not read harness output: {error}"),
-                    });
+                    let message = format!("Could not read harness output: {error}");
+                    stdout_diagnostics.record(
+                        "error",
+                        "acp.stdout.read_failed",
+                        json!({
+                            "harnessId": stdout_harness_id,
+                            "profileId": stdout_profile_id,
+                            "threadId": stdout_thread_id,
+                            "message": message,
+                        }),
+                    );
+                    let _ = stdout_events.send(BrokerEvent::Error { message });
                     break;
                 }
             }
@@ -138,10 +216,24 @@ pub async fn launch_harness(
     });
 
     let stderr_events = on_event.clone();
+    let stderr_diagnostics = diagnostics.clone();
+    let stderr_harness_id = harness_id.clone();
+    let stderr_profile_id = request.profile_id.clone();
+    let stderr_thread_id = request.thread_id.clone();
     tauri::async_runtime::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
             if !line.trim().is_empty() {
+                stderr_diagnostics.record(
+                    "warn",
+                    "acp.harness.stderr",
+                    json!({
+                        "harnessId": stderr_harness_id,
+                        "profileId": stderr_profile_id,
+                        "threadId": stderr_thread_id,
+                        "message": safe_stderr(&line),
+                    }),
+                );
                 let _ = stderr_events.send(BrokerEvent::Stderr { line });
             }
         }
@@ -165,15 +257,35 @@ pub async fn launch_harness(
 
         match status {
             Ok(status) => {
+                diagnostics.record(
+                    if status.success() { "info" } else { "error" },
+                    "acp.harness.exited",
+                    json!({
+                        "harnessId": supervisor_id,
+                        "profileId": request.profile_id,
+                        "threadId": request.thread_id,
+                        "code": status.code(),
+                        "success": status.success(),
+                    }),
+                );
                 let _ = on_event.send(BrokerEvent::Exited {
                     code: status.code(),
                     success: status.success(),
                 });
             }
             Err(error) => {
-                let _ = on_event.send(BrokerEvent::Error {
-                    message: format!("Could not observe the harness process: {error}"),
-                });
+                let message = format!("Could not observe the harness process: {error}");
+                diagnostics.record(
+                    "error",
+                    "acp.harness.wait_failed",
+                    json!({
+                        "harnessId": supervisor_id,
+                        "profileId": request.profile_id,
+                        "threadId": request.thread_id,
+                        "message": message,
+                    }),
+                );
+                let _ = on_event.send(BrokerEvent::Error { message });
             }
         }
     });
@@ -184,6 +296,7 @@ pub async fn launch_harness(
 #[tauri::command]
 pub async fn send_rpc(
     broker: State<'_, Broker>,
+    diagnostics: State<'_, Diagnostics>,
     harness_id: String,
     message: Value,
 ) -> Result<(), String> {
@@ -191,31 +304,89 @@ pub async fn send_rpc(
         return Err("ACP messages must be JSON objects".into());
     }
 
-    let stdin = broker
+    let (stdin, pending_requests, profile_id, thread_id) = broker
         .harnesses
         .lock()
         .await
         .get(&harness_id)
-        .map(|handle| Arc::clone(&handle.stdin))
+        .map(|handle| {
+            (
+                Arc::clone(&handle.stdin),
+                Arc::clone(&handle.pending_requests),
+                handle.profile_id.clone(),
+                handle.thread_id.clone(),
+            )
+        })
         .ok_or("The harness is no longer running")?;
+    if let (Some(method), Some(key)) = (
+        message.get("method").and_then(Value::as_str),
+        request_key(&message),
+    ) {
+        pending_requests.lock().await.insert(
+            key,
+            PendingRequest {
+                method: method.to_owned(),
+                started_at: Instant::now(),
+            },
+        );
+    }
+    diagnostics.record(
+        "debug",
+        "acp.rpc.sent",
+        rpc_fields(
+            &harness_id,
+            profile_id.as_deref(),
+            thread_id.as_deref(),
+            "client_to_agent",
+            &message,
+        ),
+    );
     let mut bytes = serde_json::to_vec(&message).map_err(|error| error.to_string())?;
     bytes.push(b'\n');
 
     let mut stdin = stdin.lock().await;
-    stdin
-        .write_all(&bytes)
-        .await
-        .map_err(|error| format!("Could not write to the harness: {error}"))?;
-    stdin
-        .flush()
-        .await
-        .map_err(|error| format!("Could not flush harness input: {error}"))
+    if let Err(error) = stdin.write_all(&bytes).await {
+        let message = format!("Could not write to the harness: {error}");
+        diagnostics.record(
+            "error",
+            "acp.stdin.write_failed",
+            json!({ "harnessId": harness_id, "message": message }),
+        );
+        return Err(message);
+    }
+    if let Err(error) = stdin.flush().await {
+        let message = format!("Could not flush harness input: {error}");
+        diagnostics.record(
+            "error",
+            "acp.stdin.flush_failed",
+            json!({ "harnessId": harness_id, "message": message }),
+        );
+        return Err(message);
+    }
+    Ok(())
+}
+
+fn request_key(message: &Value) -> Option<String> {
+    message.get("id").map(Value::to_string)
 }
 
 #[tauri::command]
-pub async fn stop_harness(broker: State<'_, Broker>, harness_id: String) -> Result<(), String> {
+pub async fn stop_harness(
+    broker: State<'_, Broker>,
+    diagnostics: State<'_, Diagnostics>,
+    harness_id: String,
+) -> Result<(), String> {
     let handle = broker.harnesses.lock().await.remove(&harness_id);
     if let Some(handle) = handle {
+        diagnostics.record(
+            "info",
+            "acp.harness.stop_requested",
+            json!({
+                "harnessId": harness_id,
+                "profileId": handle.profile_id,
+                "threadId": handle.thread_id,
+            }),
+        );
         handle
             .stop
             .send(())
@@ -226,7 +397,10 @@ pub async fn stop_harness(broker: State<'_, Broker>, harness_id: String) -> Resu
 }
 
 #[tauri::command]
-pub async fn stop_all_harnesses(broker: State<'_, Broker>) -> Result<(), String> {
+pub async fn stop_all_harnesses(
+    broker: State<'_, Broker>,
+    diagnostics: State<'_, Diagnostics>,
+) -> Result<(), String> {
     let handles = broker
         .harnesses
         .lock()
@@ -235,6 +409,11 @@ pub async fn stop_all_harnesses(broker: State<'_, Broker>) -> Result<(), String>
         .map(|(_, handle)| handle)
         .collect::<Vec<_>>();
 
+    diagnostics.record(
+        "info",
+        "acp.harness.stop_all_requested",
+        json!({ "count": handles.len() }),
+    );
     for handle in handles {
         let _ = handle.stop.send(()).await;
     }

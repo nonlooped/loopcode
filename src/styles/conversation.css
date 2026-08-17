@@ -66,6 +66,47 @@
   background: rgba(255, 255, 255, 0.015);
 }
 
+.settings-row-separated {
+  border-top: 1px solid var(--line);
+}
+
+.permission-mode-control {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.permission-mode-control label {
+  padding: 6px 9px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.permission-mode-control label:hover,
+.permission-mode-control label.active {
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.permission-mode-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.permission-mode-control label:has(input:focus-visible) {
+  outline: 2px solid rgba(230, 231, 234, 0.58);
+  outline-offset: 1px;
+}
+
 .settings-row-icon {
   display: grid;
   width: 36px;
@@ -90,6 +131,28 @@
   font-size: 13.5px;
   font-weight: 550;
   line-height: 1.2;
+}
+
+.settings-action {
+  min-width: 76px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.settings-action:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.settings-action:disabled {
+  opacity: 0.55;
 }
 
 .settings-row-copy small {

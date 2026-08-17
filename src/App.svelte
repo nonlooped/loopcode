@@ -10,6 +10,7 @@
   import Titlebar from './components/Titlebar.svelte';
   import Transcript from './components/Transcript.svelte';
   import { profileById, profiles } from './config/providers';
+  import { preferredAllowOptionId } from './services/acp';
   import {
     getGitBranch,
     getInitialWorkingDirectory,
@@ -23,12 +24,14 @@
     ComposerImage,
     MessageImage,
     ModelOption,
+    PermissionMode,
     PermissionRequest,
     ProjectState,
     ProviderModelCatalog,
     ThreadState,
   } from './types';
   import { loadComposerImages, MAX_COMPOSER_IMAGES } from './utils/attachments';
+  import { loadPermissionMode, savePermissionMode } from './utils/app-settings';
   import { addMessage, nextTimestamp, titleFromPrompt } from './utils/messages';
   import { findReusableEmptyThread } from './utils/thread-state';
   import { buildThreadTitlePrompt, normalizeThreadTitle } from './utils/thread-title';
@@ -67,6 +70,8 @@
   let sidebarCollapsed = $state(false);
   let settingsOpen = $state(false);
   let compactSessionRows = $state(false);
+  const initialPermissionMode = loadPermissionMode();
+  let permissionMode = $state<PermissionMode>(initialPermissionMode);
   let showSettled = $state(false);
   let workspaceDropdownOpen = $state(false);
   let windowMaximized = $state(false);
@@ -87,6 +92,8 @@
       }
     },
   });
+
+  providers.setPermissionMode(initialPermissionMode);
 
   const selectedThread = $derived(threads.find((thread) => thread.id === selectedThreadId));
   const selectedTimelineEntries = $derived(selectedThread ? timelineEntries(selectedThread) : []);
@@ -291,8 +298,9 @@
       const thread = selectedThread ?? threads[0];
       if (!thread) return;
       const provider = activeProvider(thread);
-      provider.status = 'error';
+      provider.connectionStatus = 'error';
       provider.error = errorMessage(error);
+      provider.errorDetails = { scope: 'connection', message: provider.error };
       addMessage(thread, 'error', provider.error);
     }
   }
@@ -322,7 +330,8 @@
     const thread = selectedThread;
     if (!thread) return;
     const provider = activeProvider(thread);
-    if (provider.status !== 'disconnected' && provider.status !== 'ready') return;
+    if (provider.turnStatus !== 'idle') return;
+    if (provider.connectionStatus !== 'disconnected' && provider.connectionStatus !== 'ready') return;
     const text = thread.draft.trim();
     const images = composerImages(thread.id);
     if (!text && images.length === 0) return;
@@ -337,13 +346,19 @@
     composerImagesByThread[thread.id] = [];
     attachmentErrorsByThread[thread.id] = '';
     provider.error = undefined;
+    provider.errorDetails = undefined;
     if (isFirstPrompt && !text) thread.title = 'Image prompt';
     addMessage(thread, 'user', text, messageImages);
     providers.startTurn(thread.id, profileId);
 
     let connection = providers.connection(thread.id, profileId);
-    if (provider.status === 'disconnected') connection = await providers.connect(thread, profileId);
-    if (thread.profileId !== profileId || thread.providers[profileId].status !== 'ready' || !connection) return;
+    if (provider.connectionStatus === 'disconnected') connection = await providers.connect(thread, profileId);
+    if (
+      thread.profileId !== profileId ||
+      thread.providers[profileId].connectionStatus !== 'ready' ||
+      thread.providers[profileId].turnStatus !== 'idle' ||
+      !connection
+    ) return;
 
     const turnCompletion = connection.prompt(text, promptImages);
     if (isFirstPrompt && text) {
@@ -402,6 +417,25 @@
 
   function reconnect() {
     if (selectedThread) void providers.connect(selectedThread, selectedThread.profileId);
+  }
+
+  function setPermissionMode(mode: PermissionMode) {
+    permissionMode = mode;
+    providers.setPermissionMode(mode);
+    savePermissionMode(mode);
+    if (mode !== 'full') return;
+    for (const [key, interaction] of Object.entries(interactions)) {
+      if (interaction.request.type !== 'permission') continue;
+      const optionId = preferredAllowOptionId(interaction.request);
+      if (!optionId) continue;
+      delete interactions[key];
+      providers.answerPermission(
+        interaction.threadId,
+        interaction.profileId,
+        interaction.request.requestId,
+        optionId,
+      );
+    }
   }
 
   function answerPermission(optionId?: string) {
@@ -485,7 +519,12 @@
     <main class="conversation">
       <div class="conversation-primary">
         {#if settingsOpen}
-          <SettingsPage {compactSessionRows} setCompactSessionRows={(value) => { compactSessionRows = value; }} />
+          <SettingsPage
+            {compactSessionRows}
+            {permissionMode}
+            setCompactSessionRows={(value) => { compactSessionRows = value; }}
+            {setPermissionMode}
+          />
         {:else if selectedThread}
           <Transcript thread={selectedThread} entries={selectedTimelineEntries} reducedMotion={reducedMotion} />
           {#if selectedInteraction?.request.type === 'question'}

@@ -147,7 +147,9 @@
         : status === 'connecting'
           ? `Starting ${threadHarness(props.thread)}...`
           : status === 'error'
-            ? `${threadHarness(props.thread)} unavailable — switch provider or retry`
+            ? provider.turnStatus === 'blocked'
+              ? 'Turn state is inconsistent — reconnect provider'
+              : `${threadHarness(props.thread)} unavailable — switch provider or retry`
             : status === 'stopped'
               ? 'Provider stopped — switch provider or reconnect'
               : 'Do anything...'}

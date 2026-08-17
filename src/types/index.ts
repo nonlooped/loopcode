@@ -1,12 +1,20 @@
-export type ThreadStatus =
-  | "disconnected"
-  | "connecting"
-  | "ready"
-  | "running"
-  | "stopped"
-  | "error";
+export type ConnectionStatus = "disconnected" | "connecting" | "ready" | "stopped" | "error";
+
+export type TurnStatus = "idle" | "running" | "failed" | "blocked";
+
+export type ThreadStatus = ConnectionStatus | "running";
+
+export interface AcpErrorDetails {
+  scope: "connection" | "turn" | "transport";
+  method?: string;
+  code?: number;
+  message: string;
+  data?: unknown;
+}
 
 export type MessageRole = "user" | "agent" | "thought" | "notice" | "error";
+
+export type PermissionMode = "restricted" | "full";
 
 export interface MessageImage {
   data: string;
@@ -108,7 +116,8 @@ export interface FastModeOption {
 }
 
 export interface ProviderSessionState {
-  status: ThreadStatus;
+  connectionStatus: ConnectionStatus;
+  turnStatus: TurnStatus;
   harnessId?: string;
   sessionId?: string;
   modelConfigId?: string;
@@ -124,6 +133,7 @@ export interface ProviderSessionState {
   fastModeEnabled?: boolean;
   fastModeDescription?: string;
   error?: string;
+  errorDetails?: AcpErrorDetails;
 }
 
 export interface HarnessProfile {
@@ -138,6 +148,8 @@ export interface ConnectRequest {
   cwd: string;
   command: string;
   args: string[];
+  profileId?: string;
+  threadId?: string;
   sessionId?: string;
 }
 

@@ -49,8 +49,8 @@
       >
         <span class="provider-icon"><img src={profile.icon} alt="" /></span>
         <span
-          class:ready={state.status === 'ready'}
-          class:error={state.status === 'error' || props.catalogs[profile.id].status === 'error'}
+          class:ready={state.connectionStatus === 'ready'}
+          class:error={state.connectionStatus === 'error' || props.catalogs[profile.id].status === 'error'}
           class="provider-status"
         ></span>
       </button>
@@ -85,7 +85,7 @@
           <button
             class:selected={isSelected}
             class="model-option"
-            disabled={pickerProvider.status === 'running'}
+            disabled={pickerProvider.turnStatus === 'running' || pickerProvider.turnStatus === 'blocked'}
             onclick={() => props.choose(pickerProfile.id, model)}
           >
             <span class="model-option-copy"><strong>{label.name}</strong></span>

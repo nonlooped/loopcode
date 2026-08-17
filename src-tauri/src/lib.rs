@@ -1,7 +1,9 @@
 mod broker;
+mod diagnostics;
 mod persistence;
 
 use broker::{Broker, launch_harness, send_rpc, stop_all_harnesses, stop_harness};
+use diagnostics::Diagnostics;
 use serde_json::Value;
 use std::process::Command;
 use tauri::Manager;
@@ -88,6 +90,49 @@ async fn save_workspace(app: tauri::AppHandle, workspace: Value) -> Result<(), S
 }
 
 #[tauri::command]
+fn record_diagnostic(
+    diagnostics: tauri::State<'_, Diagnostics>,
+    level: String,
+    event_name: String,
+    fields: Value,
+) {
+    diagnostics.record(&level, &event_name, fields);
+}
+
+#[tauri::command]
+async fn export_diagnostics(
+    diagnostics: tauri::State<'_, Diagnostics>,
+) -> Result<Option<String>, String> {
+    let diagnostics = diagnostics.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let destination = rfd::FileDialog::new()
+            .set_title("Export LoopCode diagnostics")
+            .set_file_name("loopcode-acp-diagnostics.jsonl")
+            .add_filter("JSON Lines", &["jsonl"])
+            .save_file();
+        let Some(destination) = destination else {
+            return Ok(None);
+        };
+        match diagnostics.export_to(&destination) {
+            Ok(()) => {
+                diagnostics.record("info", "diagnostics.exported", serde_json::json!({}));
+                Ok(Some(destination.to_string_lossy().into_owned()))
+            }
+            Err(error) => {
+                diagnostics.record(
+                    "error",
+                    "diagnostics.export_failed",
+                    serde_json::json!({ "message": error }),
+                );
+                Err(error)
+            }
+        }
+    })
+    .await
+    .map_err(|error| format!("Could not join the diagnostics export task: {error}"))?
+}
+
+#[tauri::command]
 async fn pick_folder() -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(|| {
         rfd::FileDialog::new()
@@ -133,9 +178,14 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
 }
 
 pub fn run() {
+    let home = std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Broker::default())
+        .manage(Diagnostics::new(home.join(".loopcode").join("logs")))
         .setup(|app| {
             #[cfg(windows)]
             {
@@ -154,6 +204,8 @@ pub fn run() {
             initial_working_directory,
             load_workspace,
             save_workspace,
+            record_diagnostic,
+            export_diagnostics,
             pick_folder,
             get_git_branch,
         ])

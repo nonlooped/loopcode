@@ -15,7 +15,8 @@ export function createProviderState(
 ): ProviderSessionState {
   const catalog = catalogs[profileId];
   const provider: ProviderSessionState = {
-    status: "disconnected",
+    connectionStatus: "disconnected",
+    turnStatus: "idle",
     models: catalog?.models ?? [],
     selectedModelId: catalog?.selectedModelId,
     reasoningOptions: catalog?.reasoningOptions ?? [],
@@ -56,7 +57,10 @@ export function activeProvider(thread: ThreadState) {
 }
 
 export function threadStatus(thread: ThreadState): ThreadStatus {
-  return activeProvider(thread).status;
+  const provider = activeProvider(thread);
+  if (provider.turnStatus === "running") return "running";
+  if (provider.turnStatus === "blocked") return "error";
+  return provider.connectionStatus;
 }
 
 export function threadHarness(thread: ThreadState) {
