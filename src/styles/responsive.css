@@ -89,16 +89,12 @@
     padding: 12px;
   }
 
-  .permission-header {
-    padding: 15px 15px 12px;
-  }
-
-  .permission-detail {
-    margin: 0 15px 14px;
+  .permission-modal {
+    padding: 16px;
   }
 
   .permission-actions button {
-    flex: 1 1 auto;
+    max-width: min(160px, 100%);
   }
 }
 

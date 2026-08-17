@@ -64,16 +64,12 @@
   text-transform: capitalize;
 }
 
-.tool-item pre,
-.permission-detail pre {
+.tool-item pre {
   margin: 0;
   overflow: auto;
   font-family: "Cascadia Mono", Consolas, monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.tool-item pre {
   max-height: 260px;
   margin: 2px 5px 5px 27px;
   padding: 7px 8px;
