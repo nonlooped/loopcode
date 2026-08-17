@@ -1,0 +1,99 @@
+:root {
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", sans-serif;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --shell-tint: rgba(13, 14, 17, 0.66);
+  /* Surface colors must retain alpha so the native acrylic remains visible. */
+  --shell-solid: rgba(23, 24, 27, 0.88);
+  --sidebar-tint: rgba(255, 255, 255, 0.026);
+  --floating-surface: rgba(255, 255, 255, 0.058);
+  --panel: rgba(255, 255, 255, 0.032);
+  --panel-hover: rgba(255, 255, 255, 0.048);
+  --panel-active: rgba(255, 255, 255, 0.072);
+  --line: rgba(255, 255, 255, 0.065);
+  --line-strong: rgba(255, 255, 255, 0.115);
+  --text: rgba(249, 249, 250, 0.94);
+  /* Semantic grey text must stay opaque and above 4.5:1 contrast on the dark shell. */
+  --text-soft: rgb(210, 211, 214);
+  --muted: rgb(174, 176, 182);
+  --faint: rgb(145, 148, 156);
+  --accent: rgba(236, 236, 238, 0.92);
+  --accent-hover: rgba(255, 255, 255, 0.98);
+  --success: rgba(136, 180, 154, 0.92);
+  --danger: rgba(215, 126, 137, 0.92);
+  --warning: rgba(212, 170, 114, 0.92);
+  --shadow: 0 28px 90px rgba(0, 0, 0, 0.4);
+  --sidebar-width: 256px;
+  --titlebar-height: 38px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  color: var(--text);
+  font-size: 14px;
+}
+
+button,
+input,
+textarea,
+select {
+  color: inherit;
+  font: inherit;
+}
+
+button,
+select,
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+textarea:disabled {
+  cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible,
+summary:focus-visible {
+  outline: 2px solid rgba(230, 231, 234, 0.58);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(210, 213, 220, 0.24);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
+}

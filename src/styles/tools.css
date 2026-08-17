@@ -1,0 +1,101 @@
+.tool-item {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.tool-item[open] {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.tool-item summary {
+  display: flex;
+  min-height: 26px;
+  padding: 1px 4px;
+  align-items: center;
+  gap: 5px;
+  opacity: 0.82;
+}
+
+.tool-item summary:hover {
+  background: rgba(255, 255, 255, 0.025);
+  opacity: 1;
+}
+
+.tool-icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  color: var(--faint);
+}
+
+.tool-title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.tool-title strong,
+.tool-title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-title strong {
+  min-width: 0;
+  flex: 1 1 auto;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 540;
+}
+
+.tool-title small {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 9px;
+  text-transform: capitalize;
+}
+
+.tool-item pre,
+.permission-modal pre {
+  margin: 0;
+  overflow: auto;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tool-item pre {
+  max-height: 260px;
+  margin: 2px 5px 5px 27px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+.tool-locations {
+  display: grid;
+  margin: 2px 5px 5px 27px;
+  gap: 4px;
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 9.5px;
+}
+
+.tool-locations span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

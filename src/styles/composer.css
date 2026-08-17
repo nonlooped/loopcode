@@ -1,0 +1,214 @@
+.composer-wrap {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 auto;
+  padding: 6px 14px 0;
+  background: transparent;
+}
+
+.composer-wrap.picker-open {
+  z-index: 15;
+}
+
+.composer {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.model-picker,
+.reasoning-menu {
+  background: rgba(30, 31, 35, 0.96);
+  backdrop-filter: blur(20px) saturate(115%);
+  -webkit-backdrop-filter: blur(20px) saturate(115%);
+}
+
+.composer {
+  display: grid;
+  width: min(720px, 100%);
+  min-height: 49px;
+  margin: 0 auto;
+  padding: 7px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 18px;
+  box-shadow:
+    0 12px 38px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.composer:focus-within {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 12px 38px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.composer.working {
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.composer textarea {
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  max-height: 161px;
+  padding: 6px 6px 5px 0;
+  overflow-y: hidden;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+
+.image-input {
+  display: none;
+}
+
+.attach-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.attach-button:hover:not(:disabled) {
+  background: var(--panel-hover);
+  color: var(--text-soft);
+}
+
+.attach-button:disabled {
+  opacity: 0.4;
+}
+
+.attachment-strip {
+  display: flex;
+  min-width: 0;
+  padding: 1px 1px 3px;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+}
+
+.image-attachment {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  overflow: visible;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--panel-hover);
+}
+
+.image-attachment img {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.image-attachment button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  background: rgba(41, 42, 46, 0.96);
+  color: var(--text-soft);
+}
+
+.image-attachment button:hover {
+  background: rgba(53, 54, 59, 0.96);
+  color: var(--text);
+}
+
+.attachment-error {
+  color: var(--danger);
+  font-size: 10px;
+}
+
+.composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.composer-context {
+  display: flex;
+  max-width: 390px;
+  align-items: center;
+  gap: 3px;
+  overflow: visible;
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.model-picker-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.model-picker-trigger {
+  display: flex;
+  max-width: 210px;
+  height: 28px;
+  padding: 0 7px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+}
+
+.model-picker-trigger:hover,
+.model-picker-trigger[aria-expanded="true"] {
+  border-color: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-soft);
+}
+
+.model-picker-trigger img,
+.provider-icon img {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  filter: invert(1);
+  opacity: 0.62;
+}
+
+.model-picker-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-picker-trigger svg {
+  flex: 0 0 auto;
+}

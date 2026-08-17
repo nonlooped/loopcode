@@ -1,0 +1,47 @@
+.send-button,
+.cancel-button,
+.reconnect-button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+}
+
+.send-button,
+.cancel-button {
+  background: var(--accent);
+  color: #1f2023;
+}
+
+.send-button:hover:not(:disabled),
+.cancel-button:hover {
+  background: var(--accent-hover);
+}
+
+.send-button:disabled {
+  background: rgba(238, 238, 241, 0.78);
+  color: rgba(28, 29, 32, 0.72);
+  opacity: 0.9;
+}
+
+.reconnect-button {
+  border: 1px solid var(--line-strong);
+  background: var(--panel-hover);
+  color: var(--text-soft);
+}
+
+.reconnect-button:hover {
+  background: var(--panel-active);
+  color: var(--text);
+}
+
+.send-button:active:not(:disabled),
+.cancel-button:active,
+.reconnect-button:active,
+.permission-actions button:active {
+  transform: translateY(1px);
+}

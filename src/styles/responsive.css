@@ -1,0 +1,155 @@
+@media (max-width: 1100px) {
+  .app-shell {
+    --sidebar-width: 255px;
+  }
+}
+
+@media (max-width: 880px) {
+  .titlebar {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+
+  .window-chrome {
+    position: absolute;
+    z-index: 2;
+    width: 154px;
+    height: var(--titlebar-height);
+    border-right: 0;
+    background: transparent;
+  }
+
+  .title-context,
+  .app-shell.sidebar-collapsed .title-context {
+    padding-left: 160px;
+  }
+
+  .workspace-grid {
+    display: block;
+  }
+
+  .thread-sidebar {
+    position: fixed;
+    z-index: 12;
+    top: var(--titlebar-height);
+    bottom: 0;
+    left: 0;
+    width: 270px;
+    visibility: visible !important;
+    transform: translateX(-103%);
+    background: rgba(24, 25, 29, 0.88);
+    box-shadow: 22px 0 60px rgba(0, 0, 0, 0.4);
+  }
+
+  .thread-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .conversation {
+    height: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .title-context {
+    padding-left: 124px !important;
+  }
+
+  .traffic-controls {
+    margin-right: 4px;
+    gap: 6px;
+  }
+
+  .window-chrome {
+    width: 120px;
+    padding-left: 10px;
+  }
+
+  .window-chrome .chrome-button:last-child {
+    display: none;
+  }
+
+  .title-copy small {
+    display: none;
+  }
+
+  .message-stack {
+    width: calc(100% - 30px);
+  }
+
+  .message.from-user {
+    max-width: 92%;
+  }
+
+  .composer-wrap {
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+
+  .permission-modal {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-actions {
+    grid-column: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  .thread-item,
+  input,
+  textarea,
+  select {
+    transition:
+      color 140ms ease,
+      background-color 140ms ease,
+      border-color 140ms ease,
+      box-shadow 140ms ease,
+      transform 140ms ease;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell,
+  .thread-sidebar,
+  .modal-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .app-shell {
+    background: var(--shell-solid);
+  }
+
+  .thread-sidebar {
+    background: rgba(29, 30, 33, 0.84);
+  }
+
+  .permission-modal {
+    background: rgba(36, 37, 41, 0.82);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-spinner,
+  .message.streaming .message-body::after,
+  .message.streaming
+    .message-body
+    :where(p, ul, ol, blockquote, pre, table, h1, h2, h3, h4, h5, h6),
+  .work-group.active .activity-spark,
+  .running-indicator .activity-spark {
+    animation: none !important;
+  }
+
+  .titlebar,
+  .workspace-grid,
+  .thread-sidebar,
+  .title-context,
+  .window-chrome {
+    transition: none !important;
+  }
+
+  .thread-sidebar {
+    transform: none !important;
+  }
+}

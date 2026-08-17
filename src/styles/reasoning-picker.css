@@ -1,0 +1,104 @@
+.reasoning-picker-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.reasoning-picker-trigger {
+  display: flex;
+  height: 28px;
+  max-width: 210px;
+  padding: 0 7px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.reasoning-picker-trigger:hover:not(:disabled),
+.reasoning-picker-trigger[aria-expanded="true"] {
+  border-color: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-soft);
+}
+
+.reasoning-picker-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reasoning-picker-trigger:disabled {
+  cursor: default;
+  opacity: 0.46;
+}
+
+.reasoning-menu {
+  position: absolute;
+  z-index: 15;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: 240px;
+  max-width: calc(100vw - 42px);
+  padding: 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow:
+    0 22px 58px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+}
+
+.reasoning-menu-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0;
+}
+
+.reasoning-option {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 90%, transparent);
+  font-size: 13px;
+  text-align: left;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.reasoning-option:hover,
+.reasoning-option:focus-visible,
+.reasoning-option.selected {
+  background: rgba(255, 255, 255, 0.075);
+  color: var(--text);
+}
+
+.reasoning-option span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reasoning-option svg {
+  flex: 0 0 auto;
+  color: var(--text-soft);
+}

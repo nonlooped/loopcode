@@ -1,0 +1,25 @@
+[package]
+name = "loopcode"
+version = "0.1.0"
+description = "A lightweight native orchestrator for coding-agent harnesses"
+authors = ["LoopCode contributors"]
+edition = "2024"
+
+[lib]
+name = "loopcode_lib"
+# LoopCode is desktop-only. Tauri's staticlib/cdylib outputs are needed for
+# mobile targets and make MinGW attempt to export more symbols than PE allows.
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2.11.5", features = [] }
+tokio = { version = "1.53.1", features = ["io-util", "macros", "process", "sync"] }
+rfd = "0.15"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }

@@ -1,0 +1,280 @@
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px 8px 8px;
+}
+
+.sidebar-section {
+  margin: 0;
+}
+
+.sidebar-section + .sidebar-section {
+  margin-top: 2px;
+}
+
+.section-header {
+  display: flex;
+  width: 100%;
+  height: 24px;
+  margin: 12px 0 4px;
+  padding: 0 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0;
+}
+
+.section-header:hover {
+  background: var(--panel-hover);
+  color: var(--text-soft);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 5px;
+  min-width: 0;
+}
+
+.section-rule {
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+
+.empty-hint {
+  padding: 8px;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.thread-list {
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.thread-motion {
+  width: 100%;
+}
+
+.thread-list.settled .thread-item {
+  opacity: 0.72;
+}
+
+.thread-list.settled .thread-item:hover {
+  opacity: 1;
+}
+
+.thread-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 65px;
+  margin: 2px 0 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+
+.thread-item.settled {
+  background: transparent;
+}
+
+.thread-item.slim {
+  display: flex;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 8px;
+  align-items: center;
+  gap: 10px;
+}
+
+.thread-item.slim .slim-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex: 1;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.thread-item.slim .slim-copy strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.thread-item.slim .slim-copy img {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  filter: grayscale(1) brightness(0) invert(1);
+  opacity: 0.48;
+}
+
+.slim-updated {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.thread-item.slim:hover .slim-updated {
+  opacity: 0;
+}
+
+.thread-item:hover {
+  background: var(--panel-hover);
+}
+
+.thread-item.active {
+  background: var(--panel-active);
+  box-shadow: none;
+}
+
+.thread-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.thread-copy strong,
+.thread-copy small,
+.thread-location,
+.thread-details {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-copy strong {
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 17px;
+}
+
+.thread-copy small {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.thread-location,
+.thread-details {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.thread-location span,
+.thread-details {
+  color: var(--faint);
+}
+
+.thread-details {
+  height: 14px;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.thread-details img {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  filter: grayscale(1) brightness(0) invert(1);
+  opacity: 0.62;
+}
+
+.thread-updated {
+  flex: 0 0 auto;
+}
+
+.thread-updated.live {
+  color: var(--success);
+}
+
+.thread-updated.live::before {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 5px 1px 0;
+  border-radius: 50%;
+  background: var(--success);
+  content: "";
+}
+
+.thread-updated.error {
+  color: var(--danger);
+}
+
+.thread-item:hover .thread-updated {
+  opacity: 0;
+}
+
+.thread-actions {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.thread-item:hover .thread-actions,
+.thread-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.remove-thread,
+.action-settle,
+.action-unsettle {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+}
+
+.remove-thread:hover {
+  color: var(--danger);
+}
+
+.action-settle:hover,
+.action-unsettle:hover {
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.08);
+}
