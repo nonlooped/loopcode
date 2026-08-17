@@ -48,7 +48,9 @@ export function collapseTurnActivity(
         .reverse()
         .find(
           (entry): entry is Extract<TimelineActivityEntry, { type: "message" }> =>
-            entry.type === "message" && entry.message.role === "agent",
+            entry.type === "message" &&
+            entry.message.role === "agent" &&
+            entry.message.text.trim().length > 0,
         );
   const terminalAgentId = terminalAgentEntry?.message.id;
   const workEntries = entries.filter(

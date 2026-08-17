@@ -27,7 +27,12 @@ function thread(status = "ready") {
     ],
     draft: "",
     providers: {
-      codex: { status, models: [], reasoningOptions: [] },
+      codex: {
+        connectionStatus: status === "running" ? "ready" : status,
+        turnStatus: status === "running" ? "running" : "idle",
+        models: [],
+        reasoningOptions: [],
+      },
     },
     updatedAt: 6,
     settled: false,
@@ -54,4 +59,16 @@ void test("keeps all agent output in the active work group while running", () =>
   const work = entries.find((entry) => entry.type === "work");
   assert.equal(work.active, true);
   assert.equal(work.entries.at(-1).message.id, "final");
+});
+
+void test("keeps the substantive response visible when a completed turn ends with whitespace", () => {
+  const value = thread("running");
+  value.messages.push(
+    { id: "trailing", role: "agent", text: "\n", createdAt: 7 },
+    { id: "follow-up", role: "user", text: "Continue", createdAt: 8 },
+  );
+  value.updatedAt = 8;
+
+  const entries = timelineEntries(value);
+  assert.ok(entries.some((entry) => entry.type === "message" && entry.message.id === "final"));
 });
