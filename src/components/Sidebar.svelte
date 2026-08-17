@@ -247,7 +247,7 @@
 
     <button class="sidebar-foot" onclick={props.openSettings} aria-label="Open settings">
       <span class="local-avatar">L</span>
-      <span><strong>LoopCode</strong><small>Local only</small></span>
+      <span class="sidebar-foot-copy"><strong>LoopCode</strong><small>Local only</small></span>
       <IconSettings class="sidebar-foot-settings" size={15} stroke={1.55} />
     </button>
   {/if}

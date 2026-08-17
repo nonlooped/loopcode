@@ -85,12 +85,20 @@
     padding-left: 9px;
   }
 
-  .permission-modal {
-    grid-template-columns: 1fr;
+  .modal-backdrop {
+    padding: 12px;
   }
 
-  .permission-actions {
-    grid-column: 1;
+  .permission-header {
+    padding: 15px 15px 12px;
+  }
+
+  .permission-detail {
+    margin: 0 15px 14px;
+  }
+
+  .permission-actions button {
+    flex: 1 1 auto;
   }
 }
 
@@ -126,7 +134,7 @@
   }
 
   .permission-modal {
-    background: rgba(36, 37, 41, 0.82);
+    background: rgba(24, 25, 29, 0.98);
   }
 }
 

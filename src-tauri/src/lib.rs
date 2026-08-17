@@ -3,7 +3,20 @@ mod persistence;
 
 use broker::{Broker, launch_harness, send_rpc, stop_all_harnesses, stop_harness};
 use serde_json::Value;
+use std::process::Command;
 use tauri::Manager;
+
+fn git_command() -> Command {
+    let mut command = Command::new("git");
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+
+    command
+}
 
 #[cfg(windows)]
 fn configure_native_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
@@ -89,7 +102,7 @@ async fn pick_folder() -> Result<Option<String>, String> {
 #[tauri::command]
 async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let branch = std::process::Command::new("git")
+        let branch = git_command()
             .args(["-C", &cwd, "branch", "--show-current"])
             .output();
         if let Ok(output) = branch
@@ -101,7 +114,7 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
             }
         }
 
-        let revision = std::process::Command::new("git")
+        let revision = git_command()
             .args(["-C", &cwd, "rev-parse", "--short", "HEAD"])
             .output();
         if let Ok(output) = revision
@@ -121,6 +134,7 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .manage(Broker::default())
         .setup(|app| {
             #[cfg(windows)]

@@ -19,7 +19,7 @@
   background: var(--panel-hover);
 }
 
-.sidebar-foot > span:last-child {
+.sidebar-foot-copy {
   display: grid;
   min-width: 0;
   gap: 1px;

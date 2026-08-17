@@ -73,7 +73,6 @@
   let attachmentErrorsByThread = $state<Record<string, string>>({});
   let currentBranch = $state<string | null | undefined>(undefined);
   let closing = false;
-  let allowWindowClose = false;
   let branchLookup = 0;
 
   const persistence = new WorkspacePersistence();
@@ -141,7 +140,6 @@
       else unlistenResize = unlisten;
     });
     void appWindow.onCloseRequested((event) => {
-      if (allowWindowClose) return;
       event.preventDefault();
       void closeApp();
     }).then((unlisten) => {
@@ -393,6 +391,10 @@
     if (selectedThread) await providers.selectReasoning(selectedThread, reasoningId);
   }
 
+  async function selectFastMode(enabled: boolean) {
+    if (selectedThread) await providers.selectFastMode(selectedThread, enabled);
+  }
+
   function reconnect() {
     if (selectedThread) void providers.connect(selectedThread, selectedThread.profileId);
   }
@@ -415,8 +417,7 @@
     try {
       await persistence.flush();
       await stopAllHarnesses();
-      allowWindowClose = true;
-      await appWindow.close();
+      await appWindow.destroy();
     } catch (error) {
       closing = false;
       const thread = selectedThread ?? threads[0];
@@ -492,6 +493,7 @@
             {reconnect}
             selectModel={(profileId, model) => { void selectModel(profileId, model); }}
             selectReasoning={(reasoningId) => { void selectReasoning(reasoningId); }}
+            selectFastMode={(enabled) => { void selectFastMode(enabled); }}
             {activateProvider}
             retryDiscovery={(profileId) => {
               void providers.discover(profileById(profileId), defaultWorkingFolder, threads);
