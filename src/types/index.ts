@@ -144,11 +144,13 @@ export interface ConnectRequest {
 export interface PermissionOption {
   optionId: string;
   name: string;
+  description?: string;
   kind?: string;
 }
 
 export interface PermissionRequest {
   requestId: string | number | null;
+  type: "permission" | "question";
   title: string;
   detail: string;
   options: PermissionOption[];

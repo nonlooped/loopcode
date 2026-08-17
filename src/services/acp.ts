@@ -12,6 +12,11 @@ interface PendingPermission {
   resolve: (response: PermissionResponse) => void;
 }
 
+interface PendingElicitation {
+  fieldId: string;
+  resolve: (response: acp.CreateElicitationResponse) => void;
+}
+
 export interface AcpTransport {
   launch: (request: ConnectRequest, onEvent: (event: BrokerEvent) => void) => Promise<string>;
   send: (harnessId: string, message: acp.AnyMessage) => Promise<void>;
@@ -53,6 +58,7 @@ export class AcpConnection {
   #loadingSession = false;
   #titleSessions = new Map<string, string[]>();
   #permissions = new Map<RpcId, PendingPermission>();
+  #elicitations = new Map<RpcId, PendingElicitation>();
   #stopping = false;
 
   constructor(callbacks: AcpCallbacks, transport: AcpTransport = nativeTransport) {
@@ -88,6 +94,9 @@ export class AcpConnection {
         })
         .onRequest(acp.methods.client.session.requestPermission, ({ params, requestId }) =>
           this.#requestPermission(requestId, params),
+        )
+        .onRequest(acp.methods.client.elicitation.create, ({ params, requestId }) =>
+          this.#requestElicitation(requestId, params),
         );
 
       this.#connection = client.connect({ readable, writable });
@@ -96,6 +105,7 @@ export class AcpConnection {
         protocolVersion: acp.PROTOCOL_VERSION,
         clientCapabilities: {
           session: { configOptions: { boolean: {} } },
+          elicitation: { form: {} },
         },
         clientInfo: {
           name: "loopcode",
@@ -249,15 +259,23 @@ export class AcpConnection {
   }
 
   answerPermission(requestId: RpcId, optionId: string) {
-    this.#resolvePermission(requestId, {
-      outcome: { outcome: "selected", optionId },
-    });
+    if (this.#permissions.has(requestId)) {
+      this.#resolvePermission(requestId, {
+        outcome: { outcome: "selected", optionId },
+      });
+    } else {
+      this.#resolveElicitation(requestId, optionId);
+    }
   }
 
   cancelPermission(requestId: RpcId) {
-    this.#resolvePermission(requestId, {
-      outcome: { outcome: "cancelled" },
-    });
+    if (this.#permissions.has(requestId)) {
+      this.#resolvePermission(requestId, {
+        outcome: { outcome: "cancelled" },
+      });
+    } else {
+      this.#resolveElicitation(requestId);
+    }
   }
 
   async stop() {
@@ -271,7 +289,7 @@ export class AcpConnection {
     this.#connection?.close();
     this.#connection = undefined;
     this.#titleSessions.clear();
-    this.#cancelPermissions();
+    this.#cancelInteractions();
     try {
       await this.#transport.stop(harnessId);
     } catch (error) {
@@ -312,7 +330,7 @@ export class AcpConnection {
     this.#connection = undefined;
     this.#loadingSession = false;
     this.#titleSessions.clear();
-    this.#cancelPermissions();
+    this.#cancelInteractions();
     if (!this.#incomingClosed) {
       this.#incomingClosed = true;
       this.#incoming?.close();
@@ -346,6 +364,21 @@ export class AcpConnection {
     });
   }
 
+  #requestElicitation(requestId: RpcId, params: acp.CreateElicitationRequest) {
+    const sessionId =
+      "sessionId" in params && typeof params.sessionId === "string" ? params.sessionId : undefined;
+    if (sessionId && this.#titleSessions.has(sessionId)) {
+      return Promise.resolve<acp.CreateElicitationResponse>({ action: "cancel" });
+    }
+    const question = questionFromElicitation(params);
+    if (!question) return Promise.resolve<acp.CreateElicitationResponse>({ action: "cancel" });
+
+    return new Promise<acp.CreateElicitationResponse>((resolve) => {
+      this.#elicitations.set(requestId, { fieldId: question.fieldId, resolve });
+      this.#callbacks.permission(question.request(requestId));
+    });
+  }
+
   #resolvePermission(requestId: RpcId, response: PermissionResponse) {
     const pending = this.#permissions.get(requestId);
     if (!pending) return;
@@ -353,11 +386,26 @@ export class AcpConnection {
     pending.resolve(response);
   }
 
-  #cancelPermissions() {
+  #resolveElicitation(requestId: RpcId, optionId?: string) {
+    const pending = this.#elicitations.get(requestId);
+    if (!pending) return;
+    this.#elicitations.delete(requestId);
+    pending.resolve(
+      optionId
+        ? { action: "accept", content: { [pending.fieldId]: optionId } }
+        : { action: "cancel" },
+    );
+  }
+
+  #cancelInteractions() {
     for (const pending of this.#permissions.values()) {
       pending.resolve({ outcome: { outcome: "cancelled" } });
     }
     this.#permissions.clear();
+    for (const pending of this.#elicitations.values()) {
+      pending.resolve({ action: "cancel" });
+    }
+    this.#elicitations.clear();
   }
 }
 
@@ -366,22 +414,73 @@ function permissionFromAcp(
   params: acp.RequestPermissionRequest,
 ): PermissionRequest {
   const rawInput = params.toolCall.rawInput;
-  const detail =
-    typeof rawInput === "string"
-      ? rawInput
-      : rawInput
-        ? JSON.stringify(rawInput, null, 2)
-        : "Review this request from the active coding agent.";
+  const question = questionFromInput(rawInput);
+  const detail = question?.text ?? requestDetail(rawInput);
   return {
     requestId,
-    title: params.toolCall.title ?? "Allow the harness to continue?",
+    type: question ? "question" : "permission",
+    title: question?.title ?? params.toolCall.title ?? "Allow the harness to continue?",
     detail,
     options: params.options.map((option) => ({
       optionId: option.optionId,
       name: option.name,
+      description: question?.options.get(option.name),
       kind: option.kind,
     })),
   };
+}
+
+function questionFromElicitation(params: acp.CreateElicitationRequest) {
+  if (!acp.CreateElicitationRequest.isForm(params)) return;
+  const [fieldId, schema] = Object.entries(params.requestedSchema.properties ?? {})[0] ?? [];
+  if (!fieldId || !schema || !acp.ElicitationPropertySchema.isString(schema)) return;
+  const options = schema.oneOf;
+  if (!options) return;
+
+  return {
+    fieldId,
+    request: (requestId: RpcId) => ({
+      requestId,
+      type: "question" as const,
+      title: schema.title ?? "Agent question",
+      detail: schema.description ?? params.message,
+      options: options.map((option) => ({
+        optionId: option.const,
+        name: option.title,
+        description: option.description ?? undefined,
+      })),
+    }),
+  };
+}
+
+function requestDetail(rawInput: unknown) {
+  if (typeof rawInput === "string") return rawInput;
+  if (rawInput) return JSON.stringify(rawInput, null, 2);
+  return "Review this request from the active coding agent.";
+}
+
+function questionFromInput(rawInput: unknown) {
+  if (!isRecord(rawInput)) return;
+  const rawQuestion = Array.isArray(rawInput.questions) ? rawInput.questions[0] : rawInput;
+  if (!isRecord(rawQuestion) || typeof rawQuestion.question !== "string") return;
+
+  const options = new Map<string, string>();
+  if (Array.isArray(rawQuestion.options)) {
+    for (const option of rawQuestion.options) {
+      if (!isRecord(option) || typeof option.label !== "string") continue;
+      if (typeof option.description === "string") options.set(option.label, option.description);
+    }
+  }
+
+  return {
+    title: typeof rawQuestion.header === "string" ? rawQuestion.header : "Agent question",
+    text: rawQuestion.question,
+    options,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export { readModelState } from "../utils/model-state.ts";

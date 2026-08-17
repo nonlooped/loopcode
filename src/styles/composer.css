@@ -212,3 +212,75 @@
 .model-picker-trigger svg {
   flex: 0 0 auto;
 }
+
+.question-composer {
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.018);
+  box-shadow:
+    0 12px 38px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.question-composer-label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  line-height: 1.2;
+}
+
+.question-composer h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 590;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.question-composer-detail {
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.question-composer-options {
+  display: grid;
+  gap: 6px;
+}
+
+.question-composer-option {
+  display: grid;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.question-composer-option:hover,
+.question-composer-option:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+}
+
+.question-composer-option strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.question-composer-option span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}

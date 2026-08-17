@@ -4,6 +4,7 @@
 
   import Composer from './components/Composer.svelte';
   import PermissionModal from './components/PermissionModal.svelte';
+  import QuestionComposer from './components/QuestionComposer.svelte';
   import SettingsPage from './components/SettingsPage.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Titlebar from './components/Titlebar.svelte';
@@ -57,11 +58,11 @@
   const firstThread = createThread('', null, providerCatalogs);
   let threads = $state<ThreadState[]>([firstThread]);
   let selectedThreadId = $state(firstThread.id);
-  let permission = $state<{
+  let interactions = $state<Record<string, {
     threadId: string;
     profileId: string;
     request: PermissionRequest;
-  } | null>(null);
+  }>>({});
   let sidebarOpen = $state(false);
   let sidebarCollapsed = $state(false);
   let settingsOpen = $state(false);
@@ -77,19 +78,21 @@
 
   const persistence = new WorkspacePersistence();
   const providers = new ProviderRuntime(providerCatalogs, {
-    permission: (value) => { permission = value; },
+    permission: (value) => { interactions[interactionKey(value.threadId, value.profileId)] = value; },
     clearPermission: (threadId, profileId) => {
-      if (
-        permission?.threadId === threadId &&
-        (!profileId || permission.profileId === profileId)
-      ) {
-        permission = null;
+      for (const [key, interaction] of Object.entries(interactions)) {
+        if (interaction.threadId === threadId && (!profileId || interaction.profileId === profileId)) {
+          delete interactions[key];
+        }
       }
     },
   });
 
   const selectedThread = $derived(threads.find((thread) => thread.id === selectedThreadId));
   const selectedTimelineEntries = $derived(selectedThread ? timelineEntries(selectedThread) : []);
+  const selectedInteraction = $derived(
+    selectedThread ? interactions[interactionKey(selectedThread.id, selectedThread.profileId)] : undefined,
+  );
   const inboxThreads = $derived(
     threads.filter((thread) => !thread.settled).sort(compareSidebarThreads),
   );
@@ -226,7 +229,9 @@
     delete composerImagesByThread[threadId];
     delete attachmentErrorsByThread[threadId];
     threads = threads.filter((thread) => thread.id !== threadId);
-    if (permission?.threadId === threadId) permission = null;
+    for (const [key, interaction] of Object.entries(interactions)) {
+      if (interaction.threadId === threadId) delete interactions[key];
+    }
     if (threads.length === 0) {
       const target = targetWorkspace();
       threads = [createThread(target.cwd, target.projectId, providerCatalogs)];
@@ -400,9 +405,9 @@
   }
 
   function answerPermission(optionId?: string) {
-    const active = permission;
+    const active = selectedInteraction;
     if (!active) return;
-    permission = null;
+    delete interactions[interactionKey(active.threadId, active.profileId)];
     providers.answerPermission(
       active.threadId,
       active.profileId,
@@ -428,6 +433,10 @@
   function projectNameForThread(thread: ThreadState) {
     const project = thread.projectId ? projects.find((item) => item.id === thread.projectId) : null;
     return project?.name ?? folderName(thread.cwd) ?? 'No project';
+  }
+
+  function interactionKey(threadId: string, profileId: string) {
+    return `${threadId}:${profileId}`;
   }
 
   function errorMessage(error: unknown) {
@@ -479,26 +488,34 @@
           <SettingsPage {compactSessionRows} setCompactSessionRows={(value) => { compactSessionRows = value; }} />
         {:else if selectedThread}
           <Transcript thread={selectedThread} entries={selectedTimelineEntries} reducedMotion={reducedMotion} />
-          <Composer
-            thread={selectedThread}
-            catalogs={providerCatalogs}
-            images={composerImages(selectedThread.id)}
-            attachmentError={attachmentErrorsByThread[selectedThread.id]}
-            projectName={projectNameForThread(selectedThread)}
-            {currentBranch}
-            attachImages={(files) => { void attachImages(files, selectedThread.id); }}
-            removeImage={(imageId) => removeComposerImage(selectedThread.id, imageId)}
-            send={() => { void sendPrompt(); }}
-            cancel={() => { void cancelPrompt(); }}
-            {reconnect}
-            selectModel={(profileId, model) => { void selectModel(profileId, model); }}
-            selectReasoning={(reasoningId) => { void selectReasoning(reasoningId); }}
-            selectFastMode={(enabled) => { void selectFastMode(enabled); }}
-            {activateProvider}
-            retryDiscovery={(profileId) => {
-              void providers.discover(profileById(profileId), defaultWorkingFolder, threads);
-            }}
-          />
+          {#if selectedInteraction?.request.type === 'question'}
+            <QuestionComposer
+              request={selectedInteraction.request}
+              answer={(optionId) => answerPermission(optionId)}
+              dismiss={() => answerPermission()}
+            />
+          {:else}
+            <Composer
+              thread={selectedThread}
+              catalogs={providerCatalogs}
+              images={composerImages(selectedThread.id)}
+              attachmentError={attachmentErrorsByThread[selectedThread.id]}
+              projectName={projectNameForThread(selectedThread)}
+              {currentBranch}
+              attachImages={(files) => { void attachImages(files, selectedThread.id); }}
+              removeImage={(imageId) => removeComposerImage(selectedThread.id, imageId)}
+              send={() => { void sendPrompt(); }}
+              cancel={() => { void cancelPrompt(); }}
+              {reconnect}
+              selectModel={(profileId, model) => { void selectModel(profileId, model); }}
+              selectReasoning={(reasoningId) => { void selectReasoning(reasoningId); }}
+              selectFastMode={(enabled) => { void selectFastMode(enabled); }}
+              {activateProvider}
+              retryDiscovery={(profileId) => {
+                void providers.discover(profileById(profileId), defaultWorkingFolder, threads);
+              }}
+            />
+          {/if}
         {/if}
       </div>
     </main>
@@ -509,9 +526,9 @@
   if (event.key === 'Escape' && workspaceDropdownOpen) workspaceDropdownOpen = false;
 }} />
 
-{#if permission}
+{#if selectedInteraction?.request.type === 'permission'}
   <PermissionModal
-    request={permission.request}
+    request={selectedInteraction.request}
     answer={(optionId) => answerPermission(optionId)}
     decline={() => answerPermission()}
   />

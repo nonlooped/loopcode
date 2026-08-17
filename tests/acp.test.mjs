@@ -112,6 +112,81 @@ function fakeTransport({ loadSession = false, resumeSession = false } = {}) {
         },
       });
     },
+    requestElicitation() {
+      onEvent({
+        event: "rpc",
+        data: {
+          message: {
+            jsonrpc: "2.0",
+            id: 101,
+            method: "elicitation/create",
+            params: {
+              sessionId: "session-1",
+              mode: "form",
+              message: "Which database should we use?",
+              requestedSchema: {
+                type: "object",
+                properties: {
+                  database: {
+                    type: "string",
+                    title: "Storage",
+                    description: "Which database should we use?",
+                    oneOf: [
+                      {
+                        const: "sqlite",
+                        title: "SQLite",
+                        description: "A local file-backed database.",
+                      },
+                      {
+                        const: "postgres",
+                        title: "Postgres",
+                        description: "A networked database service.",
+                      },
+                    ],
+                  },
+                },
+                required: ["database"],
+              },
+            },
+          },
+        },
+      });
+    },
+    requestQuestion() {
+      onEvent({
+        event: "rpc",
+        data: {
+          message: {
+            jsonrpc: "2.0",
+            id: 100,
+            method: "session/request_permission",
+            params: {
+              sessionId: "session-1",
+              toolCall: {
+                toolCallId: "tool-2",
+                title: "AskUserQuestion",
+                rawInput: {
+                  questions: [
+                    {
+                      header: "Storage",
+                      question: "Which database should we use?",
+                      options: [
+                        { label: "SQLite", description: "A local file-backed database." },
+                        { label: "Postgres", description: "A networked database service." },
+                      ],
+                    },
+                  ],
+                },
+              },
+              options: [
+                { optionId: "sqlite", name: "SQLite", kind: "allow_once" },
+                { optionId: "postgres", name: "Postgres", kind: "allow_once" },
+              ],
+            },
+          },
+        },
+      });
+    },
   };
 }
 
@@ -144,7 +219,7 @@ void test("uses the official SDK to initialize, create a session, and route upda
 
   assert.deepEqual(
     fake.sent.find((message) => message.method === "initialize")?.params.clientCapabilities,
-    { session: { configOptions: { boolean: {} } } },
+    { session: { configOptions: { boolean: {} } }, elicitation: { form: {} } },
   );
   assert.equal(ready.harnessId, "harness-1");
   assert.equal(ready.sessionId, "session-1");
@@ -239,6 +314,102 @@ void test("loads an existing session without forwarding private agent history", 
   });
   assert.equal(ready.sessionId, "existing-session");
   assert.deepEqual(updates, []);
+});
+
+void test("presents ACP form elicitations as agent questions", async () => {
+  const fake = fakeTransport();
+  let request;
+  const connection = new AcpConnection(
+    {
+      status: () => {},
+      ready: () => {},
+      update: () => {},
+      permission: (value) => {
+        request = value;
+        connection.answerPermission(value.requestId, "sqlite");
+      },
+      stderr: () => {},
+      error: (message) => {
+        throw new Error(message);
+      },
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  fake.requestElicitation();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(request, {
+    requestId: 101,
+    type: "question",
+    title: "Storage",
+    detail: "Which database should we use?",
+    options: [
+      {
+        optionId: "sqlite",
+        name: "SQLite",
+        description: "A local file-backed database.",
+      },
+      {
+        optionId: "postgres",
+        name: "Postgres",
+        description: "A networked database service.",
+      },
+    ],
+  });
+  const response = fake.sent.find((message) => message.id === 101 && "result" in message);
+  assert.deepEqual(response.result, { action: "accept", content: { database: "sqlite" } });
+});
+
+void test("presents question tool input as an agent question", async () => {
+  const fake = fakeTransport();
+  let request;
+  const connection = new AcpConnection(
+    {
+      status: () => {},
+      ready: () => {},
+      update: () => {},
+      permission: (value) => {
+        request = value;
+        connection.answerPermission(value.requestId, "sqlite");
+      },
+      stderr: () => {},
+      error: (message) => {
+        throw new Error(message);
+      },
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  fake.requestQuestion();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(request, {
+    requestId: 100,
+    type: "question",
+    title: "Storage",
+    detail: "Which database should we use?",
+    options: [
+      {
+        optionId: "sqlite",
+        name: "SQLite",
+        description: "A local file-backed database.",
+        kind: "allow_once",
+      },
+      {
+        optionId: "postgres",
+        name: "Postgres",
+        description: "A networked database service.",
+        kind: "allow_once",
+      },
+    ],
+  });
+  const response = fake.sent.find((message) => message.id === 100 && "result" in message);
+  assert.deepEqual(response.result, { outcome: { outcome: "selected", optionId: "sqlite" } });
 });
 
 void test("returns permission decisions through the SDK request handler", async () => {

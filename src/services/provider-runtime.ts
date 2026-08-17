@@ -43,8 +43,6 @@ export class ProviderRuntime {
   activate(thread: ThreadState, profileId: string, announceSwitch = true) {
     if (profileId === thread.profileId) return;
     const profile = profileById(profileId);
-    const previousProfileId = thread.profileId;
-    this.#hooks.clearPermission(thread.id, previousProfileId);
     thread.profileId = profile.id;
     thread.updatedAt = Date.now();
     this.#updates.clear(thread.id, profile.id);
@@ -219,6 +217,7 @@ export class ProviderRuntime {
       },
       exited: (code) => {
         if (!isCurrent()) return;
+        this.#hooks.clearPermission(thread.id, profile.id);
         const message =
           code === null ? "The harness exited." : `The harness exited with code ${code}.`;
         provider.error = message;
