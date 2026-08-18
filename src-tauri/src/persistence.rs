@@ -106,7 +106,10 @@ fn restore_backup(backup: &Path, target: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::PathBuf};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
 
     use super::{BACKUP_FILE_NAME, THREADS_FILE_NAME, load_from_directory, save_to_directory};
 
@@ -132,7 +135,7 @@ mod tests {
         }
     }
 
-    fn load(directory: &PathBuf) -> Result<Option<String>, String> {
+    fn load(directory: &Path) -> Result<Option<String>, String> {
         load_from_directory(directory, |contents| {
             let trimmed = contents.trim();
             if trimmed.starts_with('{') && trimmed.ends_with('}') {
