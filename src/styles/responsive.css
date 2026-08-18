@@ -67,7 +67,10 @@
     pointer-events: auto;
   }
 
-  .project-explorer:not(.open) .project-explorer-refresh,
+  .project-explorer:not(.open) .project-explorer-refresh {
+    display: none;
+  }
+
   .project-explorer:not(.open) .project-explorer-scroll,
   .project-explorer:not(.open) .project-explorer-notice {
     opacity: 0;
