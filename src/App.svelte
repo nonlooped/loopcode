@@ -25,7 +25,7 @@
     stopAllHarnesses,
   } from './services/native';
   import { ProviderRuntime } from './services/provider-runtime';
-  import { WorkspacePersistence } from './services/workspace-persistence';
+  import { createWorkspaceState, Workspace } from './services/workspace';
   import type {
     ComposerImage,
     MessageImage,
@@ -46,16 +46,8 @@
     saveSidebarWidth,
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
-  import { findReusableEmptyThread } from './utils/thread-state';
   import { timelineEntries } from './utils/timeline';
-  import {
-    activeProvider,
-    compareSidebarThreads,
-    createThread,
-    folderName,
-    threadStatus,
-  } from './utils/threads';
-  import { restoreWorkspace, workspaceSnapshot } from './utils/workspace';
+  import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
 
   const appWindow = getCurrentWindow();
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -68,11 +60,11 @@
 
   let defaultWorkingFolder = $state('');
   let providerCatalogs = $state<Record<string, ProviderModelCatalog>>(initialCatalogs);
-  let projects = $state<ProjectState[]>([]);
-  let selectedProjectId = $state<string | null>(null);
-  const firstThread = createThread('', null, providerCatalogs);
-  let threads = $state<ThreadState[]>([firstThread]);
-  let selectedThreadId = $state(firstThread.id);
+  const workspaceState = $state(createWorkspaceState('', providerCatalogs));
+  const projects = $derived(workspaceState.projects);
+  const selectedProjectId = $derived(workspaceState.selectedProjectId);
+  const threads = $derived(workspaceState.threads);
+  const selectedThreadId = $derived(workspaceState.selectedThreadId);
   let threadPendingRemoval = $state<ThreadState>();
   let interactions = $state<Record<string, {
     threadId: string;
@@ -111,7 +103,7 @@
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
   ].filter(Boolean).join('; '));
 
-  const persistence = new WorkspacePersistence();
+  const workspace = new Workspace(workspaceState, providerCatalogs);
   const providers = new ProviderRuntime(providerCatalogs, {
     permission: (value) => { interactions[interactionKey(value.threadId, value.profileId)] = value; },
     clearPermission: (threadId, profileId) => {
@@ -139,12 +131,10 @@
   const settledThreads = $derived(
     threads.filter((thread) => thread.settled).sort((left, right) => right.updatedAt - left.updatedAt),
   );
-  const activeProject = $derived(
-    selectedProjectId ? projects.find((project) => project.id === selectedProjectId) ?? null : null,
-  );
+  const activeProject = $derived(workspace.activeProject);
   const explorerRoot = $derived(selectedThread?.cwd ?? '');
   const explorerProjectName = $derived(
-    selectedThread ? projectNameForThread(selectedThread) : 'Project',
+    selectedThread ? workspace.projectNameForThread(selectedThread) : 'Project',
   );
   const projectExplorerVisible = $derived(
     compactLayout ? projectExplorerOpen : !projectExplorerCollapsed,
@@ -160,7 +150,7 @@
   });
 
   $effect(() => {
-    persistence.queue(workspaceSnapshot(threads, selectedThreadId, projects, selectedProjectId));
+    workspace.queuePersistence();
   });
 
   $effect(() => {
@@ -217,55 +207,23 @@
     };
   });
 
-  function targetWorkspace() {
-    const project = selectedProjectId
-      ? projects.find((item) => item.id === selectedProjectId)
-      : null;
-    return {
-      cwd: project?.path ?? defaultWorkingFolder,
-      projectId: project?.id ?? null,
-    };
+  function closeThreadSurfaces() {
+    sidebarOpen = false;
+    projectExplorerOpen = false;
   }
 
   function addThread() {
-    addThreadForTarget(targetWorkspace());
+    workspace.addThread(defaultWorkingFolder, (threadId) => composerImages(threadId).length > 0);
+    closeThreadSurfaces();
   }
 
   function addThreadToProject(projectId: string) {
-    const project = projects.find((item) => item.id === projectId);
-    if (!project) return;
     workspaceDropdownOpen = false;
-    selectedProjectId = project.id;
-    addThreadForTarget({ cwd: project.path, projectId: project.id });
-  }
-
-  function addThreadForTarget(target: { cwd: string; projectId: string | null }) {
-    const reusable = findReusableEmptyThread(
-      threads,
-      target,
+    if (workspace.addThread(
+      defaultWorkingFolder,
       (threadId) => composerImages(threadId).length > 0,
-    );
-    if (reusable) {
-      selectThread(reusable.id);
-      return;
-    }
-    const thread = createThread(target.cwd, target.projectId, providerCatalogs);
-    threads.unshift(thread);
-    selectThread(thread.id);
-  }
-
-  function ensureProjectForPath(path: string) {
-    const trimmed = path.trim();
-    const existing = projects.find((project) => project.path === trimmed);
-    if (existing) return existing;
-    const project: ProjectState = {
-      id: crypto.randomUUID(),
-      name: folderName(trimmed) || 'Untitled project',
-      path: trimmed,
-      createdAt: Date.now(),
-    };
-    projects = [...projects, project];
-    return project;
+      projectId,
+    )) closeThreadSurfaces();
   }
 
   async function openAddProject() {
@@ -273,7 +231,7 @@
     try {
       const picked = await pickFolder();
       if (!picked) return;
-      selectedProjectId = ensureProjectForPath(picked).id;
+      workspace.selectProject(workspace.ensureProject(picked).id);
     } catch (error) {
       const thread = selectedThread ?? threads[0];
       if (thread) addMessage(thread, 'error', `Could not add folder: ${errorMessage(error)}`);
@@ -281,17 +239,15 @@
   }
 
   function selectProject(projectId: string | null) {
-    selectedProjectId = projectId;
+    workspace.selectProject(projectId);
     workspaceDropdownOpen = false;
   }
 
   function renameThread(threadId: string) {
     const thread = threads.find((item) => item.id === threadId);
     if (!thread) return;
-    const title = window.prompt('Rename thread', thread.title)?.trim();
-    if (!title || title === thread.title) return;
-    thread.title = title;
-    thread.updatedAt = Date.now();
+    const title = window.prompt('Rename thread', thread.title);
+    if (title) workspace.renameThread(threadId, title);
   }
 
   function openThreadFolder(thread: ThreadState) {
@@ -307,11 +263,7 @@
   }
 
   function removeProject(projectId: string) {
-    projects = projects.filter((project) => project.id !== projectId);
-    for (const thread of threads) {
-      if (thread.projectId === projectId) thread.projectId = null;
-    }
-    if (selectedProjectId === projectId) selectedProjectId = null;
+    workspace.removeProject(projectId);
     workspaceDropdownOpen = false;
   }
 
@@ -325,10 +277,7 @@
   }
 
   function toggleSettled(threadId: string) {
-    const thread = threads.find((item) => item.id === threadId);
-    if (!thread) return;
-    thread.settled = !thread.settled;
-    thread.updatedAt = Date.now();
+    workspace.toggleSettled(threadId);
   }
 
   function requestThreadRemoval(threadId: string) {
@@ -340,23 +289,14 @@
     await providers.removeThread(threadId);
     delete composerImagesByThread[threadId];
     delete attachmentErrorsByThread[threadId];
-    threads = threads.filter((thread) => thread.id !== threadId);
     for (const [key, interaction] of Object.entries(interactions)) {
       if (interaction.threadId === threadId) delete interactions[key];
     }
-    if (threads.length === 0) {
-      const target = targetWorkspace();
-      threads = [createThread(target.cwd, target.projectId, providerCatalogs)];
-    }
-    if (!threads.some((thread) => thread.id === selectedThreadId)) {
-      selectedThreadId = threads[0].id;
-    }
+    workspace.removeThread(threadId, defaultWorkingFolder);
   }
 
   function selectThread(threadId: string) {
-    selectedThreadId = threadId;
-    sidebarOpen = false;
-    projectExplorerOpen = false;
+    if (workspace.selectThread(threadId)) closeThreadSurfaces();
   }
 
   function selectThreadFromKeyboard(event: KeyboardEvent, threadId: string) {
@@ -454,19 +394,9 @@
       await registerFrontend();
       defaultWorkingFolder = await getInitialWorkingDirectory();
       const savedWorkspace = await loadWorkspace();
-      if (savedWorkspace !== null) {
-        const restored = restoreWorkspace(savedWorkspace, defaultWorkingFolder, providerCatalogs);
-        if (!restored) throw new Error('The saved thread file has an unsupported or invalid format.');
-        threads = restored.threads;
-        selectedThreadId = restored.selectedThreadId;
-        projects = restored.projects;
-        selectedProjectId = restored.selectedProjectId;
-      } else {
-        for (const thread of threads) {
-          if (!thread.cwd) thread.cwd = defaultWorkingFolder;
-        }
+      if (!workspace.initialize(savedWorkspace, defaultWorkingFolder)) {
+        throw new Error('The saved thread file has an unsupported or invalid format.');
       }
-      persistence.setReady();
       await providers.discoverAll(defaultWorkingFolder, threads);
     } catch (error) {
       const thread = selectedThread ?? threads[0];
@@ -596,7 +526,7 @@
     if (closing) return;
     closing = true;
     try {
-      await persistence.flush();
+      await workspace.flush();
       await stopAllHarnesses();
       await appWindow.destroy();
     } catch (error) {
@@ -604,11 +534,6 @@
       const thread = selectedThread ?? threads[0];
       if (thread) addMessage(thread, 'error', `Could not save threads before closing: ${errorMessage(error)}`);
     }
-  }
-
-  function projectNameForThread(thread: ThreadState) {
-    const project = thread.projectId ? projects.find((item) => item.id === thread.projectId) : null;
-    return project?.name ?? folderName(thread.cwd) ?? 'No project';
   }
 
   function interactionKey(threadId: string, profileId: string) {
@@ -706,7 +631,7 @@
             <div bind:this={threadViewElement} class:empty={selectedThreadEmpty} class="thread-view">
               {#if selectedThreadEmpty}
                 <h1 class="empty-thread-heading">
-                  What should we build in {projectNameForThread(selectedThread)}?
+                  What should we build in {workspace.projectNameForThread(selectedThread)}?
                 </h1>
               {:else}
                 {#key selectedThread.id}
@@ -726,7 +651,7 @@
                   catalogs={providerCatalogs}
                   images={composerImages(selectedThread.id)}
                   attachmentError={attachmentErrorsByThread[selectedThread.id]}
-                  projectName={projectNameForThread(selectedThread)}
+                  projectName={workspace.projectNameForThread(selectedThread)}
                   {currentBranch}
                   {reducedMotion}
                   attachImages={(files) => { void attachImages(files, selectedThread.id); }}
