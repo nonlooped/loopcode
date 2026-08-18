@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fly } from 'svelte/transition';
   import { IconDownload, IconListDetails, IconShieldLock } from '@tabler/icons-svelte';
 
   import { exportDiagnostics } from '../services/native';
@@ -7,11 +8,12 @@
   interface Props {
     compactSessionRows: boolean;
     permissionMode: PermissionMode;
+    reducedMotion: boolean;
     setCompactSessionRows: (value: boolean) => void;
     setPermissionMode: (value: PermissionMode) => void;
   }
 
-  const { compactSessionRows, permissionMode, setCompactSessionRows, setPermissionMode }: Props = $props();
+  const { compactSessionRows, permissionMode, reducedMotion, setCompactSessionRows, setPermissionMode }: Props = $props();
   let exportState = $state<'idle' | 'exporting' | 'exported' | 'error'>('idle');
 
   async function exportLogs() {
@@ -25,7 +27,11 @@
   }
 </script>
 
-<section class="settings-page" aria-labelledby="settings-title">
+<section
+  class="settings-page"
+  aria-labelledby="settings-title"
+  in:fly|global={{ y: reducedMotion ? 0 : 4, duration: reducedMotion ? 0 : 180 }}
+>
   <div class="settings-column">
     <header class="settings-page-header">
       <h1 id="settings-title">General</h1>

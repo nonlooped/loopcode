@@ -156,6 +156,26 @@
   gap: 2px;
 }
 
+.thread-title-motion,
+.thread-status-motion {
+  display: grid;
+  min-width: 0;
+}
+
+.thread-title-motion > *,
+.thread-status-motion > * {
+  min-width: 0;
+  grid-area: 1 / 1;
+}
+
+.thread-status-motion {
+  margin-left: auto;
+}
+
+.thread-item.slim .slim-copy .thread-title-motion {
+  flex: 1;
+}
+
 .thread-copy strong,
 .thread-copy small,
 .thread-location,

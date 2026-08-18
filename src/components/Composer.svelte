@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { fly } from 'svelte/transition';
   import {
     IconArrowUp,
     IconChevronDown,
@@ -30,6 +31,7 @@
     attachmentError?: string;
     projectName: string;
     currentBranch: string | null | undefined;
+    reducedMotion: boolean;
     attachImages: (files: File[]) => void;
     removeImage: (imageId: string) => void;
     send: () => void;
@@ -208,7 +210,11 @@
   <button class="model-picker-dismiss" tabindex="-1" aria-label="Close picker" onclick={closePickers}></button>
 {/if}
 
-<section class:picker-open={modelPickerOpen || reasoningPickerOpen} class="composer-wrap">
+<section
+  class:picker-open={modelPickerOpen || reasoningPickerOpen}
+  class="composer-wrap"
+  in:fly|global={{ y: props.reducedMotion ? 0 : 4, duration: props.reducedMotion ? 0 : 180 }}
+>
   <div bind:this={composerElement} class="composer" class:expanded={expanded} class:working={status === 'running'}>
     {#if props.images.length > 0 || props.attachmentError}
       <div class="attachment-strip" aria-label="Attached images">
@@ -268,13 +274,20 @@
             <IconChevronDown size={11} stroke={1.7} />
           </button>
           {#if modelPickerOpen}
-            <ModelPicker thread={props.thread} catalogs={props.catalogs} choose={chooseModel} retryDiscovery={props.retryDiscovery} />
+            <ModelPicker
+              thread={props.thread}
+              catalogs={props.catalogs}
+              choose={chooseModel}
+              retryDiscovery={props.retryDiscovery}
+              reducedMotion={props.reducedMotion}
+            />
           {/if}
         </div>
         {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider)}
           <ReasoningPicker
             {provider}
             open={reasoningPickerOpen}
+            reducedMotion={props.reducedMotion}
             setOpen={(open) => { modelPickerOpen = false; reasoningPickerOpen = open; }}
             select={props.selectReasoning}
             selectFastMode={props.selectFastMode}
@@ -308,7 +321,12 @@
 {/if}
 
 {#if imagePreview}
-  <ImagePreview src={imagePreview.src} name={imagePreview.name} close={() => { imagePreview = undefined; }} />
+  <ImagePreview
+    src={imagePreview.src}
+    name={imagePreview.name}
+    reducedMotion={props.reducedMotion}
+    close={() => { imagePreview = undefined; }}
+  />
 {/if}
 
 <svelte:window onkeydown={(event) => {

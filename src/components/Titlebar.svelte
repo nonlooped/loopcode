@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fade } from 'svelte/transition';
   import { IconLayoutSidebar, IconPlus, IconSettings } from '@tabler/icons-svelte';
 
   import ContextMenu from './ContextMenu.svelte';
@@ -11,6 +12,7 @@
     settingsOpen: boolean;
     selectedThread?: ThreadState;
     windowMaximized: boolean;
+    reducedMotion: boolean;
     toggleSidebar: () => void;
     addThread: () => void;
     closeApp: () => void;
@@ -22,6 +24,7 @@
     settingsOpen,
     selectedThread,
     windowMaximized,
+    reducedMotion,
     toggleSidebar,
     addThread,
     closeApp,
@@ -54,19 +57,23 @@
     </button>
   </div>
   <div class="title-context" data-tauri-drag-region>
-    {#if settingsOpen}
-      <IconSettings class="title-settings-icon" size={14} stroke={1.55} />
-      <span class="title-copy" data-tauri-drag-region><strong>General</strong></span>
-    {:else if selectedThread}
-      {@const selectedProfile = profileById(selectedThread.profileId)}
-      <span class="title-thread-context" data-tauri-drag-region>
-        <img class="title-provider-icon" src={selectedProfile.icon} alt="" />
-        <span class="title-copy" data-tauri-drag-region>
-          <strong title={selectedThread.title}>{selectedThread.title}</strong>
-          <small title={selectedThread.cwd}>{#if selectedThread.cwd}{folderName(selectedThread.cwd)}{/if}</small>
-        </span>
+    {#key settingsOpen ? 'settings' : `${selectedThread?.id ?? 'empty'}:${selectedThread?.title ?? ''}:${selectedThread?.profileId ?? ''}`}
+      <span class="title-context-motion" transition:fade={{ duration: reducedMotion ? 0 : 130 }}>
+        {#if settingsOpen}
+          <IconSettings class="title-settings-icon" size={14} stroke={1.55} />
+          <span class="title-copy" data-tauri-drag-region><strong>General</strong></span>
+        {:else if selectedThread}
+          {@const selectedProfile = profileById(selectedThread.profileId)}
+          <span class="title-thread-context" data-tauri-drag-region>
+            <img class="title-provider-icon" src={selectedProfile.icon} alt="" />
+            <span class="title-copy" data-tauri-drag-region>
+              <strong title={selectedThread.title}>{selectedThread.title}</strong>
+              <small title={selectedThread.cwd}>{#if selectedThread.cwd}{folderName(selectedThread.cwd)}{/if}</small>
+            </span>
+          </span>
+        {/if}
       </span>
-    {/if}
+    {/key}
   </div>
 </header>
 

@@ -617,6 +617,7 @@
     {settingsOpen}
     {selectedThread}
     {windowMaximized}
+    {reducedMotion}
     {toggleSidebar}
     {addThread}
     {closeApp}
@@ -662,14 +663,18 @@
           <SettingsPage
             {compactSessionRows}
             {permissionMode}
+            {reducedMotion}
             setCompactSessionRows={(value) => { compactSessionRows = value; }}
             {setPermissionMode}
           />
         {:else if selectedThread}
-          <Transcript thread={selectedThread} entries={selectedTimelineEntries} reducedMotion={reducedMotion} />
+          {#key selectedThread.id}
+            <Transcript thread={selectedThread} entries={selectedTimelineEntries} {reducedMotion} />
+          {/key}
           {#if selectedInteraction?.request.type === 'question'}
             <QuestionComposer
               request={selectedInteraction.request}
+              {reducedMotion}
               answer={(optionId) => answerPermission(optionId)}
               dismiss={() => answerPermission()}
             />
@@ -681,6 +686,7 @@
               attachmentError={attachmentErrorsByThread[selectedThread.id]}
               projectName={projectNameForThread(selectedThread)}
               {currentBranch}
+              {reducedMotion}
               attachImages={(files) => { void attachImages(files, selectedThread.id); }}
               removeImage={(imageId) => removeComposerImage(selectedThread.id, imageId)}
               send={() => { void sendPrompt(); }}
@@ -720,6 +726,7 @@
 {#if selectedInteraction?.request.type === 'permission'}
   <PermissionModal
     request={selectedInteraction.request}
+    {reducedMotion}
     answer={(optionId) => answerPermission(optionId)}
     decline={() => answerPermission()}
   />

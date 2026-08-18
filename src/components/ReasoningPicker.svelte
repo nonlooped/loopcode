@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fade } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import { IconBolt, IconCheck } from '@tabler/icons-svelte';
 
   import type { ProviderSessionState } from '../types';
@@ -8,6 +8,7 @@
   interface Props {
     provider: ProviderSessionState;
     open: boolean;
+    reducedMotion: boolean;
     setOpen: (open: boolean) => void;
     select: (reasoningId: string) => void;
     selectFastMode: (enabled: boolean) => void;
@@ -33,7 +34,12 @@
     onclick={() => props.setOpen(!props.open)}
   ><span>{selectedName}</span>{#if fastModeEnabled}<IconBolt class="fast-mode-indicator" size={13} stroke={1.9} aria-hidden="true" />{/if}</button>
   {#if props.open}
-    <div class="reasoning-menu" role="menu" aria-label="Reasoning and speed" transition:fade={{ duration: 110 }}>
+    <div
+      class="reasoning-menu"
+      role="menu"
+      aria-label="Reasoning and speed"
+      transition:fly={{ y: props.reducedMotion ? 0 : 4, duration: props.reducedMotion ? 0 : 130 }}
+    >
       {#if props.provider.reasoningOptions.length > 0}
         <div class="reasoning-menu-options">
           {#each props.provider.reasoningOptions as option (option.id)}

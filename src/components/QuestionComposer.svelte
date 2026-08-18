@@ -1,14 +1,16 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { fly } from 'svelte/transition';
   import type { PermissionRequest } from '../types';
 
   interface Props {
     request: PermissionRequest;
+    reducedMotion: boolean;
     answer: (optionId: string) => void;
     dismiss: () => void;
   }
 
-  const { request, answer, dismiss }: Props = $props();
+  const { request, reducedMotion, answer, dismiss }: Props = $props();
   let composer = $state<HTMLElement>();
 
   $effect(() => {
@@ -18,7 +20,10 @@
   });
 </script>
 
-<section class="composer-wrap">
+<section
+  class="composer-wrap"
+  in:fly|global={{ y: reducedMotion ? 0 : 6, duration: reducedMotion ? 0 : 180 }}
+>
   <section
     bind:this={composer}
     class="question-composer"

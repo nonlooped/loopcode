@@ -1,6 +1,6 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
-  import { fade } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
   import {
     IconArchive,
     IconArrowLeft,
@@ -127,7 +127,11 @@
         aria-label="Close folder menu"
         onclick={() => props.setWorkspaceDropdownOpen(false)}
       ></button>
-      <div class="workspace-dropdown" role="menu">
+      <div
+        class="workspace-dropdown"
+        role="menu"
+        transition:fly={{ y: props.compactMotion ? 0 : -4, duration: props.compactMotion ? 0 : 130 }}
+      >
         <button
           class="workspace-option"
           class:active={props.selectedProjectId === null}
@@ -195,11 +199,24 @@
                           {thread.cwd ? folderName(thread.cwd) : '~'}
                         {/if}
                       </span>
-                      <span class:live={status === 'running'} class:error={status === 'error'} class="thread-updated">
-                        {status === 'running' ? 'Working' : status === 'error' ? 'Failed' : relativeTime(thread.updatedAt)}
+                      <span class="thread-status-motion">
+                        {#key status}
+                          <span
+                            class:live={status === 'running'}
+                            class:error={status === 'error'}
+                            class="thread-updated"
+                            transition:fade={{ duration: props.compactMotion ? 0 : 120 }}
+                          >
+                            {status === 'running' ? 'Working' : status === 'error' ? 'Failed' : relativeTime(thread.updatedAt)}
+                          </span>
+                        {/key}
                       </span>
                     </small>
-                    <strong>{thread.title}</strong>
+                    <span class="thread-title-motion">
+                      {#key thread.title}
+                        <strong transition:fade={{ duration: props.compactMotion ? 0 : 120 }}>{thread.title}</strong>
+                      {/key}
+                    </span>
                     <span class="thread-details">
                       <img src={threadProfile.icon} alt="" />
                       <span>{threadHarness(thread)}</span>
@@ -257,7 +274,14 @@
                     title={thread.title}
                     transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
                   >
-                    <span class="slim-copy"><img src={threadProfile.icon} alt="" /><strong>{thread.title}</strong></span>
+                    <span class="slim-copy">
+                      <img src={threadProfile.icon} alt="" />
+                      <span class="thread-title-motion">
+                        {#key thread.title}
+                          <strong transition:fade={{ duration: props.compactMotion ? 0 : 120 }}>{thread.title}</strong>
+                        {/key}
+                      </span>
+                    </span>
                     <span class="slim-updated">{relativeTime(thread.updatedAt)}</span>
                     <span class="thread-actions">
                       <button

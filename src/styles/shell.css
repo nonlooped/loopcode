@@ -105,10 +105,19 @@
 }
 
 .title-context {
+  display: grid;
   gap: 7px;
   overflow: hidden;
   padding: 0 42px 0 14px;
   white-space: nowrap;
+}
+
+.title-context-motion {
+  display: flex;
+  min-width: 0;
+  grid-area: 1 / 1;
+  align-items: center;
+  gap: 7px;
 }
 
 .title-thread-context {

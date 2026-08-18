@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fly } from 'svelte/transition';
   import { IconCheck, IconSearch } from '@tabler/icons-svelte';
 
   import { profileById, profiles } from '../config/providers';
@@ -7,6 +8,7 @@
   interface Props {
     thread: ThreadState;
     catalogs: Record<string, ProviderModelCatalog>;
+    reducedMotion: boolean;
     choose: (profileId: string, model: ModelOption) => void;
     retryDiscovery: (profileId: string) => void;
   }
@@ -35,7 +37,13 @@
   }
 </script>
 
-<div class="model-picker" role="dialog" aria-label="Choose provider and model" tabindex="-1">
+<div
+  class="model-picker"
+  role="dialog"
+  aria-label="Choose provider and model"
+  tabindex="-1"
+  transition:fly|global={{ y: props.reducedMotion ? 0 : 5, duration: props.reducedMotion ? 0 : 140 }}
+>
   <nav class="model-providers" aria-label="Providers">
     {#each profiles as profile}
       {@const state = props.thread.providers[profile.id]}

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { tick } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { onMount, tick } from 'svelte';
+  import { fade, fly } from 'svelte/transition';
   import { IconAlertTriangle, IconChevronDown, IconChevronRight, IconTool } from '@tabler/icons-svelte';
 
   import ContextMenu from './ContextMenu.svelte';
@@ -25,8 +25,15 @@
   let canScrollDown = $state(false);
   let pinnedToBottom = true;
   let renderedThreadId: string | undefined;
+  let animateEntries = $state(false);
   let contextMenu = $state<ContextMenuState>();
   let imagePreview = $state<{ src: string; name: string }>();
+  const entryMotion = $derived(animateEntries && !reducedMotion);
+
+  onMount(() => {
+    const frame = requestAnimationFrame(() => { animateEntries = true; });
+    return () => cancelAnimationFrame(frame);
+  });
 
   $effect(() => {
     const updatedAt = thread.updatedAt;
@@ -107,7 +114,7 @@
   }
 </script>
 
-<div class="transcript-shell">
+<div class="transcript-shell" in:fade|global={{ duration: reducedMotion ? 0 : 150 }}>
   <section
     class:can-scroll-up={canScrollUp}
     class:can-scroll-down={canScrollDown}
@@ -119,7 +126,11 @@
     <div class="message-stack" class:empty={thread.messages.length === 0 && thread.tools.length === 0}>
     {#each entries as entry (entry.type === 'message' ? `message-${entry.message.id}` : entry.id)}
       {#if entry.type === 'work'}
-        <details class:active={entry.active} class="work-group">
+        <details
+          class:active={entry.active}
+          class="work-group"
+          in:fly={{ y: entryMotion ? 4 : 0, duration: entryMotion ? 180 : 0 }}
+        >
           <summary>
             <span class="work-chevron"><IconChevronRight size={14} stroke={1.8} /></span>
             <span class="activity-spark"></span>
@@ -130,7 +141,12 @@
             {#each entry.entries as workEntry (workEntry.type === 'tool' ? `tool-${workEntry.tool.id}` : `message-${workEntry.message.id}`)}
               {#if workEntry.type === 'tool'}
                 {@const tool = workEntry.tool}
-                <details class="tool-item" open={tool.status === 'in_progress'} oncontextmenu={(event) => openToolMenu(event, tool)}>
+                <details
+                  class="tool-item"
+                  open={tool.status === 'in_progress'}
+                  oncontextmenu={(event) => openToolMenu(event, tool)}
+                  in:fly={{ y: entryMotion ? 3 : 0, duration: entryMotion ? 160 : 0 }}
+                >
                   <summary>
                     <span class="tool-icon"><IconTool size={14} stroke={1.8} /></span>
                     <span class="tool-title"><strong>{tool.title}</strong><small>{toolStatus(tool.status)}</small></span>
@@ -141,7 +157,13 @@
                   {/if}
                 </details>
               {:else}
-                <div role="presentation" class:thought={workEntry.message.role === 'thought'} class="work-message" oncontextmenu={(event) => openMessageMenu(event, workEntry.message)}>
+                <div
+                  role="presentation"
+                  class:thought={workEntry.message.role === 'thought'}
+                  class="work-message"
+                  oncontextmenu={(event) => openMessageMenu(event, workEntry.message)}
+                  in:fly={{ y: entryMotion ? 3 : 0, duration: entryMotion ? 160 : 0 }}
+                >
                   <MarkdownMessage id={workEntry.message.id} source={workEntry.message.text.trim()} streaming={entry.active} />
                 </div>
               {/if}
@@ -151,13 +173,23 @@
       {:else}
         {@const message = entry.message}
         {#if message.role === 'notice' || message.role === 'error'}
-          <div class:error={message.role === 'error'} class="notice-message">
+          <div
+            class:error={message.role === 'error'}
+            class="notice-message"
+            in:fly={{ y: entryMotion ? 4 : 0, duration: entryMotion ? 170 : 0 }}
+          >
             {#if message.role === 'error'}<IconAlertTriangle size={15} stroke={1.8} />{/if}
             <span>{message.text}</span>
           </div>
         {:else}
           {@const streaming = isStreamingMessage(thread, message)}
-          <article class:from-user={message.role === 'user'} class:streaming={streaming} class="message" oncontextmenu={(event) => openMessageMenu(event, message)}>
+          <article
+            class:from-user={message.role === 'user'}
+            class:streaming={streaming}
+            class="message"
+            oncontextmenu={(event) => openMessageMenu(event, message)}
+            in:fly={{ y: entryMotion ? (message.role === 'user' ? 10 : 4) : 0, duration: entryMotion ? 180 : 0 }}
+          >
             <header>{message.role === 'user' ? 'You' : threadHarness(thread)}</header>
             <div class="message-body">
               <MarkdownMessage id={message.id} source={message.text} {streaming} />
@@ -175,7 +207,7 @@
       {/if}
     {/each}
     {#if threadStatus(thread) === 'running' && !entries.some((entry) => entry.type === 'work' && entry.active)}
-      <div class="running-indicator"><span class="activity-spark"></span><span>Working…</span></div>
+      <div class="running-indicator" in:fade={{ duration: entryMotion ? 140 : 0 }}><span class="activity-spark"></span><span>Working…</span></div>
     {/if}
     </div>
   </section>
@@ -199,5 +231,10 @@
 {/if}
 
 {#if imagePreview}
-  <ImagePreview src={imagePreview.src} name={imagePreview.name} close={() => { imagePreview = undefined; }} />
+  <ImagePreview
+    src={imagePreview.src}
+    name={imagePreview.name}
+    {reducedMotion}
+    close={() => { imagePreview = undefined; }}
+  />
 {/if}

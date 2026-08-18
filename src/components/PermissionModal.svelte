@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fade, scale } from 'svelte/transition';
 
   import type { PermissionRequest } from '../types';
 
   interface Props {
     request: PermissionRequest;
+    reducedMotion: boolean;
     answer: (optionId: string) => void;
     decline: () => void;
   }
 
-  const { request, answer, decline }: Props = $props();
+  const { request, reducedMotion, answer, decline }: Props = $props();
   let dialog = $state<HTMLDivElement>();
 
   const primaryOptionId = $derived(
@@ -88,7 +90,11 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" role="presentation">
+<div
+  class="modal-backdrop"
+  role="presentation"
+  transition:fade|global={{ duration: reducedMotion ? 0 : 150 }}
+>
   <div
     bind:this={dialog}
     class="permission-modal"
@@ -97,6 +103,7 @@
     aria-labelledby="permission-title"
     aria-describedby="permission-description"
     tabindex="-1"
+    transition:scale|global={{ start: reducedMotion ? 1 : 0.985, duration: reducedMotion ? 0 : 170 }}
   >
     <header class="permission-header">
       <h2 id="permission-title">{title}</h2>
