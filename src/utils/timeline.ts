@@ -105,6 +105,10 @@ export function workGroupMeta(entries: TimelineActivityEntry[]) {
 
 export function isStreamingMessage(thread: ThreadState, message: TimelineMessage) {
   if (message.role !== "agent" || threadStatus(thread) !== "running") return false;
-  const lastAgent = [...thread.messages].reverse().find((item) => item.role === "agent");
-  return lastAgent?.id === message.id;
+  for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
+    const item = thread.messages[index];
+    if (item.role === "user") return false;
+    if (item.role === "agent") return item.id === message.id;
+  }
+  return false;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { timelineEntries } from "../src/utils/timeline.ts";
+import { isStreamingMessage, timelineEntries } from "../src/utils/timeline.ts";
 
 function thread(status = "ready") {
   return {
@@ -71,4 +71,20 @@ void test("keeps the substantive response visible when a completed turn ends wit
 
   const entries = timelineEntries(value);
   assert.ok(entries.some((entry) => entry.type === "message" && entry.message.id === "final"));
+});
+
+void test("does not mark the previous turn's response as streaming while the next turn starts", () => {
+  const value = thread("running");
+  const previousResponse = value.messages.find((message) => message.id === "final");
+  value.messages.push({ id: "follow-up", role: "user", text: "Continue", createdAt: 7 });
+  value.updatedAt = 7;
+
+  assert.equal(isStreamingMessage(value, previousResponse), false);
+
+  const currentResponse = { id: "current", role: "agent", text: "Continuing", createdAt: 8 };
+  value.messages.push(currentResponse);
+  value.updatedAt = 8;
+
+  assert.equal(isStreamingMessage(value, previousResponse), false);
+  assert.equal(isStreamingMessage(value, currentResponse), true);
 });
