@@ -1,6 +1,35 @@
-/node_modules
-/dist
-/target
-/src-tauri/target
-/.vite
+# Dependencies and build output
+/node_modules/
+/dist/
+/target/
+/src-tauri/target/
+/.vite/
+/coverage/
+*.tsbuildinfo
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+/.mcp.json
+
+# Local agent context
+/.agents/
+/AGENTS.md
+/DESIGN.md
+
+# Logs
 *.log
+
+# Editors and operating systems
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Rust tooling
+*.rs.bk
