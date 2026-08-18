@@ -125,7 +125,7 @@
 
 .workspace-dropdown {
   position: absolute;
-  top: 39px;
+  top: calc(var(--titlebar-height) + 39px);
   left: 8px;
   right: 8px;
   z-index: 6;

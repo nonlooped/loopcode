@@ -1,4 +1,6 @@
 .app-shell {
+  --sidebar-width: var(--sidebar-expanded-width);
+  --project-explorer-width: var(--project-explorer-expanded-width);
   position: relative;
   isolation: isolate;
   width: 100%;
@@ -39,8 +41,8 @@
 .window-chrome {
   padding: 0 10px 0 14px;
   gap: 3px;
-  border-right: 1px solid rgba(255, 255, 255, 0.052);
-  background: var(--sidebar-tint);
+  border-right: 0;
+  background: transparent;
   transition:
     border-color 180ms ease,
     opacity 180ms ease;
@@ -201,16 +203,23 @@
 }
 
 .thread-sidebar {
-  position: relative;
+  position: absolute;
+  z-index: 9;
+  top: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
+  width: var(--sidebar-width);
   min-height: 0;
+  padding-top: var(--titlebar-height);
   flex-direction: column;
   overflow: visible;
   border-right: 1px solid rgba(255, 255, 255, 0.052);
   background: var(--sidebar-tint);
   opacity: 1;
-  will-change: opacity;
+  will-change: width, opacity;
   transition:
+    width 220ms cubic-bezier(0.32, 0.72, 0, 1),
     opacity 180ms ease,
     visibility 0s linear 0s;
 }
@@ -251,6 +260,7 @@ body.resizing-sidebar .sidebar-resize-handle::after {
 
 body.resizing-sidebar .titlebar,
 body.resizing-sidebar .workspace-grid,
+body.resizing-sidebar .thread-sidebar,
 body.resizing-sidebar .project-explorer {
   transition: none;
 }

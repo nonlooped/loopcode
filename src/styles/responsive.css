@@ -80,6 +80,7 @@
     bottom: 0;
     left: 0;
     width: 270px;
+    padding-top: 0;
     visibility: visible !important;
     transform: translateX(-103%);
     background: rgba(24, 25, 29, 0.88);
@@ -88,6 +89,10 @@
 
   .thread-sidebar.open {
     transform: translateX(0);
+  }
+
+  .workspace-dropdown {
+    top: 39px;
   }
 
   .conversation {

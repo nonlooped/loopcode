@@ -623,8 +623,7 @@
     minimize={() => { void appWindow.minimize(); }}
     toggleMaximize={() => { void appWindow.toggleMaximize(); }}
   />
-  <div class="workspace-grid">
-    <Sidebar
+  <Sidebar
       open={sidebarOpen}
       {settingsOpen}
       compactMotion={reducedMotion}
@@ -654,8 +653,9 @@
       setShowSettled={(show) => { showSettled = show; }}
       {openSettings}
       {closeSettings}
-      startResize={(event) => startSidebarResize(event, 'left')}
-    />
+    startResize={(event) => startSidebarResize(event, 'left')}
+  />
+  <div class="workspace-grid">
     <main class="conversation">
       <div class="conversation-primary">
         {#if settingsOpen}
