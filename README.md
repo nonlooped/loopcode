@@ -1,54 +1,52 @@
 # LoopCode
 
-LoopCode is a small desktop workbench for coding agents that speak the Agent Client Protocol (ACP). It launches each agent harness as a local subprocess, creates an ephemeral ACP session for a working folder, streams messages and tool activity, persists the visible LoopCode thread, and presents permission requests without importing an agent's private history.
+LoopCode is a Windows desktop workbench for coding agents that use the Agent Client Protocol (ACP). It launches harnesses locally, keeps each thread tied to a working folder, streams tool activity, and presents permission requests. LoopCode persists its own visible transcript; an agent's private history never becomes sidebar history.
 
-The application uses Tauri 2, Svelte 5, TypeScript, Vite+, and the official `@agentclientprotocol/sdk`. Its Windows shell combines Tauri's native acrylic effect with a transparent webview and a solid CSS fallback for reduced-transparency environments.
+## Run locally
 
-## Requirements
+Requirements:
 
 - Windows 10 or 11 with WebView2
-- Node.js 24 or newer and npm 12 or newer
-- A current Rust toolchain
-- The standard Tauri Windows build prerequisites
-- At least one supported ACP harness
-
-Codex and Claude launch pinned npm adapters through `npx`. Their first launch may require network access. OpenCode expects the `opencode` command to be installed. Sign in with the relevant agent CLI before using that provider.
-
-The bundled adapter versions are:
-
-- Codex ACP: `@agentclientprotocol/codex-acp@1.4.0`
-- Claude ACP: `@agentclientprotocol/claude-agent-acp@0.69.0`
-
-These pins should be reviewed and updated deliberately with each LoopCode release rather than following `latest` at runtime.
-
-## Install and run
+- Node.js 24+ and npm 12+
+- Current Rust and the Tauri Windows prerequisites
+- A configured ACP harness
 
 ```powershell
 npm install
 npm run tauri -- dev
 ```
 
-Tauri starts the frontend through `npm run dev`, which runs `vp dev`.
+Codex and Claude use the npm adapters pinned in `src/config/provider-definitions.ts`; their first launch may need network access. OpenCode expects `opencode` on `PATH`. Authenticate with the provider CLI before using it.
 
-At startup, LoopCode briefly connects to Codex, Claude, and OpenCode to discover their advertised models. It then stops those discovery harnesses and caches the model lists for the lifetime of the application. New and restored threads remain local and disconnected until their first prompt.
+## Runtime model
 
-A thread can be associated with the initial working folder or a folder added through the project menu. The first prompt starts only the selected provider, applies the selected model, reasoning option, and advertised Fast mode setting, and sends text and any attached images. Switching to a provider that has not yet been used remains local until the next prompt.
+At startup, LoopCode briefly launches each provider to discover advertised models, then caches the results for that app run. A new or restored thread remains disconnected until its first prompt.
 
-After the first text prompt, LoopCode uses the selected model in a quiet secondary ACP session to generate a concise title. Title-session output never enters the visible transcript.
+The first prompt starts the selected provider for the selected folder and applies its model, reasoning, and advertised Fast mode settings. A separate quiet ACP session generates the thread title after the first text prompt; its output is never added to the transcript.
 
-## Persistence
+Visible workspace state is stored in `~/.loopcode/threads.json`. Writes rotate the previous snapshot to `threads.json.bak`. Persisted state includes threads, drafts, messages, attachments, tool activity, projects, selections, and private per-provider ACP session IDs. Process IDs, connection state, provider errors, and discovered runtime configuration remain transient.
 
-Visible workspace state is stored at `~/.loopcode/threads.json`. The previous successful snapshot is retained at `~/.loopcode/threads.json.bak`, and writes use a temporary file before rotation.
+## Project map
 
-LoopCode persists:
+- `src/App.svelte` — application coordination
+- `src/components/` — desktop UI
+- `src/config/` — provider commands and presentation metadata
+- `src/services/acp.ts` — ACP SDK transport integration
+- `src/services/provider-runtime.ts` — discovery and provider lifecycle
+- `src/services/native.ts` — typed Tauri commands and channels
+- `src/services/workspace-persistence.ts` — debounced persistence
+- `src/types/` — workspace and timeline types
+- `src/utils/` — state transformations and focused helpers
+- `src/styles/` — feature-scoped global CSS
+- `src-tauri/src/broker.rs` — subprocess and JSON-line relay
+- `src-tauri/src/persistence.rs` — recoverable snapshot storage
+- `tests/` — frontend behavior tests
 
-- Threads, drafts, archive state, messages, image attachments, and tool activity
-- Added projects and the selected project
-- The selected provider for each thread
+Agent instructions live in [`AGENTS.md`](AGENTS.md). Visual rules live in [`DESIGN.md`](DESIGN.md).
 
-ACP session IDs are persisted as private per-provider thread metadata so agents can restore context after a restart. Harness process IDs, connection status, provider errors, and discovered runtime configuration remain transient. Agent-replayed history is not imported into LoopCode's visible transcript.
+## Validation
 
-## Verification
+The available frontend commands are defined in `package.json`; Rust commands use `src-tauri/Cargo.toml`. Run only the checks covering the changed area.
 
 ```powershell
 npm run check
@@ -59,29 +57,10 @@ cargo test --manifest-path src-tauri\Cargo.toml
 cargo check --manifest-path src-tauri\Cargo.toml
 ```
 
-`npm run check` runs Svelte diagnostics plus Vite+ formatting, linting, and TypeScript checks. Frontend tests exercise extracted state transformations rather than matching implementation text.
-
 ## Current boundaries
 
-- LoopCode targets stable ACP v1. Experimental ACP v2 is not enabled.
-- Authentication flows, loading agent-owned sessions, MCP server injection, and non-model configuration UI beyond advertised Fast mode are not implemented.
-- Permission requests are supported. LoopCode does not advertise filesystem or terminal client capabilities.
-- Citations and specialized rich tool renderers are not included.
-- Each active thread/provider pair owns its harness process; there is no cross-thread pooling, crash recovery, queue backpressure, or log export.
-- Windows acrylic and responsive behavior still require manual visual verification on target machines.
-
-## Structure
-
-- `src/App.svelte` — top-level application coordination and page composition
-- `src/components/` — title bar, sidebar, transcript, composer, pickers, settings, permissions, and Markdown rendering
-- `src/config/` — pinned provider definitions and provider presentation metadata
-- `src/services/acp.ts` — official ACP SDK integration over the Tauri broker transport
-- `src/services/provider-runtime.ts` — provider discovery, connection lifecycle, model selection, and transient runtime state
-- `src/services/native.ts` — typed Tauri commands and channels
-- `src/services/workspace-persistence.ts` — debounced frontend persistence coordination
-- `src/types/` — application and timeline types
-- `src/utils/` — workspace validation, thread creation, timeline transforms, title helpers, attachments, and model normalization
-- `src/styles/` — feature-scoped global styles
-- `src-tauri/src/broker.rs` — subprocess lifecycle and newline-delimited JSON relay
-- `src-tauri/src/persistence.rs` — recoverable JSON snapshot storage
-- `tests/` — behavioral frontend tests
+- Stable ACP v1 only; experimental ACP v2 is disabled.
+- No authentication flow, agent-owned session browser, MCP injection, citation UI, specialized tool renderers, or non-model configuration beyond advertised Fast mode.
+- Permission requests are supported; filesystem and terminal client capabilities are not advertised.
+- Each active thread/provider pair owns one harness process. There is no pooling, crash recovery, queue backpressure, or log export.
+- Acrylic and responsive behavior require manual verification on target Windows hardware.
