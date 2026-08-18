@@ -155,3 +155,33 @@
   opacity: 0.45;
   cursor: default;
 }
+
+.confirmation-modal {
+  width: min(400px, 100%);
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.confirmation-actions button {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-soft);
+}
+
+.confirmation-actions button:hover {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.confirmation-actions button.danger {
+  border-color: rgba(255, 92, 92, 0.3);
+  color: var(--danger);
+}

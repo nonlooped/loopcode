@@ -63,7 +63,7 @@
       { label: 'Rename', action: () => props.renameThread(thread.id) },
       { label: thread.settled ? 'Unarchive' : 'Archive', action: () => props.toggleSettled(thread.id) },
       { label: 'Open project folder', action: () => props.openThreadFolder(thread), disabled: !thread.cwd },
-      { label: 'Remove thread', action: () => props.removeThread(thread.id), danger: true, separatorBefore: true },
+      { label: 'Delete thread', action: () => props.removeThread(thread.id), danger: true, separatorBefore: true },
     ]);
   }
 
@@ -233,8 +233,8 @@
                     <button
                       type="button"
                       class="remove-thread"
-                      aria-label={`Remove ${thread.title}`}
-                      title="Remove thread"
+                      aria-label={`Delete ${thread.title}`}
+                      title="Delete thread"
                       onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
                     ><IconTrash size={13} stroke={1.7} /></button>
                   </span>
@@ -294,8 +294,8 @@
                       <button
                         type="button"
                         class="remove-thread"
-                        aria-label={`Remove ${thread.title}`}
-                        title="Remove thread"
+                        aria-label={`Delete ${thread.title}`}
+                        title="Delete thread"
                         onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
                       ><IconTrash size={12} stroke={1.7} /></button>
                     </span>

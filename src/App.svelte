@@ -3,6 +3,7 @@
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
   import Composer from './components/Composer.svelte';
+  import DeleteThreadModal from './components/DeleteThreadModal.svelte';
   import PermissionModal from './components/PermissionModal.svelte';
   import ProjectExplorer from './components/ProjectExplorer.svelte';
   import QuestionComposer from './components/QuestionComposer.svelte';
@@ -72,6 +73,7 @@
   const firstThread = createThread('', null, providerCatalogs);
   let threads = $state<ThreadState[]>([firstThread]);
   let selectedThreadId = $state(firstThread.id);
+  let threadPendingRemoval = $state<ThreadState>();
   let interactions = $state<Record<string, {
     threadId: string;
     profileId: string;
@@ -312,7 +314,12 @@
     thread.updatedAt = Date.now();
   }
 
+  function requestThreadRemoval(threadId: string) {
+    threadPendingRemoval = threads.find((thread) => thread.id === threadId);
+  }
+
   async function removeThread(threadId: string) {
+    threadPendingRemoval = undefined;
     await providers.removeThread(threadId);
     delete composerImagesByThread[threadId];
     delete attachmentErrorsByThread[threadId];
@@ -647,7 +654,7 @@
       {toggleSettled}
       {renameThread}
       {openThreadFolder}
-      removeThread={(threadId) => { void removeThread(threadId); }}
+      removeThread={requestThreadRemoval}
       {openProjectFolder}
       {revealProjectFolder}
       {removeProject}
@@ -722,6 +729,15 @@
 <svelte:window onkeydown={(event) => {
   if (event.key === 'Escape' && workspaceDropdownOpen) workspaceDropdownOpen = false;
 }} />
+
+{#if threadPendingRemoval}
+  <DeleteThreadModal
+    title={threadPendingRemoval.title}
+    {reducedMotion}
+    cancel={() => { threadPendingRemoval = undefined; }}
+    confirm={() => { void removeThread(threadPendingRemoval!.id); }}
+  />
+{/if}
 
 {#if selectedInteraction?.request.type === 'permission'}
   <PermissionModal
