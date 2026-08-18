@@ -56,6 +56,11 @@
   color: var(--text-soft);
 }
 
+.project-file-row.active {
+  background: var(--panel-active);
+  color: var(--text);
+}
+
 .project-file-chevron {
   display: grid;
   width: 13px;

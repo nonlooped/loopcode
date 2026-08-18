@@ -4,7 +4,6 @@
   import ContextMenu from './ContextMenu.svelte';
   import ProjectFileNode from './ProjectFileNode.svelte';
   import {
-    openProjectFile,
     openProjectPath,
     readProjectDirectory,
     revealProjectPath,
@@ -19,10 +18,12 @@
     projectRoot: string;
     depth: number;
     revision: number;
+    activeFilePath: string | null;
+    openFile: (path: string) => void;
     reportError: (message: string) => void;
   }
 
-  const { entry, projectRoot, depth, revision, reportError }: Props = $props();
+  const { entry, projectRoot, depth, revision, activeFilePath, openFile, reportError }: Props = $props();
   let expanded = $state(false);
   let loaded = $state(false);
   let loading = $state(false);
@@ -87,9 +88,7 @@
       if (expanded && !loaded) void loadChildren();
       return;
     }
-    void openProjectFile(projectRoot, entry.path).catch((error) => {
-      reportError(`Could not open ${entry.name}: ${errorMessage(error)}`);
-    });
+    openFile(entry.path);
   }
 
   function errorMessage(error: unknown) {
@@ -97,10 +96,15 @@
   }
 </script>
 
-<li role="treeitem" aria-expanded={entry.isDirectory ? expanded : undefined} aria-selected="false">
+<li
+  role="treeitem"
+  aria-expanded={entry.isDirectory ? expanded : undefined}
+  aria-selected={!entry.isDirectory && activeFilePath === entry.path}
+>
   <button
     type="button"
     class:folder={entry.isDirectory}
+    class:active={!entry.isDirectory && activeFilePath === entry.path}
     class="project-file-row"
     style={`--file-depth: ${depth}`}
     title={entry.path}
@@ -134,6 +138,8 @@
             {projectRoot}
             depth={depth + 1}
             {revision}
+            {activeFilePath}
+            {openFile}
             {reportError}
           />
         {/each}

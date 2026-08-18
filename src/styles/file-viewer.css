@@ -1,0 +1,132 @@
+.file-viewer-resume {
+  display: flex;
+  min-height: 39px;
+  padding: 4px 12px;
+  align-items: center;
+  justify-content: flex-end;
+  border-bottom: 1px solid var(--line);
+}
+
+.file-viewer {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.file-viewer-toolbar {
+  display: grid;
+  min-height: 39px;
+  padding: 6px 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.file-viewer-navigation {
+  display: flex;
+  gap: 2px;
+}
+
+.file-viewer-toolbar .chrome-button:disabled {
+  opacity: 0.35;
+}
+
+.file-viewer-title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.file-viewer-title strong,
+.file-viewer-title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-viewer-title strong {
+  color: var(--text-soft);
+  font-size: 11.5px;
+  font-weight: 590;
+}
+
+.file-viewer-title small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.file-viewer-content {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.file-viewer-state {
+  margin: 0;
+  padding: 24px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.file-viewer-state.error {
+  color: var(--danger);
+}
+
+.file-viewer-image {
+  display: grid;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  place-items: center;
+}
+
+.file-viewer-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.file-viewer-code :where(pre.shiki, pre.shiki-fallback) {
+  min-width: 100%;
+  width: max-content;
+  min-height: 100%;
+  padding: 14px 0 32px;
+  margin: 0;
+  background: transparent !important;
+  font:
+    12px/1.6 "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+  tab-size: 2;
+}
+
+.file-viewer-code code {
+  display: block;
+  counter-reset: file-line;
+}
+
+.file-viewer-code .line {
+  display: block;
+  min-height: 1.6em;
+  padding-right: 20px;
+  counter-increment: file-line;
+}
+
+.file-viewer-code .line::before {
+  display: inline-block;
+  width: 52px;
+  padding-right: 14px;
+  color: var(--faint);
+  content: counter(file-line);
+  text-align: right;
+  user-select: none;
+}

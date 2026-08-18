@@ -139,6 +139,13 @@
     width: calc(100% - 30px);
   }
 
+  .empty-thread-heading {
+    width: calc(100% - 30px);
+    margin-bottom: 14px;
+    padding: 0 9px;
+    font-size: 19px;
+  }
+
   .message.from-user {
     max-width: 92%;
   }

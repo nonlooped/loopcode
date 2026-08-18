@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
   import Composer from './components/Composer.svelte';
   import DeleteThreadModal from './components/DeleteThreadModal.svelte';
+  import FileViewer from './components/FileViewer.svelte';
   import PermissionModal from './components/PermissionModal.svelte';
   import ProjectExplorer from './components/ProjectExplorer.svelte';
   import QuestionComposer from './components/QuestionComposer.svelte';
@@ -97,6 +98,11 @@
   let composerImagesByThread = $state<Record<string, ComposerImage[]>>({});
   let attachmentErrorsByThread = $state<Record<string, string>>({});
   let currentBranch = $state<string | null | undefined>(undefined);
+  let fileHistory = $state<string[]>([]);
+  let fileHistoryIndex = $state(-1);
+  let fileRevision = $state(0);
+  let fileViewerThreadId = $state('');
+  let threadViewElement = $state<HTMLElement>();
   let closing = false;
   let branchLookup = 0;
   let stopSidebarResize: (() => void) | undefined;
@@ -122,6 +128,9 @@
 
   const selectedThread = $derived(threads.find((thread) => thread.id === selectedThreadId));
   const selectedTimelineEntries = $derived(selectedThread ? timelineEntries(selectedThread) : []);
+  const selectedThreadEmpty = $derived(Boolean(
+    selectedThread && selectedThread.messages.length === 0 && selectedThread.tools.length === 0,
+  ));
   const selectedInteraction = $derived(
     selectedThread ? interactions[interactionKey(selectedThread.id, selectedThread.profileId)] : undefined,
   );
@@ -141,6 +150,15 @@
   const projectExplorerVisible = $derived(
     compactLayout ? projectExplorerOpen : !projectExplorerCollapsed,
   );
+  const activeFilePath = $derived(fileHistoryIndex >= 0 ? fileHistory[fileHistoryIndex] ?? null : null);
+
+  $effect(() => {
+    if (selectedThreadId === fileViewerThreadId) return;
+    fileViewerThreadId = selectedThreadId;
+    fileHistory = [];
+    fileHistoryIndex = -1;
+    fileRevision = 0;
+  });
 
   $effect(() => {
     persistence.queue(workspaceSnapshot(threads, selectedThreadId, projects, selectedProjectId));
@@ -358,6 +376,31 @@
     else projectExplorerCollapsed = !projectExplorerCollapsed;
   }
 
+  function openFile(path: string) {
+    if (path === activeFilePath) return;
+    fileHistory = [...fileHistory.slice(0, fileHistoryIndex + 1), path];
+    fileHistoryIndex = fileHistory.length - 1;
+    fileRevision += 1;
+    if (compactLayout) projectExplorerOpen = false;
+  }
+
+  function goBackInFileHistory() {
+    if (fileHistoryIndex >= 0) fileHistoryIndex -= 1;
+  }
+
+  function goForwardInFileHistory() {
+    if (fileHistoryIndex < fileHistory.length - 1) fileHistoryIndex += 1;
+  }
+
+  function closeFileViewer() {
+    fileHistory = [];
+    fileHistoryIndex = -1;
+  }
+
+  function projectFilesChanged(paths: string[]) {
+    if (activeFilePath && paths.includes(activeFilePath)) fileRevision += 1;
+  }
+
   function startSidebarResize(event: PointerEvent, side: 'left' | 'right') {
     if (compactLayout || event.button !== 0) return;
     event.preventDefault();
@@ -471,6 +514,9 @@
 
     const profileId = thread.profileId;
     const isFirstPrompt = !thread.messages.some((message) => message.role === 'user');
+    const centeredComposerTop = selectedThreadEmpty && !reducedMotion
+      ? threadViewElement?.querySelector<HTMLElement>('.composer-wrap')?.getBoundingClientRect().top
+      : undefined;
     const selectedModelId = provider.selectedModelId;
     const messageImages: MessageImage[] = images.map(({ data, mimeType, name }) => ({ data, mimeType, name }));
     const promptImages = messageImages.map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
@@ -481,6 +527,7 @@
     provider.errorDetails = undefined;
     if (isFirstPrompt && !text) thread.title = 'Image prompt';
     addMessage(thread, 'user', text, messageImages);
+    if (centeredComposerTop !== undefined) animateComposerToTranscript(centeredComposerTop);
     providers.startTurn(thread.id, profileId);
 
     let connection = providers.connection(thread.id, profileId);
@@ -501,6 +548,19 @@
     } catch {
       // The provider callback already added a contextual error to the timeline.
     }
+  }
+
+  function animateComposerToTranscript(previousTop: number) {
+    void tick().then(() => {
+      const composer = threadViewElement?.querySelector<HTMLElement>('.composer-wrap');
+      if (!composer) return;
+      const offset = previousTop - composer.getBoundingClientRect().top;
+      if (Math.abs(offset) < 1) return;
+      composer.animate(
+        [{ transform: `translateY(${offset}px)` }, { transform: 'translateY(0)' }],
+        { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      );
+    });
   }
 
   async function generateThreadTitle(
@@ -675,38 +735,65 @@
             {setPermissionMode}
           />
         {:else if selectedThread}
-          {#key selectedThread.id}
-            <Transcript thread={selectedThread} entries={selectedTimelineEntries} {reducedMotion} />
-          {/key}
-          {#if selectedInteraction?.request.type === 'question'}
-            <QuestionComposer
-              request={selectedInteraction.request}
-              {reducedMotion}
-              answer={(optionId) => answerPermission(optionId)}
-              dismiss={() => answerPermission()}
+          {#if activeFilePath}
+            <FileViewer
+              path={activeFilePath}
+              projectRoot={explorerRoot}
+              revision={fileRevision}
+              canGoForward={fileHistoryIndex < fileHistory.length - 1}
+              back={goBackInFileHistory}
+              forward={goForwardInFileHistory}
+              close={closeFileViewer}
             />
           {:else}
-            <Composer
-              thread={selectedThread}
-              catalogs={providerCatalogs}
-              images={composerImages(selectedThread.id)}
-              attachmentError={attachmentErrorsByThread[selectedThread.id]}
-              projectName={projectNameForThread(selectedThread)}
-              {currentBranch}
-              {reducedMotion}
-              attachImages={(files) => { void attachImages(files, selectedThread.id); }}
-              removeImage={(imageId) => removeComposerImage(selectedThread.id, imageId)}
-              send={() => { void sendPrompt(); }}
-              cancel={() => { void cancelPrompt(); }}
-              {reconnect}
-              selectModel={(profileId, model) => { void selectModel(profileId, model); }}
-              selectReasoning={(reasoningId) => { void selectReasoning(reasoningId); }}
-              selectFastMode={(enabled) => { void selectFastMode(enabled); }}
-              {activateProvider}
-              retryDiscovery={(profileId) => {
-                void providers.discover(profileById(profileId), defaultWorkingFolder, threads);
-              }}
-            />
+            {#if fileHistory.length > 0}
+              <div class="file-viewer-resume">
+                <button type="button" class="settings-action" onclick={goForwardInFileHistory}>
+                  Forward to file
+                </button>
+              </div>
+            {/if}
+            <div bind:this={threadViewElement} class:empty={selectedThreadEmpty} class="thread-view">
+              {#if selectedThreadEmpty}
+                <h1 class="empty-thread-heading">
+                  What should we build in {projectNameForThread(selectedThread)}?
+                </h1>
+              {:else}
+                {#key selectedThread.id}
+                  <Transcript thread={selectedThread} entries={selectedTimelineEntries} {reducedMotion} />
+                {/key}
+              {/if}
+              {#if selectedInteraction?.request.type === 'question'}
+                <QuestionComposer
+                  request={selectedInteraction.request}
+                  {reducedMotion}
+                  answer={(optionId) => answerPermission(optionId)}
+                  dismiss={() => answerPermission()}
+                />
+              {:else}
+                <Composer
+                  thread={selectedThread}
+                  catalogs={providerCatalogs}
+                  images={composerImages(selectedThread.id)}
+                  attachmentError={attachmentErrorsByThread[selectedThread.id]}
+                  projectName={projectNameForThread(selectedThread)}
+                  {currentBranch}
+                  {reducedMotion}
+                  attachImages={(files) => { void attachImages(files, selectedThread.id); }}
+                  removeImage={(imageId) => removeComposerImage(selectedThread.id, imageId)}
+                  send={() => { void sendPrompt(); }}
+                  cancel={() => { void cancelPrompt(); }}
+                  {reconnect}
+                  selectModel={(profileId, model) => { void selectModel(profileId, model); }}
+                  selectReasoning={(reasoningId) => { void selectReasoning(reasoningId); }}
+                  selectFastMode={(enabled) => { void selectFastMode(enabled); }}
+                  {activateProvider}
+                  retryDiscovery={(profileId) => {
+                    void providers.discover(profileById(profileId), defaultWorkingFolder, threads);
+                  }}
+                />
+              {/if}
+            </div>
           {/if}
         {/if}
       </div>
@@ -718,7 +805,10 @@
           visible={projectExplorerVisible}
           projectRoot={explorerRoot}
           projectName={explorerProjectName}
+          {activeFilePath}
           toggle={toggleProjectExplorer}
+          {openFile}
+          filesChanged={projectFilesChanged}
           startResize={(event) => startSidebarResize(event, 'right')}
         />
       {/key}

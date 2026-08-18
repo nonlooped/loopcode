@@ -90,7 +90,14 @@ export function readProjectDirectory(
   projectRoot: string,
   directory: string,
 ): Promise<ProjectFileEntry[]> {
-  return invoke<ProjectFileEntry[]>("read_project_directory", { projectRoot, directory });
+  return invoke<ProjectFileEntry[]>("read_project_directory", {
+    projectRoot,
+    directory,
+  });
+}
+
+export function readProjectFile(projectRoot: string, path: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_project_file", { projectRoot, path });
 }
 
 export function openProjectFile(projectRoot: string, path: string): Promise<void> {
@@ -111,7 +118,10 @@ export async function startProjectFileWatcher(
 ): Promise<number> {
   const channel = new Channel<ProjectFileChange>();
   channel.onmessage = onChange;
-  return invoke<number>("start_project_file_watcher", { projectRoot, onChange: channel });
+  return invoke<number>("start_project_file_watcher", {
+    projectRoot,
+    onChange: channel,
+  });
 }
 
 export function stopProjectFileWatcher(watcherId: number): Promise<void> {

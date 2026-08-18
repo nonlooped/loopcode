@@ -145,6 +145,62 @@ async fn read_project_directory(
     .map_err(|error| format!("Could not join project folder task: {error}"))?
 }
 
+fn project_image_media_type(path: &Path) -> Option<&'static str> {
+    match path.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "avif" => Some("image/avif"),
+        "bmp" => Some("image/bmp"),
+        "gif" => Some("image/gif"),
+        "ico" => Some("image/x-icon"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "svg" => Some("image/svg+xml"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+#[tauri::command]
+async fn read_project_file(
+    project_root: String,
+    path: String,
+) -> Result<tauri::ipc::Response, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = resolve_project_path(&project_root, &path)?;
+        if !path.is_file() {
+            return Err("The requested project path is not a file.".to_owned());
+        }
+
+        let media_type = project_image_media_type(&path);
+        let limit = if media_type.is_some() {
+            10 * 1024 * 1024
+        } else {
+            1024 * 1024
+        };
+        let size = path
+            .metadata()
+            .map_err(|error| format!("Could not inspect file: {error}"))?
+            .len();
+        if size > limit {
+            return Err(if media_type.is_some() {
+                "Images larger than 10 MB cannot be previewed.".to_owned()
+            } else {
+                "Text files larger than 1 MB cannot be previewed.".to_owned()
+            });
+        }
+
+        let bytes =
+            std::fs::read(&path).map_err(|error| format!("Could not read file: {error}"))?;
+        if bytes.len() as u64 > limit {
+            return Err(
+                "The file grew beyond the preview limit while it was being read.".to_owned(),
+            );
+        }
+        Ok(tauri::ipc::Response::new(bytes))
+    })
+    .await
+    .map_err(|error| format!("Could not join project file task: {error}"))?
+}
+
 #[tauri::command]
 async fn open_project_file(
     app: tauri::AppHandle,
@@ -367,6 +423,21 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
     .map_err(|error| format!("Could not join Git branch task: {error}"))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::project_image_media_type;
+    use std::path::Path;
+
+    #[test]
+    fn recognizes_previewable_image_extensions() {
+        assert_eq!(
+            project_image_media_type(Path::new("image.PNG")),
+            Some("image/png")
+        );
+        assert_eq!(project_image_media_type(Path::new("component.ts")), None);
+    }
+}
+
 pub fn run() {
     let home = std::env::var_os("USERPROFILE")
         .or_else(|| std::env::var_os("HOME"))
@@ -403,6 +474,7 @@ pub fn run() {
             pick_folder,
             get_git_branch,
             read_project_directory,
+            read_project_file,
             open_project_file,
             open_project_path,
             reveal_project_path,

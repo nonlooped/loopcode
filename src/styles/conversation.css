@@ -17,6 +17,32 @@
   background: transparent;
 }
 
+.thread-view {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.thread-view.empty {
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.empty-thread-heading {
+  width: min(720px, calc(100% - 56px));
+  margin: 0 auto 18px;
+  padding: 0 14px;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 560;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  text-align: center;
+}
+
 .settings-page {
   min-height: 0;
   flex: 1;

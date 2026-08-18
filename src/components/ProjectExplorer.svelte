@@ -14,11 +14,16 @@
     visible: boolean;
     projectRoot: string;
     projectName: string;
+    activeFilePath: string | null;
     toggle: () => void;
+    openFile: (path: string) => void;
+    filesChanged: (paths: string[]) => void;
     startResize: (event: PointerEvent) => void;
   }
 
-  const { open, visible, projectRoot, projectName, toggle, startResize }: Props = $props();
+  const {
+    open, visible, projectRoot, projectName, activeFilePath, toggle, openFile, filesChanged, startResize,
+  }: Props = $props();
   let entries = $state<ProjectFileEntry[]>([]);
   let loading = $state(true);
   let loadError = $state('');
@@ -31,8 +36,9 @@
     let disposed = false;
     let watcherId: number | undefined;
 
-    void startProjectFileWatcher(projectRoot, () => {
+    void startProjectFileWatcher(projectRoot, (change) => {
       if (disposed) return;
+      filesChanged(change.paths);
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => { revision += 1; }, 160);
     }).then((id) => {
@@ -121,6 +127,8 @@
             {projectRoot}
             depth={0}
             {revision}
+            {activeFilePath}
+            {openFile}
             reportError={(message) => { notice = message; }}
           />
         {/each}
