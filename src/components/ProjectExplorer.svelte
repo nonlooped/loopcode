@@ -62,7 +62,11 @@
   });
 
   $effect(() => {
-    if (!focusedPath && entries.length > 0) focusedPath = entries[0].path;
+    if (!tree) return;
+    const observer = new MutationObserver(resetMissingTreeFocus);
+    observer.observe(tree, { childList: true, subtree: true });
+    resetMissingTreeFocus();
+    return () => observer.disconnect();
   });
 
   async function loadRoot(requestedRevision: number) {
@@ -79,6 +83,11 @@
     } finally {
       if (token === loadToken) loading = false;
     }
+  }
+
+  function resetMissingTreeFocus() {
+    const items = Array.from(tree?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]') ?? []);
+    if (!items.some((item) => item.dataset.path === focusedPath)) focusedPath = items[0]?.dataset.path ?? null;
   }
 
   function focusTreeItem(item: HTMLButtonElement | undefined) {
