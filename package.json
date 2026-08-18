@@ -17,6 +17,7 @@
     "@tabler/icons-svelte": "^3.46.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-opener": "^2.5.0",
+    "material-icon-theme": "^5.37.0",
     "shiki": "^4.4.3",
     "svelte": "^5.56.9",
     "zod": "4.4.3"

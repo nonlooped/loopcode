@@ -24,7 +24,10 @@
   --danger: rgba(215, 126, 137, 0.92);
   --warning: rgba(212, 170, 114, 0.92);
   --shadow: 0 28px 90px rgba(0, 0, 0, 0.4);
-  --sidebar-width: 256px;
+  --sidebar-expanded-width: 256px;
+  --project-explorer-expanded-width: 280px;
+  --sidebar-width: var(--sidebar-expanded-width);
+  --project-explorer-width: var(--project-explorer-expanded-width);
   --titlebar-height: 38px;
 }
 
@@ -46,6 +49,11 @@ body,
 body {
   color: var(--text);
   font-size: 14px;
+}
+
+body.resizing-sidebar {
+  cursor: ew-resize;
+  user-select: none;
 }
 
 button,

@@ -20,10 +20,13 @@
   z-index: 10;
   display: grid;
   height: var(--titlebar-height);
+  width: calc(100% - var(--project-explorer-width));
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   background: transparent;
   user-select: none;
-  transition: grid-template-columns 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition:
+    width 220ms cubic-bezier(0.32, 0.72, 0, 1),
+    grid-template-columns 220ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .window-chrome,
@@ -102,7 +105,7 @@
 .title-context {
   gap: 7px;
   overflow: hidden;
-  padding: 0 14px;
+  padding: 0 42px 0 14px;
   white-space: nowrap;
 }
 
@@ -159,6 +162,10 @@
   --sidebar-width: 0px;
 }
 
+.app-shell.project-explorer-collapsed {
+  --project-explorer-width: 0px;
+}
+
 .app-shell.sidebar-collapsed .titlebar {
   grid-template-columns: 154px minmax(0, 1fr);
 }
@@ -189,7 +196,7 @@
   display: grid;
   height: calc(100dvh - var(--titlebar-height));
   min-height: 0;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--project-explorer-width);
   transition: grid-template-columns 220ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -206,4 +213,44 @@
   transition:
     opacity 180ms ease,
     visibility 0s linear 0s;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  touch-action: none;
+  cursor: ew-resize;
+}
+
+.left-sidebar-resize-handle {
+  right: -4px;
+}
+
+.right-sidebar-resize-handle {
+  left: -4px;
+}
+
+.sidebar-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  content: "";
+  transition: background-color 120ms ease;
+}
+
+.sidebar-resize-handle:hover::after,
+body.resizing-sidebar .sidebar-resize-handle::after {
+  background: var(--line-strong);
+}
+
+body.resizing-sidebar .titlebar,
+body.resizing-sidebar .workspace-grid,
+body.resizing-sidebar .project-explorer {
+  transition: none;
 }

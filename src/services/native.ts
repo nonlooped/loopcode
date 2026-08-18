@@ -9,20 +9,41 @@ export interface LaunchRequest {
   threadId?: string;
 }
 
+let frontendGeneration: number | undefined;
+
 export type BrokerEvent =
   | { event: "rpc"; data: { message: AnyMessage } }
   | { event: "stderr"; data: { line: string } }
   | { event: "exited"; data: { code: number | null; success: boolean } }
   | { event: "error"; data: { message: string } };
 
+export interface ProjectFileEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  isSymlink: boolean;
+}
+
+export interface ProjectFileChange {
+  paths: string[];
+}
+
 export async function launchHarness(
   request: LaunchRequest,
   onMessage: (event: BrokerEvent) => void,
 ): Promise<string> {
+  if (frontendGeneration === undefined) throw new Error("The frontend is not registered");
   const onEvent = new Channel<BrokerEvent>();
   onEvent.onmessage = onMessage;
-  const result = await invoke<{ harnessId: string }>("launch_harness", { request, onEvent });
+  const result = await invoke<{ harnessId: string }>("launch_harness", {
+    request: { ...request, frontendGeneration },
+    onEvent,
+  });
   return result.harnessId;
+}
+
+export async function registerFrontend() {
+  frontendGeneration = await invoke<number>("register_frontend");
 }
 
 export function sendRpc(harnessId: string, message: AnyMessage): Promise<void> {
@@ -63,4 +84,36 @@ export function pickFolder(): Promise<string | null> {
 
 export function getGitBranch(cwd: string): Promise<string | null> {
   return invoke<string | null>("get_git_branch", { cwd });
+}
+
+export function readProjectDirectory(
+  projectRoot: string,
+  directory: string,
+): Promise<ProjectFileEntry[]> {
+  return invoke<ProjectFileEntry[]>("read_project_directory", { projectRoot, directory });
+}
+
+export function openProjectFile(projectRoot: string, path: string): Promise<void> {
+  return invoke("open_project_file", { projectRoot, path });
+}
+
+export function openProjectPath(projectRoot: string, path: string): Promise<void> {
+  return invoke("open_project_path", { projectRoot, path });
+}
+
+export function revealProjectPath(projectRoot: string, path: string): Promise<void> {
+  return invoke("reveal_project_path", { projectRoot, path });
+}
+
+export async function startProjectFileWatcher(
+  projectRoot: string,
+  onChange: (change: ProjectFileChange) => void,
+): Promise<number> {
+  const channel = new Channel<ProjectFileChange>();
+  channel.onmessage = onChange;
+  return invoke<number>("start_project_file_watcher", { projectRoot, onChange: channel });
+}
+
+export function stopProjectFileWatcher(watcherId: number): Promise<void> {
+  return invoke("stop_project_file_watcher", { watcherId });
 }

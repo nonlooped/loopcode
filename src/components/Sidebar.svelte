@@ -15,8 +15,11 @@
     IconTrash,
   } from '@tabler/icons-svelte';
 
+  import ContextMenu from './ContextMenu.svelte';
   import { profileById } from '../config/providers';
   import type { ProjectState, ThreadState } from '../types';
+  import { copyText } from '../utils/clipboard';
+  import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
   import { folderName, relativeTime, threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -36,19 +39,53 @@
     selectProject: (projectId: string | null) => void;
     addProject: () => void;
     addThread: () => void;
+    addThreadToProject: (projectId: string) => void;
     selectThread: (threadId: string) => void;
     selectThreadFromKeyboard: (event: KeyboardEvent, threadId: string) => void;
     toggleSettled: (threadId: string) => void;
+    renameThread: (threadId: string) => void;
+    openThreadFolder: (thread: ThreadState) => void;
     removeThread: (threadId: string) => void;
+    openProjectFolder: (project: ProjectState) => void;
+    revealProjectFolder: (project: ProjectState) => void;
+    removeProject: (projectId: string) => void;
     setShowSettled: (show: boolean) => void;
     openSettings: () => void;
     closeSettings: () => void;
+    startResize: (event: PointerEvent) => void;
   }
 
   const props: Props = $props();
+  let contextMenu = $state<ContextMenuState>();
+
+  function openThreadMenu(event: MouseEvent, thread: ThreadState) {
+    contextMenu = menuFromEvent(event, [
+      { label: 'Rename', action: () => props.renameThread(thread.id) },
+      { label: thread.settled ? 'Unarchive' : 'Archive', action: () => props.toggleSettled(thread.id) },
+      { label: 'Open project folder', action: () => props.openThreadFolder(thread), disabled: !thread.cwd },
+      { label: 'Remove thread', action: () => props.removeThread(thread.id), danger: true, separatorBefore: true },
+    ]);
+  }
+
+  function openProjectMenu(event: MouseEvent, project: ProjectState) {
+    contextMenu = menuFromEvent(event, [
+      { label: 'New thread in project', action: () => props.addThreadToProject(project.id) },
+      { label: 'Open folder', action: () => props.openProjectFolder(project) },
+      { label: 'Reveal folder', action: () => props.revealProjectFolder(project) },
+      { label: 'Copy path', action: () => copyText(project.path) },
+      { label: 'Remove from LoopCode', action: () => props.removeProject(project.id), danger: true, separatorBefore: true },
+    ]);
+  }
 </script>
 
 <aside class:open={props.open} class="thread-sidebar">
+  <div
+    class="sidebar-resize-handle left-sidebar-resize-handle"
+    role="separator"
+    aria-label="Resize left sidebar"
+    aria-orientation="vertical"
+    onpointerdown={props.startResize}
+  ></div>
   {#if props.settingsOpen}
     <div class="settings-nav">
       <div class="settings-nav-label">Settings</div>
@@ -110,6 +147,7 @@
             class:active={props.selectedProjectId === project.id}
             role="menuitem"
             onclick={() => props.selectProject(project.id)}
+            oncontextmenu={(event) => openProjectMenu(event, project)}
           >
             <IconFolder size={13} stroke={1.6} />
             <span class="workspace-option-main">
@@ -143,6 +181,7 @@
                   role="button"
                   tabindex="0"
                   onclick={() => props.selectThread(thread.id)}
+                  oncontextmenu={(event) => openThreadMenu(event, thread)}
                   onkeydown={(event) => props.selectThreadFromKeyboard(event, thread.id)}
                   transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
                 >
@@ -155,7 +194,6 @@
                         {:else}
                           {thread.cwd ? folderName(thread.cwd) : '~'}
                         {/if}
-                        <span>@ local</span>
                       </span>
                       <span class:live={status === 'running'} class:error={status === 'error'} class="thread-updated">
                         {status === 'running' ? 'Working' : status === 'error' ? 'Failed' : relativeTime(thread.updatedAt)}
@@ -214,6 +252,7 @@
                     role="button"
                     tabindex="0"
                     onclick={() => props.selectThread(thread.id)}
+                    oncontextmenu={(event) => openThreadMenu(event, thread)}
                     onkeydown={(event) => props.selectThreadFromKeyboard(event, thread.id)}
                     title={thread.title}
                     transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
@@ -245,10 +284,13 @@
       </section>
     </div>
 
-    <button class="sidebar-foot" onclick={props.openSettings} aria-label="Open settings">
-      <span class="local-avatar">L</span>
-      <span class="sidebar-foot-copy"><strong>LoopCode</strong><small>Local only</small></span>
-      <IconSettings class="sidebar-foot-settings" size={15} stroke={1.55} />
+    <button class="sidebar-foot" onclick={props.openSettings}>
+      <IconSettings size={16} stroke={1.55} />
+      <span>Settings</span>
     </button>
   {/if}
 </aside>
+
+{#if contextMenu}
+  <ContextMenu menu={contextMenu} close={() => { contextMenu = undefined; }} />
+{/if}

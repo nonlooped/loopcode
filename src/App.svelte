@@ -4,6 +4,7 @@
 
   import Composer from './components/Composer.svelte';
   import PermissionModal from './components/PermissionModal.svelte';
+  import ProjectExplorer from './components/ProjectExplorer.svelte';
   import QuestionComposer from './components/QuestionComposer.svelte';
   import SettingsPage from './components/SettingsPage.svelte';
   import Sidebar from './components/Sidebar.svelte';
@@ -15,7 +16,10 @@
     getGitBranch,
     getInitialWorkingDirectory,
     loadWorkspace,
+    openProjectPath,
     pickFolder,
+    registerFrontend,
+    revealProjectPath,
     stopAllHarnesses,
   } from './services/native';
   import { ProviderRuntime } from './services/provider-runtime';
@@ -31,7 +35,14 @@
     ThreadState,
   } from './types';
   import { loadComposerImages, MAX_COMPOSER_IMAGES } from './utils/attachments';
-  import { loadPermissionMode, savePermissionMode } from './utils/app-settings';
+  import {
+    LEFT_SIDEBAR_WIDTH_RANGE,
+    RIGHT_SIDEBAR_WIDTH_RANGE,
+    loadPermissionMode,
+    loadSidebarWidths,
+    savePermissionMode,
+    saveSidebarWidth,
+  } from './utils/app-settings';
   import { addMessage, nextTimestamp, titleFromPrompt } from './utils/messages';
   import { findReusableEmptyThread } from './utils/thread-state';
   import { buildThreadTitlePrompt, normalizeThreadTitle } from './utils/thread-title';
@@ -68,6 +79,12 @@
   }>>({});
   let sidebarOpen = $state(false);
   let sidebarCollapsed = $state(false);
+  let projectExplorerOpen = $state(false);
+  let projectExplorerCollapsed = $state(false);
+  const savedSidebarWidths = loadSidebarWidths();
+  let leftSidebarWidth = $state<number | null>(savedSidebarWidths.left);
+  let rightSidebarWidth = $state<number | null>(savedSidebarWidths.right);
+  let compactLayout = $state(window.matchMedia('(max-width: 880px)').matches);
   let settingsOpen = $state(false);
   let compactSessionRows = $state(false);
   const initialPermissionMode = loadPermissionMode();
@@ -80,6 +97,12 @@
   let currentBranch = $state<string | null | undefined>(undefined);
   let closing = false;
   let branchLookup = 0;
+  let stopSidebarResize: (() => void) | undefined;
+
+  const sidebarWidthStyle = $derived([
+    leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
+    rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
+  ].filter(Boolean).join('; '));
 
   const persistence = new WorkspacePersistence();
   const providers = new ProviderRuntime(providerCatalogs, {
@@ -108,6 +131,13 @@
   );
   const activeProject = $derived(
     selectedProjectId ? projects.find((project) => project.id === selectedProjectId) ?? null : null,
+  );
+  const explorerRoot = $derived(selectedThread?.cwd ?? '');
+  const explorerProjectName = $derived(
+    selectedThread ? projectNameForThread(selectedThread) : 'Project',
+  );
+  const projectExplorerVisible = $derived(
+    compactLayout ? projectExplorerOpen : !projectExplorerCollapsed,
   );
 
   $effect(() => {
@@ -141,7 +171,10 @@
 
     const syncMaximizedState = async () => {
       const maximized = await appWindow.isMaximized();
-      if (!disposed) windowMaximized = maximized;
+      if (!disposed) {
+        windowMaximized = maximized;
+        compactLayout = window.matchMedia('(max-width: 880px)').matches;
+      }
     };
 
     void syncMaximizedState();
@@ -157,13 +190,11 @@
       else unlistenClose = unlisten;
     });
 
-    const stopChildren = () => { void stopAllHarnesses(); };
-    window.addEventListener('beforeunload', stopChildren);
     return () => {
       disposed = true;
+      stopSidebarResize?.();
       unlistenResize?.();
       unlistenClose?.();
-      window.removeEventListener('beforeunload', stopChildren);
     };
   });
 
@@ -178,7 +209,18 @@
   }
 
   function addThread() {
-    const target = targetWorkspace();
+    addThreadForTarget(targetWorkspace());
+  }
+
+  function addThreadToProject(projectId: string) {
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+    workspaceDropdownOpen = false;
+    selectedProjectId = project.id;
+    addThreadForTarget({ cwd: project.path, projectId: project.id });
+  }
+
+  function addThreadForTarget(target: { cwd: string; projectId: string | null }) {
     const reusable = findReusableEmptyThread(
       threads,
       target,
@@ -224,6 +266,45 @@
     workspaceDropdownOpen = false;
   }
 
+  function renameThread(threadId: string) {
+    const thread = threads.find((item) => item.id === threadId);
+    if (!thread) return;
+    const title = window.prompt('Rename thread', thread.title)?.trim();
+    if (!title || title === thread.title) return;
+    thread.title = title;
+    thread.updatedAt = Date.now();
+  }
+
+  function openThreadFolder(thread: ThreadState) {
+    if (thread.cwd) void runPathAction(openProjectPath(thread.cwd, thread.cwd));
+  }
+
+  function openProjectFolder(project: ProjectState) {
+    void runPathAction(openProjectPath(project.path, project.path));
+  }
+
+  function revealProjectFolder(project: ProjectState) {
+    void runPathAction(revealProjectPath(project.path, project.path));
+  }
+
+  function removeProject(projectId: string) {
+    projects = projects.filter((project) => project.id !== projectId);
+    for (const thread of threads) {
+      if (thread.projectId === projectId) thread.projectId = null;
+    }
+    if (selectedProjectId === projectId) selectedProjectId = null;
+    workspaceDropdownOpen = false;
+  }
+
+  async function runPathAction(action: Promise<void>) {
+    try {
+      await action;
+    } catch (error) {
+      const thread = selectedThread ?? threads[0];
+      if (thread) addMessage(thread, 'error', errorMessage(error));
+    }
+  }
+
   function toggleSettled(threadId: string) {
     const thread = threads.find((item) => item.id === threadId);
     if (!thread) return;
@@ -251,6 +332,7 @@
   function selectThread(threadId: string) {
     selectedThreadId = threadId;
     sidebarOpen = false;
+    projectExplorerOpen = false;
   }
 
   function selectThreadFromKeyboard(event: KeyboardEvent, threadId: string) {
@@ -262,6 +344,48 @@
   function toggleSidebar() {
     if (window.matchMedia('(max-width: 880px)').matches) sidebarOpen = !sidebarOpen;
     else sidebarCollapsed = !sidebarCollapsed;
+  }
+
+  function toggleProjectExplorer() {
+    if (compactLayout) projectExplorerOpen = !projectExplorerOpen;
+    else projectExplorerCollapsed = !projectExplorerCollapsed;
+  }
+
+  function startSidebarResize(event: PointerEvent, side: 'left' | 'right') {
+    if (compactLayout || event.button !== 0) return;
+    event.preventDefault();
+    stopSidebarResize?.();
+
+    const shell = document.querySelector<HTMLElement>('.app-shell');
+    const panelSelector = side === 'left' ? '.thread-sidebar' : '.project-explorer';
+    const panel = shell?.querySelector<HTMLElement>(panelSelector);
+    if (!shell || !panel) return;
+
+    const startX = event.clientX;
+    const startWidth = panel.getBoundingClientRect().width;
+    const range = side === 'left' ? LEFT_SIDEBAR_WIDTH_RANGE : RIGHT_SIDEBAR_WIDTH_RANGE;
+    document.body.classList.add('resizing-sidebar');
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const delta = side === 'left' ? moveEvent.clientX - startX : startX - moveEvent.clientX;
+      const width = Math.round(Math.min(range.max, Math.max(range.min, startWidth + delta)));
+      if (side === 'left') leftSidebarWidth = width;
+      else rightSidebarWidth = width;
+    };
+    const finish = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      document.body.classList.remove('resizing-sidebar');
+      const width = side === 'left' ? leftSidebarWidth : rightSidebarWidth;
+      if (width !== null) saveSidebarWidth(side, width);
+      stopSidebarResize = undefined;
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    stopSidebarResize = finish;
   }
 
   function openSettings() {
@@ -278,6 +402,7 @@
 
   async function initializeWorkspace() {
     try {
+      await registerFrontend();
       defaultWorkingFolder = await getInitialWorkingDirectory();
       const savedWorkspace = await loadWorkspace();
       if (savedWorkspace !== null) {
@@ -480,10 +605,18 @@
 
 <svelte:head><title>{settingsOpen ? 'Settings' : (selectedThread?.title ?? 'LoopCode')} | LoopCode</title></svelte:head>
 
-<div class:maximized={windowMaximized} class:sidebar-collapsed={sidebarCollapsed} class:compact-session-rows={compactSessionRows} class="app-shell">
+<div
+  class:maximized={windowMaximized}
+  class:sidebar-collapsed={sidebarCollapsed}
+  class:project-explorer-collapsed={!explorerRoot || (!compactLayout && projectExplorerCollapsed)}
+  class:compact-session-rows={compactSessionRows}
+  class="app-shell"
+  style={sidebarWidthStyle}
+>
   <Titlebar
     {settingsOpen}
     {selectedThread}
+    {windowMaximized}
     {toggleSidebar}
     {addThread}
     {closeApp}
@@ -508,13 +641,20 @@
       {selectProject}
       addProject={() => { void openAddProject(); }}
       {addThread}
+      {addThreadToProject}
       {selectThread}
       {selectThreadFromKeyboard}
       {toggleSettled}
+      {renameThread}
+      {openThreadFolder}
       removeThread={(threadId) => { void removeThread(threadId); }}
+      {openProjectFolder}
+      {revealProjectFolder}
+      {removeProject}
       setShowSettled={(show) => { showSettled = show; }}
       {openSettings}
       {closeSettings}
+      startResize={(event) => startSidebarResize(event, 'left')}
     />
     <main class="conversation">
       <div class="conversation-primary">
@@ -558,6 +698,18 @@
         {/if}
       </div>
     </main>
+    {#if explorerRoot}
+      {#key explorerRoot}
+        <ProjectExplorer
+          open={projectExplorerOpen}
+          visible={projectExplorerVisible}
+          projectRoot={explorerRoot}
+          projectName={explorerProjectName}
+          toggle={toggleProjectExplorer}
+          startResize={(event) => startSidebarResize(event, 'right')}
+        />
+      {/key}
+    {/if}
   </div>
 </div>
 

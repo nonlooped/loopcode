@@ -2,11 +2,46 @@ mod broker;
 mod diagnostics;
 mod persistence;
 
-use broker::{Broker, launch_harness, send_rpc, stop_all_harnesses, stop_harness};
+use broker::{
+    Broker, launch_harness, register_frontend, send_rpc, stop_all_harnesses, stop_harness,
+};
 use diagnostics::Diagnostics;
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Serialize;
 use serde_json::Value;
-use std::process::Command;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
+};
 use tauri::Manager;
+use tauri::ipc::Channel;
+use tauri_plugin_opener::OpenerExt;
+
+#[derive(Default)]
+struct ProjectFileWatchers {
+    next_id: AtomicU64,
+    watchers: Mutex<HashMap<u64, RecommendedWatcher>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectFileEntry {
+    name: String,
+    path: String,
+    is_directory: bool,
+    is_symlink: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectFileChange {
+    paths: Vec<String>,
+}
 
 fn git_command() -> Command {
     let mut command = Command::new("git");
@@ -56,6 +91,161 @@ fn initial_working_directory() -> Result<String, String> {
     std::env::current_dir()
         .map(|path| path.to_string_lossy().into_owned())
         .map_err(|error| format!("Could not resolve the initial working directory: {error}"))
+}
+
+fn resolve_project_path(project_root: &str, candidate: &str) -> Result<PathBuf, String> {
+    let root = Path::new(project_root)
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve project folder: {error}"))?;
+    let path = Path::new(candidate)
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve project path: {error}"))?;
+    if !path.starts_with(&root) {
+        return Err("The requested path is outside the project folder.".to_owned());
+    }
+    Ok(path)
+}
+
+#[tauri::command]
+async fn read_project_directory(
+    project_root: String,
+    directory: String,
+) -> Result<Vec<ProjectFileEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let directory = resolve_project_path(&project_root, &directory)?;
+        if !directory.is_dir() {
+            return Err("The requested project path is not a folder.".to_owned());
+        }
+
+        let mut entries = Vec::new();
+        for entry in std::fs::read_dir(&directory)
+            .map_err(|error| format!("Could not read project folder: {error}"))?
+        {
+            let entry = entry.map_err(|error| format!("Could not read project entry: {error}"))?;
+            let file_type = entry
+                .file_type()
+                .map_err(|error| format!("Could not inspect project entry: {error}"))?;
+            entries.push(ProjectFileEntry {
+                name: entry.file_name().to_string_lossy().into_owned(),
+                path: entry.path().to_string_lossy().into_owned(),
+                is_directory: file_type.is_dir(),
+                is_symlink: file_type.is_symlink(),
+            });
+        }
+        entries.sort_by(|left, right| {
+            right
+                .is_directory
+                .cmp(&left.is_directory)
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+                .then_with(|| left.name.cmp(&right.name))
+        });
+        Ok(entries)
+    })
+    .await
+    .map_err(|error| format!("Could not join project folder task: {error}"))?
+}
+
+#[tauri::command]
+async fn open_project_file(
+    app: tauri::AppHandle,
+    project_root: String,
+    path: String,
+) -> Result<(), String> {
+    let path = tauri::async_runtime::spawn_blocking(move || {
+        let path = resolve_project_path(&project_root, &path)?;
+        if !path.is_file() {
+            return Err("The requested project path is not a file.".to_owned());
+        }
+        Ok(path)
+    })
+    .await
+    .map_err(|error| format!("Could not join project file task: {error}"))??;
+
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<String>)
+        .map_err(|error| format!("Could not open file: {error}"))
+}
+
+#[tauri::command]
+async fn open_project_path(
+    app: tauri::AppHandle,
+    project_root: String,
+    path: String,
+) -> Result<(), String> {
+    let path =
+        tauri::async_runtime::spawn_blocking(move || resolve_project_path(&project_root, &path))
+            .await
+            .map_err(|error| format!("Could not join project path task: {error}"))??;
+
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<String>)
+        .map_err(|error| format!("Could not open path: {error}"))
+}
+
+#[tauri::command]
+async fn reveal_project_path(
+    app: tauri::AppHandle,
+    project_root: String,
+    path: String,
+) -> Result<(), String> {
+    let path =
+        tauri::async_runtime::spawn_blocking(move || resolve_project_path(&project_root, &path))
+            .await
+            .map_err(|error| format!("Could not join project path task: {error}"))??;
+
+    app.opener()
+        .reveal_item_in_dir(path)
+        .map_err(|error| format!("Could not reveal path: {error}"))
+}
+
+#[tauri::command]
+fn start_project_file_watcher(
+    state: tauri::State<'_, ProjectFileWatchers>,
+    project_root: String,
+    on_change: Channel<ProjectFileChange>,
+) -> Result<u64, String> {
+    let root = Path::new(&project_root)
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve project folder: {error}"))?;
+    if !root.is_dir() {
+        return Err("The project path is not a folder.".to_owned());
+    }
+
+    let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
+        let Ok(event) = result else { return };
+        let _ = on_change.send(ProjectFileChange {
+            paths: event
+                .paths
+                .into_iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+        });
+    })
+    .map_err(|error| format!("Could not create project watcher: {error}"))?;
+    watcher
+        .watch(&root, RecursiveMode::Recursive)
+        .map_err(|error| format!("Could not watch project folder: {error}"))?;
+
+    let watcher_id = state.next_id.fetch_add(1, Ordering::Relaxed) + 1;
+    state
+        .watchers
+        .lock()
+        .map_err(|_| "The project watcher lock was poisoned.".to_owned())?
+        .insert(watcher_id, watcher);
+    Ok(watcher_id)
+}
+
+#[tauri::command]
+fn stop_project_file_watcher(
+    state: tauri::State<'_, ProjectFileWatchers>,
+    watcher_id: u64,
+) -> Result<(), String> {
+    state
+        .watchers
+        .lock()
+        .map_err(|_| "The project watcher lock was poisoned.".to_owned())?
+        .remove(&watcher_id);
+    Ok(())
 }
 
 fn loopcode_data_directory(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
@@ -182,10 +372,13 @@ pub fn run() {
         .or_else(|| std::env::var_os("HOME"))
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
-    tauri::Builder::default()
+    let shutdown_started = Arc::new(AtomicBool::new(false));
+    let shutdown_completed = Arc::new(AtomicBool::new(false));
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Broker::default())
         .manage(Diagnostics::new(home.join(".loopcode").join("logs")))
+        .manage(ProjectFileWatchers::default())
         .setup(|app| {
             #[cfg(windows)]
             {
@@ -198,6 +391,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             launch_harness,
+            register_frontend,
             send_rpc,
             stop_harness,
             stop_all_harnesses,
@@ -208,7 +402,36 @@ pub fn run() {
             export_diagnostics,
             pick_folder,
             get_git_branch,
+            read_project_directory,
+            open_project_file,
+            open_project_path,
+            reveal_project_path,
+            start_project_file_watcher,
+            stop_project_file_watcher,
         ])
-        .run(tauri::generate_context!())
-        .expect("failed to run LoopCode");
+        .build(tauri::generate_context!())
+        .expect("failed to build LoopCode");
+
+    app.run(move |app, event| {
+        if let tauri::RunEvent::ExitRequested { api, code, .. } = event
+            && !shutdown_completed.load(Ordering::Acquire)
+        {
+            api.prevent_exit();
+            if !shutdown_started.swap(true, Ordering::AcqRel) {
+                let app = app.clone();
+                let shutdown_started = Arc::clone(&shutdown_started);
+                let shutdown_completed = Arc::clone(&shutdown_completed);
+                tauri::async_runtime::spawn(async move {
+                    let broker = app.state::<Broker>();
+                    let diagnostics = app.state::<Diagnostics>();
+                    if broker.shutdown(&diagnostics).await.is_ok() {
+                        shutdown_completed.store(true, Ordering::Release);
+                        app.exit(code.unwrap_or(0));
+                    } else {
+                        shutdown_started.store(false, Ordering::Release);
+                    }
+                });
+            }
+        }
+    });
 }

@@ -1,6 +1,8 @@
 @import "./styles/base.css";
+@import "./styles/context-menu.css";
 @import "./styles/shell.css";
 @import "./styles/sidebar.css";
+@import "./styles/project-explorer.css";
 @import "./styles/thread-list.css";
 @import "./styles/sidebar-footer.css";
 @import "./styles/conversation.css";
