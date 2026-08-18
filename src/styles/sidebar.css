@@ -134,7 +134,7 @@
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(30, 31, 35, 0.96);
+  background: var(--floating-surface);
   backdrop-filter: blur(20px) saturate(115%);
   -webkit-backdrop-filter: blur(20px) saturate(115%);
   box-shadow:

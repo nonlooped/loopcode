@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
 
   import type { ContextMenuState } from '../utils/context-menu';
-  import { contextMenuPosition } from '../utils/context-menu';
+  import { contextMenuPosition, nextMenuItemIndex } from '../utils/context-menu';
 
   interface Props {
     menu: ContextMenuState;
@@ -46,13 +46,15 @@
       close();
       return;
     }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
     const buttons = Array.from(element?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
-    if (buttons.length === 0) return;
-    const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const step = event.key === 'ArrowDown' ? 1 : -1;
-    buttons[(current + step + buttons.length) % buttons.length].focus();
+    const index = nextMenuItemIndex(
+      buttons.indexOf(document.activeElement as HTMLButtonElement),
+      buttons.length,
+      event.key as 'ArrowDown' | 'ArrowUp' | 'Home' | 'End',
+    );
+    buttons[index]?.focus();
   }
 </script>
 

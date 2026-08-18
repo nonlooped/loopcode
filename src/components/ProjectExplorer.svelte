@@ -31,6 +31,8 @@
   let revision = $state(0);
   let refreshTimer: number | undefined;
   let loadToken = 0;
+  let tree = $state<HTMLUListElement>();
+  let focusedPath = $state<string | null>(null);
 
   onMount(() => {
     let disposed = false;
@@ -59,6 +61,14 @@
     void loadRoot(revision);
   });
 
+  $effect(() => {
+    if (!tree) return;
+    const observer = new MutationObserver(resetMissingTreeFocus);
+    observer.observe(tree, { childList: true, subtree: true });
+    resetMissingTreeFocus();
+    return () => observer.disconnect();
+  });
+
   async function loadRoot(requestedRevision: number) {
     const token = ++loadToken;
     loading = true;
@@ -72,6 +82,49 @@
       loadError = errorMessage(error);
     } finally {
       if (token === loadToken) loading = false;
+    }
+  }
+
+  function resetMissingTreeFocus() {
+    const items = Array.from(tree?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]') ?? []);
+    if (!items.some((item) => item.dataset.path === focusedPath)) focusedPath = items[0]?.dataset.path ?? null;
+  }
+
+  function focusTreeItem(item: HTMLButtonElement | undefined) {
+    if (!item) return;
+    focusedPath = item.dataset.path ?? null;
+    item.focus();
+  }
+
+  function handleTreeKeydown(event: KeyboardEvent) {
+    const current = (event.target as HTMLElement).closest<HTMLButtonElement>('[role="treeitem"]');
+    if (!current || !tree) return;
+    const items = Array.from(tree.querySelectorAll<HTMLButtonElement>('[role="treeitem"]'));
+    const index = items.indexOf(current);
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      focusTreeItem(event.key === 'Home'
+        ? items[0]
+        : event.key === 'End'
+          ? items.at(-1)
+          : items[index + (event.key === 'ArrowDown' ? 1 : -1)]);
+      return;
+    }
+    if (event.key === 'ArrowRight' && current.hasAttribute('aria-expanded')) {
+      event.preventDefault();
+      if (current.getAttribute('aria-expanded') === 'false') current.click();
+      else focusTreeItem(current.closest('li')?.querySelector<HTMLButtonElement>(':scope > ul > li > [role="treeitem"]') ?? undefined);
+      return;
+    }
+    if (event.key === 'ArrowLeft') {
+      const parent = current.closest('li')?.parentElement?.closest('li')?.querySelector<HTMLButtonElement>(':scope > [role="treeitem"]');
+      if (current.getAttribute('aria-expanded') === 'true') {
+        event.preventDefault();
+        current.click();
+      } else if (parent) {
+        event.preventDefault();
+        focusTreeItem(parent);
+      }
     }
   }
 
@@ -120,7 +173,13 @@
     {:else if entries.length === 0}
       <p class="project-explorer-empty">This project is empty.</p>
     {:else}
-      <ul class="project-file-tree" role="tree" aria-label={`${projectName} files`}>
+      <ul
+        bind:this={tree}
+        class="project-file-tree"
+        role="tree"
+        aria-label={`${projectName} files`}
+        onkeydown={handleTreeKeydown}
+      >
         {#each entries as entry (entry.path)}
           <ProjectFileNode
             {entry}
@@ -128,6 +187,8 @@
             depth={0}
             {revision}
             {activeFilePath}
+            {focusedPath}
+            setFocusedPath={(path) => { focusedPath = path; }}
             {openFile}
             reportError={(message) => { notice = message; }}
           />

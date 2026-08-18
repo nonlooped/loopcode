@@ -92,11 +92,29 @@
   background: transparent;
 }
 
+.thread-select {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
 .thread-item.slim {
   display: flex;
   min-height: 36px;
   height: 36px;
   padding: 0 8px;
+  align-items: center;
+  gap: 10px;
+}
+
+.thread-item.slim .thread-select {
+  display: flex;
+  min-width: 0;
+  flex: 1;
   align-items: center;
   gap: 10px;
 }
@@ -270,6 +288,7 @@
 }
 
 .thread-item:hover .thread-actions,
+.thread-item:focus-within .thread-actions,
 .thread-actions:focus-within {
   opacity: 1;
   pointer-events: auto;

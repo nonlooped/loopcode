@@ -28,6 +28,17 @@ export function contextMenuPosition(
   };
 }
 
+export function nextMenuItemIndex(
+  current: number,
+  length: number,
+  key: "ArrowDown" | "ArrowUp" | "Home" | "End",
+) {
+  if (length === 0) return -1;
+  if (key === "Home") return 0;
+  if (key === "End") return length - 1;
+  return (current + (key === "ArrowDown" ? 1 : -1) + length) % length;
+}
+
 export function menuFromEvent(event: MouseEvent, items: ContextMenuItem[]): ContextMenuState {
   event.preventDefault();
   event.stopPropagation();

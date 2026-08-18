@@ -197,7 +197,14 @@
                 <div class="message-images" aria-label="Attached images">
                   {#each message.images as image, index (`${message.id}-image-${index}`)}
                     {@const src = imageUrl(image)}
-                    <img {src} alt={image.name} title={image.name} oncontextmenu={(event) => openImageMenu(event, image, src)} />
+                    <button
+                      type="button"
+                      class="message-image-button"
+                      aria-label={`Preview ${image.name}`}
+                      title={image.name}
+                      onclick={() => { imagePreview = { src, name: image.name }; }}
+                      oncontextmenu={(event) => openImageMenu(event, image, src)}
+                    ><img {src} alt="" /></button>
                   {/each}
                 </div>
               {/if}

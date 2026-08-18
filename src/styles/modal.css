@@ -17,7 +17,7 @@
   border: 1px solid var(--line-strong);
   border-radius: 13px;
   outline: 0;
-  background: rgba(30, 31, 35, 0.96);
+  background: var(--decision-surface);
   box-shadow:
     0 24px 65px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(255, 255, 255, 0.025);
@@ -70,7 +70,7 @@
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--recessed-surface);
   color: var(--text-soft);
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 10.5px;

@@ -19,11 +19,15 @@
     depth: number;
     revision: number;
     activeFilePath: string | null;
+    focusedPath: string | null;
+    setFocusedPath: (path: string) => void;
     openFile: (path: string) => void;
     reportError: (message: string) => void;
   }
 
-  const { entry, projectRoot, depth, revision, activeFilePath, openFile, reportError }: Props = $props();
+  const {
+    entry, projectRoot, depth, revision, activeFilePath, focusedPath, setFocusedPath, openFile, reportError,
+  }: Props = $props();
   let expanded = $state(false);
   let loaded = $state(false);
   let loading = $state(false);
@@ -96,19 +100,21 @@
   }
 </script>
 
-<li
-  role="treeitem"
-  aria-expanded={entry.isDirectory ? expanded : undefined}
-  aria-selected={!entry.isDirectory && activeFilePath === entry.path}
->
+<li role="none">
   <button
     type="button"
+    role="treeitem"
+    aria-expanded={entry.isDirectory ? expanded : undefined}
+    aria-selected={!entry.isDirectory && activeFilePath === entry.path}
+    data-path={entry.path}
+    tabindex={focusedPath === entry.path ? 0 : -1}
     class:folder={entry.isDirectory}
     class:active={!entry.isDirectory && activeFilePath === entry.path}
     class="project-file-row"
     style={`--file-depth: ${depth}`}
     title={entry.path}
     onclick={activate}
+    onfocus={() => setFocusedPath(entry.path)}
     oncontextmenu={openMenu}
   >
     <span class="project-file-chevron" aria-hidden="true">
@@ -139,6 +145,8 @@
             depth={depth + 1}
             {revision}
             {activeFilePath}
+            {focusedPath}
+            {setFocusedPath}
             {openFile}
             {reportError}
           />
