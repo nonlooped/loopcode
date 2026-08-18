@@ -53,10 +53,18 @@
     right: 0;
   }
 
+  .project-explorer:not(.open) {
+    border-left-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
   .project-explorer:not(.open) .project-explorer-actions {
     right: auto;
     left: 3px;
     width: 25px;
+    pointer-events: auto;
   }
 
   .project-explorer:not(.open) .project-explorer-refresh,
