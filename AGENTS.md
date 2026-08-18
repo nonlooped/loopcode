@@ -6,11 +6,11 @@ Keep ACP integrations thin: each agent remains responsible for its loop, authent
 
 - Optimize early features for usefulness and low code volume.
 - Prefer maintained crates and protocol APIs over custom infrastructure.
-- Verify changes with the smallest relevant non-interactive Cargo command, such as `cargo check`, `cargo test`, or formatting checks.
+- Run tests, checks, formatters, and other validation only for the files, packages, or components touched. Do not run app-wide or repo-wide validation unless the change itself is app-wide/repo-wide or the user explicitly requests it.
 
 ## App execution
 
-- Never launch, run, or restart the LoopCode application. This includes `cargo run`, invoking a built `loopcode` executable, or starting it through PowerShell, a shell, an IDE, a debugger, or any automation tool.
-- Never use computer-control, GUI-automation, screenshot, browser, or window-inspection tools to exercise or visually inspect the running application.
-- Do not stop, replace, attach to, or interact with a LoopCode process that is already running. Treat every running instance as user-owned.
-- For UI changes, limit verification to static code inspection and non-interactive checks such as `cargo fmt -- --check`, `cargo check`, and relevant tests. Describe any remaining manual visual verification for the user instead of performing it.
+- UI changes may be verified by launching LoopCode and using computer-control, GUI automation, screenshots, or window inspection.
+- Check for an existing LoopCode process before launching the app. Treat every pre-existing instance as user-owned: do not stop, replace, attach to, or interact with it.
+- Track any LoopCode process started for verification and stop only that process when verification is complete.
+- Run the scoped non-interactive checks required above before visual verification.
