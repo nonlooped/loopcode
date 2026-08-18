@@ -45,9 +45,8 @@
     savePermissionMode,
     saveSidebarWidth,
   } from './utils/app-settings';
-  import { addMessage, nextTimestamp, titleFromPrompt } from './utils/messages';
+  import { addMessage } from './utils/messages';
   import { findReusableEmptyThread } from './utils/thread-state';
-  import { buildThreadTitlePrompt, normalizeThreadTitle } from './utils/thread-title';
   import { timelineEntries } from './utils/timeline';
   import {
     activeProvider,
@@ -504,50 +503,20 @@
   async function sendPrompt() {
     const thread = selectedThread;
     if (!thread) return;
-    const provider = activeProvider(thread);
-    if (provider.turnStatus !== 'idle') return;
-    if (provider.connectionStatus !== 'disconnected' && provider.connectionStatus !== 'ready') return;
     const text = thread.draft.trim();
-    const images = composerImages(thread.id);
-    if (!text && images.length === 0) return;
-    if (providerCatalogs[thread.profileId]?.status !== 'ready' || !provider.selectedModelId) return;
-
-    const profileId = thread.profileId;
-    const isFirstPrompt = !thread.messages.some((message) => message.role === 'user');
+    const images: MessageImage[] = composerImages(thread.id)
+      .map(({ data, mimeType, name }) => ({ data, mimeType, name }));
     const centeredComposerTop = selectedThreadEmpty && !reducedMotion
       ? threadViewElement?.querySelector<HTMLElement>('.composer-wrap')?.getBoundingClientRect().top
       : undefined;
-    const selectedModelId = provider.selectedModelId;
-    const messageImages: MessageImage[] = images.map(({ data, mimeType, name }) => ({ data, mimeType, name }));
-    const promptImages = messageImages.map(({ data, mimeType }) => ({ type: 'image' as const, data, mimeType }));
+    const turn = providers.runTurn(thread, text, images);
+    if (!turn) return;
+
     thread.draft = '';
     composerImagesByThread[thread.id] = [];
     attachmentErrorsByThread[thread.id] = '';
-    provider.error = undefined;
-    provider.errorDetails = undefined;
-    if (isFirstPrompt && !text) thread.title = 'Image prompt';
-    addMessage(thread, 'user', text, messageImages);
     if (centeredComposerTop !== undefined) animateComposerToTranscript(centeredComposerTop);
-    providers.startTurn(thread.id, profileId);
-
-    let connection = providers.connection(thread.id, profileId);
-    if (provider.connectionStatus === 'disconnected') connection = await providers.connect(thread, profileId);
-    if (
-      thread.profileId !== profileId ||
-      thread.providers[profileId].connectionStatus !== 'ready' ||
-      thread.providers[profileId].turnStatus !== 'idle' ||
-      !connection
-    ) return;
-
-    const turnCompletion = connection.prompt(text, promptImages);
-    if (isFirstPrompt && text) {
-      void generateThreadTitle(thread, connection, text, selectedModelId);
-    }
-    try {
-      await turnCompletion;
-    } catch {
-      // The provider callback already added a contextual error to the timeline.
-    }
+    await turn;
   }
 
   function animateComposerToTranscript(previousTop: number) {
@@ -561,25 +530,6 @@
         { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
       );
     });
-  }
-
-  async function generateThreadTitle(
-    thread: ThreadState,
-    connection: import('./services/acp').AcpConnection,
-    request: string,
-    selectedModelId: string,
-  ) {
-    let title: string | undefined;
-    try {
-      title = normalizeThreadTitle(
-        await connection.generateTitle(thread.cwd, buildThreadTitlePrompt(request), selectedModelId),
-      );
-    } catch {
-      // Use the local fallback when a provider cannot create a quiet title session.
-    }
-    if (!threads.some((item) => item.id === thread.id)) return;
-    thread.title = title ?? titleFromPrompt(request);
-    thread.updatedAt = nextTimestamp(thread);
   }
 
   async function cancelPrompt() {

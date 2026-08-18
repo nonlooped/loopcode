@@ -1,10 +1,14 @@
 import type { SessionUpdate } from "@agentclientprotocol/sdk";
 
-import { profileById, profiles } from "../config/providers.ts";
+import {
+  providerDefinitionById,
+  providerDefinitions,
+  type ProviderDefinition,
+} from "../config/provider-definitions.ts";
 import type {
   AcpErrorDetails,
   ConnectionStatus,
-  HarnessProfile,
+  MessageImage,
   PermissionMode,
   PermissionRequest,
   ProviderModelCatalog,
@@ -12,9 +16,10 @@ import type {
   ThreadState,
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
-import { addMessage } from "../utils/messages.ts";
+import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
 import { discoverModelOptions } from "../utils/model-options.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
+import { buildThreadTitlePrompt, normalizeThreadTitle } from "../utils/thread-title.ts";
 import { AcpConnection, readModelState, type AcpModelState } from "./acp.ts";
 import { recordDiagnostic } from "./native.ts";
 import { SessionUpdateHandler } from "./session-updates.ts";
@@ -30,6 +35,8 @@ export class ProviderRuntime {
   #permissionMode: PermissionMode = "restricted";
   #connections = new Map<string, AcpConnection>();
   #tokens = new Map<string, string>();
+  #turnTokens = new Map<string, string>();
+  #titleTokens = new Map<string, string>();
   #updates = new SessionUpdateHandler(applyProviderConfigState);
 
   constructor(catalogs: Record<string, ProviderModelCatalog>, hooks: RuntimeHooks) {
@@ -45,13 +52,40 @@ export class ProviderRuntime {
     this.#permissionMode = mode;
   }
 
-  startTurn(threadId: string, profileId: string) {
-    this.#updates.startTurn(threadId, profileId);
+  runTurn(thread: ThreadState, text: string, images: MessageImage[] = []) {
+    const profileId = thread.profileId;
+    const provider = thread.providers[profileId];
+    if (!text && images.length === 0) return;
+    if (provider.turnStatus !== "idle") return;
+    if (provider.connectionStatus !== "disconnected" && provider.connectionStatus !== "ready")
+      return;
+    if (this.#catalogs[profileId]?.status !== "ready" || !provider.selectedModelId) return;
+
+    const selectedModelId = provider.selectedModelId;
+    const isFirstPrompt = !thread.messages.some((message) => message.role === "user");
+    const turnToken = crypto.randomUUID();
+    this.#turnTokens.set(thread.id, turnToken);
+    provider.error = undefined;
+    provider.errorDetails = undefined;
+    if (isFirstPrompt && !text) thread.title = "Image prompt";
+    addMessage(thread, "user", text, images);
+    this.#updates.startTurn(thread.id, profileId);
+
+    return this.#completeTurn(
+      thread,
+      profileId,
+      selectedModelId,
+      text,
+      images,
+      isFirstPrompt,
+      turnToken,
+    );
   }
 
   activate(thread: ThreadState, profileId: string, announceSwitch = true) {
     if (profileId === thread.profileId) return;
-    const profile = profileById(profileId);
+    const profile = providerDefinitionById(profileId);
+    this.#turnTokens.delete(thread.id);
     thread.profileId = profile.id;
     thread.updatedAt = Date.now();
     this.#updates.clear(thread.id, profile.id);
@@ -61,10 +95,12 @@ export class ProviderRuntime {
   }
 
   async discoverAll(cwd: string, threads: ThreadState[]) {
-    await Promise.allSettled(profiles.map((profile) => this.discover(profile, cwd, threads)));
+    await Promise.allSettled(
+      providerDefinitions.map((profile) => this.discover(profile, cwd, threads)),
+    );
   }
 
-  async discover(profile: HarnessProfile, cwd: string, threads: ThreadState[]) {
+  async discover(profile: ProviderDefinition, cwd: string, threads: ThreadState[]) {
     this.#catalogs[profile.id] = { status: "loading", models: [], reasoningOptions: [] };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
     const connection = new AcpConnection({
@@ -148,7 +184,7 @@ export class ProviderRuntime {
 
   async connect(thread: ThreadState, profileId: string) {
     if (!thread.cwd) return;
-    const profile = profileById(profileId);
+    const profile = providerDefinitionById(profileId);
     const provider = thread.providers[profile.id];
     const selectedModelId = provider.selectedModelId;
     const requestedReasoningId = provider.selectedReasoningId;
@@ -321,6 +357,75 @@ export class ProviderRuntime {
     }
   }
 
+  async #completeTurn(
+    thread: ThreadState,
+    profileId: string,
+    selectedModelId: string,
+    text: string,
+    images: MessageImage[],
+    isFirstPrompt: boolean,
+    turnToken: string,
+  ) {
+    let connection = this.connection(thread.id, profileId);
+    if (thread.providers[profileId].connectionStatus === "disconnected") {
+      connection = await this.connect(thread, profileId);
+    }
+    const provider = thread.providers[profileId];
+    if (
+      this.#turnTokens.get(thread.id) !== turnToken ||
+      thread.profileId !== profileId ||
+      provider.connectionStatus !== "ready" ||
+      provider.turnStatus !== "idle" ||
+      !connection
+    ) {
+      if (this.#turnTokens.get(thread.id) === turnToken) this.#turnTokens.delete(thread.id);
+      return;
+    }
+
+    const turnCompletion = connection.prompt(
+      text,
+      images.map(({ data, mimeType }) => ({ type: "image" as const, data, mimeType })),
+    );
+    const titleCompletion =
+      isFirstPrompt && text
+        ? this.#generateThreadTitle(thread, connection, text, selectedModelId)
+        : undefined;
+    try {
+      await turnCompletion;
+    } catch {
+      // The connection callback already added a contextual error to the timeline.
+    } finally {
+      if (this.#turnTokens.get(thread.id) === turnToken) this.#turnTokens.delete(thread.id);
+    }
+    await titleCompletion;
+  }
+
+  async #generateThreadTitle(
+    thread: ThreadState,
+    connection: AcpConnection,
+    request: string,
+    selectedModelId: string,
+  ) {
+    const token = crypto.randomUUID();
+    this.#titleTokens.set(thread.id, token);
+    let title: string | undefined;
+    try {
+      title = normalizeThreadTitle(
+        await connection.generateTitle(
+          thread.cwd,
+          buildThreadTitlePrompt(request),
+          selectedModelId,
+        ),
+      );
+    } catch {
+      // Use the local fallback when a provider cannot create a quiet title session.
+    }
+    if (this.#titleTokens.get(thread.id) !== token) return;
+    this.#titleTokens.delete(thread.id);
+    thread.title = title ?? titleFromPrompt(request);
+    thread.updatedAt = nextTimestamp(thread);
+  }
+
   async selectModel(thread: ThreadState, profileId: string, modelId: string) {
     const provider = thread.providers[profileId];
     const previousModelId = provider.selectedModelId;
@@ -337,7 +442,8 @@ export class ProviderRuntime {
     }
     try {
       const connection = this.connection(thread.id, profileId);
-      if (!connection) throw new Error(`${profileById(profileId).label} is not connected`);
+      if (!connection)
+        throw new Error(`${providerDefinitionById(profileId).label} is not connected`);
       const updated = await connection.setModel(provider.modelConfigId, modelId);
       applyProviderConfigState(provider, updated);
       provider.selectedModelId = updated.selectedModelId ?? modelId;
@@ -364,11 +470,13 @@ export class ProviderRuntime {
       return;
     try {
       const connection = this.connection(thread.id, thread.profileId);
-      if (!connection) throw new Error(`${profileById(thread.profileId).label} is not connected`);
+      if (!connection) {
+        throw new Error(`${providerDefinitionById(thread.profileId).label} is not connected`);
+      }
       const updated = await connection.setConfigOption(provider.reasoningConfigId, reasoningId);
       if (updated.selectedReasoningId !== reasoningId) {
         throw new Error(
-          `${profileById(thread.profileId).label} did not apply reasoning variant ${reasoningId}.`,
+          `${providerDefinitionById(thread.profileId).label} did not apply reasoning variant ${reasoningId}.`,
         );
       }
       applyProviderConfigState(provider, updated);
@@ -389,10 +497,14 @@ export class ProviderRuntime {
     if (provider.connectionStatus !== "ready" || provider.turnStatus !== "idle") return;
     try {
       const connection = this.connection(thread.id, thread.profileId);
-      if (!connection) throw new Error(`${profileById(thread.profileId).label} is not connected`);
+      if (!connection) {
+        throw new Error(`${providerDefinitionById(thread.profileId).label} is not connected`);
+      }
       const updated = await connection.setBooleanConfigOption(provider.fastModeConfigId, enabled);
       if (updated.fastModeEnabled !== enabled) {
-        throw new Error(`${profileById(thread.profileId).label} did not apply Fast mode.`);
+        throw new Error(
+          `${providerDefinitionById(thread.profileId).label} did not apply Fast mode.`,
+        );
       }
       applyProviderConfigState(provider, updated);
     } catch (error) {
@@ -404,7 +516,9 @@ export class ProviderRuntime {
   }
 
   async removeThread(threadId: string) {
-    const threadConnections = profiles.flatMap((profile) => {
+    this.#turnTokens.delete(threadId);
+    this.#titleTokens.delete(threadId);
+    const threadConnections = providerDefinitions.flatMap((profile) => {
       const key = connectionKey(threadId, profile.id);
       this.#tokens.delete(key);
       const connection = this.#connections.get(key);
