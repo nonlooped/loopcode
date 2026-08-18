@@ -1,6 +1,8 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
-  import { IconDownload, IconListDetails, IconShieldLock } from '@tabler/icons-svelte';
+  import IconDownload from '@tabler/icons-svelte/icons/download';
+  import IconListDetails from '@tabler/icons-svelte/icons/list-details';
+  import IconShieldLock from '@tabler/icons-svelte/icons/shield-lock';
 
   import { exportDiagnostics } from '../services/native';
   import type { PermissionMode } from '../types';

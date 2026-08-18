@@ -1,14 +1,17 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { fade, fly } from 'svelte/transition';
-  import { IconAlertTriangle, IconChevronDown, IconChevronRight, IconTool } from '@tabler/icons-svelte';
+  import IconAlertTriangle from '@tabler/icons-svelte/icons/alert-triangle';
+  import IconChevronDown from '@tabler/icons-svelte/icons/chevron-down';
+  import IconChevronRight from '@tabler/icons-svelte/icons/chevron-right';
+  import IconTool from '@tabler/icons-svelte/icons/tool';
 
   import ContextMenu from './ContextMenu.svelte';
-  import ImagePreview from './ImagePreview.svelte';
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
-  import type { MessageImage, ThreadState, TimelineMessage, ToolActivity } from '../types';
+  import TranscriptImage from './TranscriptImage.svelte';
+  import type { ThreadState, TimelineMessage, ToolActivity } from '../types';
   import type { TimelineDisplayEntry } from '../types/timeline';
-  import { copyImage, copyText, saveImage } from '../utils/clipboard';
+  import { copyText } from '../utils/clipboard';
   import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
   import { isStreamingMessage, workGroupMeta } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
@@ -27,7 +30,6 @@
   let renderedThreadId: string | undefined;
   let animateEntries = $state(false);
   let contextMenu = $state<ContextMenuState>();
-  let imagePreview = $state<{ src: string; name: string }>();
   const entryMotion = $derived(animateEntries && !reducedMotion);
 
   onMount(() => {
@@ -72,10 +74,6 @@
     if (behavior === 'auto' || reducedMotion) updateScrollState();
   }
 
-  function imageUrl(image: { mimeType: string; data: string }) {
-    return `data:${image.mimeType};base64,${image.data}`;
-  }
-
   function toolStatus(status: string) {
     return status.replaceAll('_', ' ');
   }
@@ -105,13 +103,6 @@
     contextMenu = menuFromEvent(event, [{ label: 'Copy path', action: () => copyText(location) }]);
   }
 
-  function openImageMenu(event: MouseEvent, image: MessageImage, src: string) {
-    contextMenu = menuFromEvent(event, [
-      { label: 'Open preview', action: () => { imagePreview = { src, name: image.name }; } },
-      { label: 'Copy image', action: () => copyImage(src) },
-      { label: 'Save image', action: () => saveImage(src, image.name) },
-    ]);
-  }
 </script>
 
 <div class="transcript-shell" in:fade|global={{ duration: reducedMotion ? 0 : 150 }}>
@@ -196,8 +187,7 @@
               {#if message.images && message.images.length > 0}
                 <div class="message-images" aria-label="Attached images">
                   {#each message.images as image, index (`${message.id}-image-${index}`)}
-                    {@const src = imageUrl(image)}
-                    <img {src} alt={image.name} title={image.name} oncontextmenu={(event) => openImageMenu(event, image, src)} />
+                    <TranscriptImage {image} {reducedMotion} />
                   {/each}
                 </div>
               {/if}
@@ -228,13 +218,4 @@
 
 {#if contextMenu}
   <ContextMenu menu={contextMenu} close={() => { contextMenu = undefined; }} />
-{/if}
-
-{#if imagePreview}
-  <ImagePreview
-    src={imagePreview.src}
-    name={imagePreview.name}
-    {reducedMotion}
-    close={() => { imagePreview = undefined; }}
-  />
 {/if}

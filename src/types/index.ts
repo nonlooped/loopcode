@@ -16,11 +16,9 @@ export type MessageRole = "user" | "agent" | "thought" | "notice" | "error";
 
 export type PermissionMode = "restricted" | "full";
 
-export interface MessageImage {
-  data: string;
-  mimeType: string;
-  name: string;
-}
+export type MessageImage =
+  | { attachmentId: string; mimeType: string; name: string }
+  | { data: string; mimeType: string; name: string };
 
 export interface TimelineMessage {
   id: string;
@@ -184,9 +182,8 @@ export interface ProviderModelCatalog {
 }
 
 export interface ComposerImage {
-  id: string;
+  attachmentId: string;
   type: "image";
-  data: string;
   mimeType: string;
   name: string;
   previewUrl: string;

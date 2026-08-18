@@ -15,6 +15,7 @@
   import { profileById, profiles } from './config/providers';
   import { preferredAllowOptionId } from './services/acp';
   import {
+    cleanupAttachmentOrphans,
     getGitBranch,
     getInitialWorkingDirectory,
     loadWorkspace,
@@ -36,7 +37,12 @@
     ProviderModelCatalog,
     ThreadState,
   } from './types';
-  import { loadComposerImages, MAX_COMPOSER_IMAGES } from './utils/attachments';
+  import {
+    disposeComposerImages,
+    loadComposerImages,
+    MAX_COMPOSER_IMAGES,
+    migrateLegacyAttachments,
+  } from './utils/attachments';
   import {
     LEFT_SIDEBAR_WIDTH_RANGE,
     RIGHT_SIDEBAR_WIDTH_RANGE,
@@ -204,6 +210,7 @@
       stopSidebarResize?.();
       unlistenResize?.();
       unlistenClose?.();
+      void cleanupPendingAttachments();
     };
   });
 
@@ -287,8 +294,10 @@
   async function removeThread(threadId: string) {
     threadPendingRemoval = undefined;
     await providers.removeThread(threadId);
+    const pendingImages = composerImages(threadId);
     delete composerImagesByThread[threadId];
     delete attachmentErrorsByThread[threadId];
+    await disposeComposerImages(pendingImages);
     for (const [key, interaction] of Object.entries(interactions)) {
       if (interaction.threadId === threadId) delete interactions[key];
     }
@@ -394,6 +403,11 @@
       await registerFrontend();
       defaultWorkingFolder = await getInitialWorkingDirectory();
       const savedWorkspace = await loadWorkspace();
+      await migrateLegacyAttachments(savedWorkspace);
+      // Composer state does not exist yet; the 24-hour grace protects files left by an interrupted prior run.
+      await cleanupAttachmentOrphans([]).catch((error) => {
+        console.warn('Could not clean up orphan attachments', error);
+      });
       if (!workspace.initialize(savedWorkspace, defaultWorkingFolder)) {
         throw new Error('The saved thread file has an unsupported or invalid format.');
       }
@@ -417,25 +431,35 @@
     try {
       const selection = await loadComposerImages(files, composerImages(threadId).length);
       attachmentErrorsByThread[threadId] = selection.error;
-      if (selection.images.length === 0 || !threads.some((thread) => thread.id === threadId)) return;
-      composerImagesByThread[threadId] = [...composerImages(threadId), ...selection.images]
-        .slice(0, MAX_COMPOSER_IMAGES);
+      if (selection.images.length === 0) return;
+      if (!threads.some((thread) => thread.id === threadId)) {
+        await disposeComposerImages(selection.images);
+        return;
+      }
+      const available = Math.max(0, MAX_COMPOSER_IMAGES - composerImages(threadId).length);
+      const kept = selection.images.slice(0, available);
+      await disposeComposerImages(selection.images.slice(available));
+      composerImagesByThread[threadId] = [...composerImages(threadId), ...kept];
     } catch (error) {
       attachmentErrorsByThread[threadId] = errorMessage(error);
     }
   }
 
-  function removeComposerImage(threadId: string, imageId: string) {
-    composerImagesByThread[threadId] = composerImages(threadId).filter((image) => image.id !== imageId);
+  async function removeComposerImage(threadId: string, imageId: string) {
+    const removed = composerImages(threadId).filter((image) => image.attachmentId === imageId);
+    composerImagesByThread[threadId] = composerImages(threadId)
+      .filter((image) => image.attachmentId !== imageId);
     attachmentErrorsByThread[threadId] = '';
+    await disposeComposerImages(removed);
   }
 
   async function sendPrompt() {
     const thread = selectedThread;
     if (!thread) return;
     const text = thread.draft.trim();
-    const images: MessageImage[] = composerImages(thread.id)
-      .map(({ data, mimeType, name }) => ({ data, mimeType, name }));
+    const pendingImages = composerImages(thread.id);
+    const images: MessageImage[] = pendingImages
+      .map(({ attachmentId, mimeType, name }) => ({ attachmentId, mimeType, name }));
     const centeredComposerTop = selectedThreadEmpty && !reducedMotion
       ? threadViewElement?.querySelector<HTMLElement>('.composer-wrap')?.getBoundingClientRect().top
       : undefined;
@@ -445,6 +469,7 @@
     thread.draft = '';
     composerImagesByThread[thread.id] = [];
     attachmentErrorsByThread[thread.id] = '';
+    for (const image of pendingImages) URL.revokeObjectURL(image.previewUrl);
     if (centeredComposerTop !== undefined) animateComposerToTranscript(centeredComposerTop);
     await turn;
   }
@@ -527,6 +552,7 @@
     closing = true;
     try {
       await workspace.flush();
+      await cleanupPendingAttachments();
       await stopAllHarnesses();
       await appWindow.destroy();
     } catch (error) {
@@ -534,6 +560,12 @@
       const thread = selectedThread ?? threads[0];
       if (thread) addMessage(thread, 'error', `Could not save threads before closing: ${errorMessage(error)}`);
     }
+  }
+
+  async function cleanupPendingAttachments() {
+    const pending = Object.values(composerImagesByThread).flat();
+    composerImagesByThread = {};
+    await disposeComposerImages(pending);
   }
 
   function interactionKey(threadId: string, profileId: string) {

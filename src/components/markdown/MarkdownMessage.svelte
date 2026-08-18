@@ -1,10 +1,3 @@
-<script lang="ts" module>
-  import { setShikiHighlighter } from '@humanspeak/svelte-markdown/extensions/shiki';
-  import { syntaxHighlighter } from '../../utils/syntax-highlighter';
-
-  setShikiHighlighter(syntaxHighlighter);
-</script>
-
 <script lang="ts">
   import SvelteMarkdown from '@humanspeak/svelte-markdown';
   import { openUrl } from '@tauri-apps/plugin-opener';

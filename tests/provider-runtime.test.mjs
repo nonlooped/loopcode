@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ProviderRuntime } from "../src/services/provider-runtime.ts";
+import {
+  ProviderRuntime,
+  applyProviderConfigState,
+  bytesToBase64,
+} from "../src/services/provider-runtime.ts";
 
 const catalogs = {
   codex: {
@@ -59,9 +63,13 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
   }
 
   const state = thread();
-  const runtime = new Runtime(catalogs, hooks);
+  const attachmentId = "123e4567-e89b-12d3-a456-426614174000";
+  const runtime = new Runtime(catalogs, hooks, async (requestedId) => {
+    assert.equal(requestedId, attachmentId);
+    return Uint8Array.of(0, 1, 2, 253, 254, 255).buffer;
+  });
   const completion = runtime.runTurn(state, "Implement this", [
-    { data: "image-data", mimeType: "image/png", name: "reference.png" },
+    { attachmentId, mimeType: "image/png", name: "reference.png" },
   ]);
 
   assert.ok(completion);
@@ -69,12 +77,68 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
   assert.deepEqual(calls, [
     {
       text: "Implement this",
-      images: [{ type: "image", data: "image-data", mimeType: "image/png" }],
+      images: [{ type: "image", data: "AAEC/f7/", mimeType: "image/png" }],
     },
   ]);
   assert.equal(state.messages[0].role, "user");
-  assert.equal(state.messages[0].images[0].name, "reference.png");
+  assert.deepEqual(state.messages[0].images[0], {
+    attachmentId,
+    mimeType: "image/png",
+    name: "reference.png",
+  });
+  assert.equal(JSON.stringify(state.messages).includes("AAEC/f7/"), false);
   assert.equal(state.title, "Runtime Owns Turns");
+});
+
+void test("base64 encoding remains exact across bounded chunk boundaries", () => {
+  const bytes = Uint8Array.from({ length: 48 * 1024 + 5 }, (_, index) => index % 251);
+  assert.equal(bytesToBase64(bytes), Buffer.from(bytes).toString("base64"));
+});
+
+void test("attachment read failures use turn errors without removing the reference", async () => {
+  const connection = {
+    async prompt() {
+      assert.fail("prompt should not run");
+    },
+  };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return connection;
+    }
+  }
+  const state = thread();
+  const image = {
+    attachmentId: "123e4567-e89b-12d3-a456-426614174000",
+    mimeType: "image/png",
+    name: "missing.png",
+  };
+  const runtime = new Runtime(catalogs, hooks, async () => {
+    throw new Error("missing file");
+  });
+  await runtime.runTurn(state, "Keep this", [image]);
+  assert.deepEqual(state.messages[0].images, [image]);
+  assert.equal(state.providers.codex.turnStatus, "failed");
+  assert.match(state.messages.at(-1).text, /Could not read attachment: missing file/);
+});
+
+void test("connected model updates memoize capabilities for later selection", () => {
+  const state = provider();
+  state.selectedModelId = "model-2";
+
+  applyProviderConfigState(state, {
+    models: [],
+    selectedModelId: "model-2",
+    reasoningOptions: [{ id: "high", name: "High" }],
+    selectedReasoningId: "high",
+    fastModeConfigId: "fast-mode",
+    fastModeEnabled: true,
+  });
+
+  assert.deepEqual(state.reasoningOptionsByModel["model-2"], {
+    options: [{ id: "high", name: "High" }],
+    selectedId: "high",
+  });
+  assert.equal(state.fastModeOptionsByModel["model-2"].enabled, true);
 });
 
 void test("a provider switch prevents a stale reconnect from prompting", async () => {

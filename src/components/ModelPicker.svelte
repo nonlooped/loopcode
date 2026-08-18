@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
-  import { IconCheck, IconSearch } from '@tabler/icons-svelte';
+  import IconCheck from '@tabler/icons-svelte/icons/check';
+  import IconSearch from '@tabler/icons-svelte/icons/search';
 
   import { profileById, profiles } from '../config/providers';
   import type { ModelOption, ProviderModelCatalog, ThreadState } from '../types';

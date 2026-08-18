@@ -135,6 +135,54 @@ void test("snapshots retain private sessions but exclude transient provider stat
   assert.equal(restarted.state.threads[0].providers.codex.sessionId, "private-session");
 });
 
+void test("version 2 mixed attachment records round trip without adding base64 to references", () => {
+  const { state, events, workspace } = setup();
+  const reference = {
+    attachmentId: "123e4567-e89b-12d3-a456-426614174000",
+    mimeType: "image/png",
+    name: "stored.png",
+  };
+  const legacy = { data: "AQID", mimeType: "image/png", name: "legacy.png" };
+  assert.equal(
+    workspace.initialize(
+      {
+        version: 2,
+        selectedThreadId: "thread-1",
+        projects: [],
+        threads: [
+          {
+            id: "thread-1",
+            title: "Images",
+            profileId: "codex",
+            cwd: "C:\\workspace",
+            messages: [
+              {
+                id: "message-1",
+                role: "user",
+                text: "Both",
+                images: [reference, legacy],
+                createdAt: 1,
+              },
+            ],
+            tools: [],
+            draft: "",
+            updatedAt: 1,
+          },
+        ],
+      },
+      "C:\\default",
+    ),
+    true,
+  );
+  assert.deepEqual(state.threads[0].messages[0].images, [reference, legacy]);
+
+  workspace.queuePersistence();
+  const snapshot = events.at(-1);
+  assert.equal(snapshot.version, 2);
+  assert.deepEqual(snapshot.threads[0].messages[0].images, [reference, legacy]);
+  assert.equal("data" in snapshot.threads[0].messages[0].images[0], false);
+});
+
 void test("keeps project, selection, reuse, and deletion invariants behind one interface", () => {
   const { state, workspace } = setup();
   const project = workspace.ensureProject("C:\\loopcode");

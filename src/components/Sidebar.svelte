@@ -1,19 +1,17 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
   import { fade, fly } from 'svelte/transition';
-  import {
-    IconArchive,
-    IconArrowLeft,
-    IconCheck,
-    IconChevronDown,
-    IconChevronRight,
-    IconFolder,
-    IconFolderPlus,
-    IconInbox,
-    IconPlus,
-    IconSettings,
-    IconTrash,
-  } from '@tabler/icons-svelte';
+  import IconArchive from '@tabler/icons-svelte/icons/archive';
+  import IconArrowLeft from '@tabler/icons-svelte/icons/arrow-left';
+  import IconCheck from '@tabler/icons-svelte/icons/check';
+  import IconChevronDown from '@tabler/icons-svelte/icons/chevron-down';
+  import IconChevronRight from '@tabler/icons-svelte/icons/chevron-right';
+  import IconFolder from '@tabler/icons-svelte/icons/folder';
+  import IconFolderPlus from '@tabler/icons-svelte/icons/folder-plus';
+  import IconInbox from '@tabler/icons-svelte/icons/inbox';
+  import IconPlus from '@tabler/icons-svelte/icons/plus';
+  import IconSettings from '@tabler/icons-svelte/icons/settings';
+  import IconTrash from '@tabler/icons-svelte/icons/trash';
 
   import ContextMenu from './ContextMenu.svelte';
   import { profileById } from '../config/providers';

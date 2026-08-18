@@ -84,6 +84,11 @@
   margin: 0 0 17px;
 }
 
+.message:not(.streaming) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+
 .message header {
   display: none;
 }

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
-  import { IconLayoutSidebar, IconPlus, IconSettings } from '@tabler/icons-svelte';
+  import IconLayoutSidebar from '@tabler/icons-svelte/icons/layout-sidebar';
+  import IconPlus from '@tabler/icons-svelte/icons/plus';
+  import IconSettings from '@tabler/icons-svelte/icons/settings';
 
   import ContextMenu from './ContextMenu.svelte';
   import { profileById } from '../config/providers';

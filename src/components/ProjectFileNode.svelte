@@ -1,7 +1,10 @@
 <script lang="ts">
-  import { IconChevronDown, IconChevronRight, IconLink } from '@tabler/icons-svelte';
+  import IconChevronDown from '@tabler/icons-svelte/icons/chevron-down';
+  import IconChevronRight from '@tabler/icons-svelte/icons/chevron-right';
+  import IconLink from '@tabler/icons-svelte/icons/link';
 
   import ContextMenu from './ContextMenu.svelte';
+  import MaterialFileIcon from './MaterialFileIcon.svelte';
   import ProjectFileNode from './ProjectFileNode.svelte';
   import {
     openProjectPath,
@@ -11,41 +14,44 @@
   } from '../services/native';
   import { copyText } from '../utils/clipboard';
   import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
-  import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
+  import { pathKey } from '../utils/project-file-changes';
 
   interface Props {
     entry: ProjectFileEntry;
     projectRoot: string;
     depth: number;
-    revision: number;
+    directoryRevisions: Record<string, number>;
+    manualRevision: number;
     activeFilePath: string | null;
     openFile: (path: string) => void;
     reportError: (message: string) => void;
   }
 
-  const { entry, projectRoot, depth, revision, activeFilePath, openFile, reportError }: Props = $props();
+  const {
+    entry, projectRoot, depth, directoryRevisions, manualRevision, activeFilePath, openFile, reportError,
+  }: Props = $props();
   let expanded = $state(false);
   let loaded = $state(false);
   let loading = $state(false);
   let children = $state<ProjectFileEntry[]>([]);
   let loadError = $state('');
-  let loadedRevision = $state(-1);
+  let loadedDirectoryRevision = $state(-1);
+  let loadedManualRevision = $state(-1);
   let loadToken = 0;
   let contextMenu = $state<ContextMenuState>();
-
-  const icon = $derived(
-    entry.isDirectory
-      ? materialFolderIcon(entry.name, expanded)
-      : materialFileIcon(entry.name),
-  );
+  const directoryRevision = $derived(directoryRevisions[pathKey(entry.path)] ?? 0);
 
   $effect(() => {
-    if (expanded && loaded && revision !== loadedRevision) void loadChildren();
+    if (
+      expanded && loaded
+      && (directoryRevision !== loadedDirectoryRevision || manualRevision !== loadedManualRevision)
+    ) void loadChildren();
   });
 
   async function loadChildren() {
     const token = ++loadToken;
-    const requestedRevision = revision;
+    const requestedDirectoryRevision = directoryRevision;
+    const requestedManualRevision = manualRevision;
     loading = true;
     loadError = '';
     try {
@@ -53,7 +59,8 @@
       if (token !== loadToken) return;
       children = nextChildren;
       loaded = true;
-      loadedRevision = requestedRevision;
+      loadedDirectoryRevision = requestedDirectoryRevision;
+      loadedManualRevision = requestedManualRevision;
     } catch (error) {
       if (token !== loadToken) return;
       loadError = errorMessage(error);
@@ -116,7 +123,7 @@
         {#if expanded}<IconChevronDown size={13} stroke={1.65} />{:else}<IconChevronRight size={13} stroke={1.65} />{/if}
       {/if}
     </span>
-    {#if icon}<img class="project-file-icon" src={icon} alt="" />{/if}
+    <MaterialFileIcon name={entry.name} directory={entry.isDirectory} {expanded} />
     <span class="project-file-name">{entry.name}</span>
     {#if entry.isSymlink}<IconLink class="project-file-link" size={11} stroke={1.6} />{/if}
   </button>
@@ -137,7 +144,8 @@
             entry={child}
             {projectRoot}
             depth={depth + 1}
-            {revision}
+            {directoryRevisions}
+            {manualRevision}
             {activeFilePath}
             {openFile}
             {reportError}

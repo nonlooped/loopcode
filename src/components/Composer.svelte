@@ -1,16 +1,14 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { fly } from 'svelte/transition';
-  import {
-    IconArrowUp,
-    IconChevronDown,
-    IconFolder,
-    IconGitBranch,
-    IconPaperclip,
-    IconPlayerStop,
-    IconPlugConnected,
-    IconX,
-  } from '@tabler/icons-svelte';
+  import IconArrowUp from '@tabler/icons-svelte/icons/arrow-up';
+  import IconChevronDown from '@tabler/icons-svelte/icons/chevron-down';
+  import IconFolder from '@tabler/icons-svelte/icons/folder';
+  import IconGitBranch from '@tabler/icons-svelte/icons/git-branch';
+  import IconPaperclip from '@tabler/icons-svelte/icons/paperclip';
+  import IconPlayerStop from '@tabler/icons-svelte/icons/player-stop';
+  import IconPlugConnected from '@tabler/icons-svelte/icons/plug-connected';
+  import IconX from '@tabler/icons-svelte/icons/x';
 
   import ContextMenu from './ContextMenu.svelte';
   import ImagePreview from './ImagePreview.svelte';
@@ -131,11 +129,10 @@
     if (!promptTextarea) return;
     promptTextarea.style.height = 'auto';
     const maxHeight = Number.parseFloat(getComputedStyle(promptTextarea).maxHeight);
-    const height = Number.isFinite(maxHeight)
-      ? Math.min(promptTextarea.scrollHeight, maxHeight)
-      : promptTextarea.scrollHeight;
+    const scrollHeight = promptTextarea.scrollHeight;
+    const height = Number.isFinite(maxHeight) ? Math.min(scrollHeight, maxHeight) : scrollHeight;
     promptTextarea.style.height = `${height}px`;
-    promptTextarea.style.overflowY = promptTextarea.scrollHeight > height ? 'auto' : 'hidden';
+    promptTextarea.style.overflowY = scrollHeight > height ? 'auto' : 'hidden';
   }
 
   function layoutBox(element: Element): LayoutBox {
@@ -176,7 +173,7 @@
       { label: 'Open preview', action: () => { imagePreview = { src: image.previewUrl, name: image.name }; } },
       { label: 'Copy image', action: () => copyImage(image.previewUrl) },
       { label: 'Save image', action: () => saveImage(image.previewUrl, image.name) },
-      { label: 'Remove attachment', action: () => props.removeImage(image.id), danger: true, separatorBefore: true },
+      { label: 'Remove attachment', action: () => props.removeImage(image.attachmentId), danger: true, separatorBefore: true },
     ]);
   }
 
@@ -218,10 +215,10 @@
   <div bind:this={composerElement} class="composer" class:expanded={expanded} class:working={status === 'running'}>
     {#if props.images.length > 0 || props.attachmentError}
       <div class="attachment-strip" aria-label="Attached images">
-        {#each props.images as image (image.id)}
+        {#each props.images as image (image.attachmentId)}
           <div class="image-attachment" role="group" title={image.name} oncontextmenu={(event) => openImageMenu(event, image)}>
             <img src={image.previewUrl} alt={image.name} />
-            <button type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
+            <button type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.attachmentId)}>
               <IconX size={10} stroke={2} />
             </button>
           </div>
@@ -250,7 +247,6 @@
               : 'Do anything...'}
       disabled={!canEdit()}
       rows="1"
-      oninput={resizePromptTextarea}
       onpaste={handlePaste}
       onkeydown={(event) => {
         if (event.key === 'Enter' && !event.shiftKey) {

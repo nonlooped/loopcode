@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade, scale } from 'svelte/transition';
-  import { IconX } from '@tabler/icons-svelte';
+  import IconX from '@tabler/icons-svelte/icons/x';
 
   interface Props {
     src: string;

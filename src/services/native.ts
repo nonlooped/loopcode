@@ -70,6 +70,24 @@ export function saveWorkspace(workspace: unknown): Promise<void> {
   return invoke("save_workspace", { workspace });
 }
 
+export function storeAttachment(attachmentId: string, bytes: Uint8Array): Promise<void> {
+  return invoke("store_attachment", bytes, {
+    headers: { "x-loopcode-attachment-id": attachmentId },
+  });
+}
+
+export function readAttachment(attachmentId: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_attachment", { attachmentId });
+}
+
+export function deleteAttachment(attachmentId: string): Promise<void> {
+  return invoke("delete_attachment", { attachmentId });
+}
+
+export function cleanupAttachmentOrphans(pendingIds: string[]): Promise<number> {
+  return invoke<number>("cleanup_attachment_orphans", { pendingIds });
+}
+
 export function recordDiagnostic(level: string, eventName: string, fields: unknown): Promise<void> {
   return invoke("record_diagnostic", { level, eventName, fields });
 }

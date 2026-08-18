@@ -24,7 +24,7 @@ At startup, LoopCode briefly launches each provider to discover advertised model
 
 The first prompt starts the selected provider for the selected folder and applies its model, reasoning, and advertised Fast mode settings. A separate quiet ACP session generates the thread title after the first text prompt; its output is never added to the transcript.
 
-Visible workspace state is stored in `~/.loopcode/threads.json`. Writes rotate the previous snapshot to `threads.json.bak`. Persisted state includes threads, drafts, messages, attachments, tool activity, projects, selections, and private per-provider ACP session IDs. Process IDs, connection state, provider errors, and discovered runtime configuration remain transient.
+Visible workspace state is stored in `~/.loopcode/threads.json`. Writes rotate the previous snapshot to `threads.json.bak`. Attachment metadata is kept in that snapshot and its raw bytes are stored under `~/.loopcode/attachments`. Persisted state also includes threads, drafts, messages, tool activity, projects, selections, and private per-provider ACP session IDs. Process IDs, connection state, provider errors, and discovered runtime configuration remain transient.
 
 ## Project map
 

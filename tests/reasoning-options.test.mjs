@@ -4,47 +4,53 @@ import test from "node:test";
 import { discoverModelOptions } from "../src/utils/model-options.ts";
 import { applyReasoningForSelectedModel } from "../src/utils/reasoning-options.ts";
 
-void test("discovers reasoning variants for every advertised model", async () => {
+void test("inspects only the selected model when discovery already matches", async () => {
   const initial = {
     modelConfigId: "model",
     models: [
       { id: "opencode/big-pickle", name: "Big Pickle" },
       { id: "meta/muse-spark-1.2-contributor", name: "Muse Spark 1.2 Contributor" },
-      { id: "unsupported/model", name: "Unsupported" },
     ],
     selectedModelId: "opencode/big-pickle",
-    reasoningOptions: [],
+    reasoningOptions: [{ id: "high", name: "High" }],
+    selectedReasoningId: "high",
   };
+  let setModelCalls = 0;
   const connection = {
-    async setModel(_configId, modelId) {
-      if (modelId === "unsupported/model") return initial;
-      return {
-        ...initial,
-        selectedModelId: modelId,
-        reasoningConfigId: "effort",
-        reasoningOptions: [
-          { id: "minimal", name: "Minimal" },
-          { id: "high", name: "High" },
-        ],
-        selectedReasoningId: "minimal",
-      };
+    async setModel() {
+      setModelCalls += 1;
+      throw new Error("should not select during inspection");
     },
   };
 
-  const discovered = await discoverModelOptions(connection, initial);
+  const discovered = await discoverModelOptions(connection, initial, initial.selectedModelId);
 
-  assert.deepEqual(discovered.reasoningOptionsByModel["opencode/big-pickle"], {
-    options: [],
-    selectedId: undefined,
+  assert.equal(setModelCalls, 0);
+  assert.deepEqual(discovered.reasoningOptionsByModel[initial.selectedModelId], {
+    options: [{ id: "high", name: "High" }],
+    selectedId: "high",
   });
-  assert.deepEqual(discovered.reasoningOptionsByModel["meta/muse-spark-1.2-contributor"], {
-    options: [
-      { id: "minimal", name: "Minimal" },
-      { id: "high", name: "High" },
-    ],
-    selectedId: "minimal",
-  });
-  assert.equal(discovered.reasoningOptionsByModel["unsupported/model"], undefined);
+  assert.equal(discovered.reasoningOptionsByModel["meta/muse-spark-1.2-contributor"], undefined);
+});
+
+void test("uses at most one fallback selection for a normalized model", async () => {
+  const initial = {
+    modelConfigId: "model",
+    models: [{ id: "model-1", name: "Model 1" }],
+    selectedModelId: undefined,
+    reasoningOptions: [],
+  };
+  const calls = [];
+  const connection = {
+    async setModel(configId, modelId) {
+      calls.push([configId, modelId]);
+      return { ...initial, selectedModelId: modelId, reasoningOptions: [] };
+    },
+  };
+
+  await discoverModelOptions(connection, initial, "model-1");
+
+  assert.deepEqual(calls, [["model", "model-1"]]);
 });
 
 void test("updates disconnected reasoning options when the selected model changes", () => {

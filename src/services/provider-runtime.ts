@@ -21,7 +21,7 @@ import { discoverModelOptions } from "../utils/model-options.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
 import { buildThreadTitlePrompt, normalizeThreadTitle } from "../utils/thread-title.ts";
 import { AcpConnection, readModelState, type AcpModelState } from "./acp.ts";
-import { recordDiagnostic } from "./native.ts";
+import { readAttachment, recordDiagnostic } from "./native.ts";
 import { SessionUpdateHandler } from "./session-updates.ts";
 
 interface RuntimeHooks {
@@ -38,10 +38,16 @@ export class ProviderRuntime {
   #turnTokens = new Map<string, string>();
   #titleTokens = new Map<string, string>();
   #updates = new SessionUpdateHandler(applyProviderConfigState);
+  #readAttachment: (attachmentId: string) => Promise<ArrayBuffer>;
 
-  constructor(catalogs: Record<string, ProviderModelCatalog>, hooks: RuntimeHooks) {
+  constructor(
+    catalogs: Record<string, ProviderModelCatalog>,
+    hooks: RuntimeHooks,
+    attachmentReader: (attachmentId: string) => Promise<ArrayBuffer> = readAttachment,
+  ) {
     this.#catalogs = catalogs;
     this.#hooks = hooks;
+    this.#readAttachment = attachmentReader;
   }
 
   connection(threadId: string, profileId: string) {
@@ -129,6 +135,7 @@ export class ProviderRuntime {
       const { reasoningOptionsByModel, fastModeOptionsByModel } = await discoverModelOptions(
         connection,
         discovered,
+        selectedModelId,
       );
       const selectedReasoning = reasoningOptionsByModel[selectedModelId];
       const selectedFastMode = fastModeOptionsByModel[selectedModelId];
@@ -220,7 +227,7 @@ export class ProviderRuntime {
     const isCurrent = () => this.#tokens.get(key) === token;
     let startupComplete = false;
     let connectionReportedError = false;
-    let sessionSelectedModelId: string | undefined;
+    let sessionModelState: AcpModelState | undefined;
     const connection = new AcpConnection({
       connectionStatus: (status) => {
         if (!isCurrent() || (status === "ready" && !startupComplete)) return;
@@ -244,7 +251,7 @@ export class ProviderRuntime {
         if (requestedFastModeEnabled !== undefined && session.fastModeConfigId) {
           provider.fastModeEnabled = requestedFastModeEnabled;
         }
-        sessionSelectedModelId = session.selectedModelId;
+        sessionModelState = session;
         provider.error = undefined;
         provider.errorDetails = undefined;
       },
@@ -302,13 +309,14 @@ export class ProviderRuntime {
       if (!provider.modelConfigId) {
         throw new Error(`${profile.label} did not expose a model configuration.`);
       }
-      const updated = await connection.setModel(provider.modelConfigId, selectedModelId);
-      const appliedModelId = updated.selectedModelId ?? sessionSelectedModelId;
-      if (appliedModelId !== selectedModelId) {
+      const updated =
+        sessionModelState?.selectedModelId === selectedModelId
+          ? sessionModelState
+          : await connection.setModel(provider.modelConfigId, selectedModelId);
+      if (updated.selectedModelId !== selectedModelId) {
         throw new Error(`${profile.label} did not apply model ${selectedModelId}.`);
       }
       applyProviderConfigState(provider, updated);
-      provider.selectedModelId = selectedModelId;
       const reasoningId =
         requestedReasoningId &&
         provider.reasoningOptions.some((option) => option.id === requestedReasoningId)
@@ -382,10 +390,27 @@ export class ProviderRuntime {
       return;
     }
 
-    const turnCompletion = connection.prompt(
-      text,
-      images.map(({ data, mimeType }) => ({ type: "image" as const, data, mimeType })),
-    );
+    const promptImages: { type: "image"; data: string; mimeType: string }[] = [];
+    try {
+      for (const image of images) {
+        const data =
+          "attachmentId" in image
+            ? bytesToBase64(new Uint8Array(await this.#readAttachment(image.attachmentId)))
+            : image.data;
+        promptImages.push({ type: "image", data, mimeType: image.mimeType });
+      }
+    } catch (error) {
+      const details: AcpErrorDetails = {
+        scope: "turn",
+        message: `Could not read attachment: ${error instanceof Error ? error.message : String(error)}`,
+      };
+      this.#setError(thread, profileId, details);
+      addMessage(thread, "error", details.message);
+      if (this.#turnTokens.get(thread.id) === turnToken) this.#turnTokens.delete(thread.id);
+      return;
+    }
+
+    const turnCompletion = connection.prompt(text, promptImages);
     const titleCompletion =
       isFirstPrompt && text
         ? this.#generateThreadTitle(thread, connection, text, selectedModelId)
@@ -599,6 +624,17 @@ export class ProviderRuntime {
     this.#setError(thread, profileId, details);
     if (thread.profileId === profileId) addMessage(thread, "error", details.message);
   }
+}
+
+const BASE64_CHUNK_BYTES = 48 * 1024;
+
+export function bytesToBase64(bytes: Uint8Array) {
+  let encoded = "";
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_BYTES) {
+    const chunk = bytes.subarray(offset, offset + BASE64_CHUNK_BYTES);
+    encoded += btoa(String.fromCharCode(...chunk));
+  }
+  return encoded;
 }
 
 function connectionKey(threadId: string, profileId: string) {

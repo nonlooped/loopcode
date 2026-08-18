@@ -191,12 +191,16 @@ function restoreMessage(value: unknown): TimelineMessage | undefined {
 
 function restoreMessageImages(value: unknown): MessageImage[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const images = value.filter(isObject).flatMap((image) => {
-    const data = stringValue(image.data);
+  const images = value.filter(isObject).flatMap((image): MessageImage[] => {
+    const attachmentId = stringValue(image.attachmentId);
     const mimeType = stringValue(image.mimeType);
-    const name = stringValue(image.name);
-    if (!data || !mimeType?.match(/^image\/[a-z0-9.+-]+$/i)) return [];
-    return [{ data, mimeType, name: name ?? "Attached image" }];
+    const name = stringValue(image.name) ?? "Attached image";
+    if (!mimeType?.match(/^image\/[a-z0-9.+-]+$/i)) return [];
+    if (attachmentId?.match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i)) {
+      return [{ attachmentId, mimeType, name }];
+    }
+    const data = stringValue(image.data);
+    return data ? [{ data, mimeType, name }] : [];
   });
   return images.length > 0 ? images : undefined;
 }

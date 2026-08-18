@@ -16,6 +16,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{ChildStdin, Command},
     sync::{Mutex, mpsc, watch},
+    task::JoinSet,
     time::{Duration, timeout},
 };
 
@@ -493,19 +494,47 @@ impl Broker {
             json!({ "count": controls.len(), "reason": reason }),
         );
 
-        let mut first_error = None;
-        for (harness_id, control) in controls {
-            match stop_harness_control(diagnostics, &harness_id, control, reason).await {
-                Ok(()) => {
-                    self.harnesses.lock().await.remove(&harness_id);
-                }
-                Err(error) => {
-                    first_error.get_or_insert(error);
-                }
+        let (stopped, first_error) = stop_harness_controls(diagnostics, controls, reason).await;
+        if !stopped.is_empty() {
+            let mut harnesses = self.harnesses.lock().await;
+            for harness_id in stopped {
+                harnesses.remove(&harness_id);
             }
         }
         first_error.map_or(Ok(()), Err)
     }
+}
+
+async fn stop_harness_controls(
+    diagnostics: &Diagnostics,
+    controls: Vec<(String, HarnessStop)>,
+    reason: &str,
+) -> (Vec<String>, Option<String>) {
+    let mut waits = JoinSet::new();
+    for (harness_id, control) in controls {
+        let diagnostics = diagnostics.clone();
+        let reason = reason.to_owned();
+        waits.spawn(async move {
+            let result = stop_harness_control(&diagnostics, &harness_id, control, &reason).await;
+            (harness_id, result)
+        });
+    }
+
+    let mut stopped = Vec::new();
+    let mut first_error = None;
+    while let Some(result) = waits.join_next().await {
+        match result {
+            Ok((harness_id, Ok(()))) => stopped.push(harness_id),
+            Ok((_, Err(error))) => {
+                first_error.get_or_insert(error);
+            }
+            Err(error) => {
+                first_error
+                    .get_or_insert_with(|| format!("Could not join harness stop task: {error}"));
+            }
+        }
+    }
+    (stopped, first_error)
 }
 
 async fn stop_matching_harnesses(
@@ -585,11 +614,67 @@ async fn wait_for_harness_stop(
 
 #[cfg(test)]
 mod tests {
-    use super::wait_for_harness_stop;
+    use super::{HarnessStop, stop_harness_controls, wait_for_harness_stop};
+    use crate::diagnostics::Diagnostics;
+    use std::path::PathBuf;
     use tokio::{
         sync::{mpsc, watch},
         time::{Duration, timeout},
     };
+
+    #[tokio::test]
+    async fn requests_every_stop_before_waiting_for_acknowledgements() {
+        let diagnostics = Diagnostics::new(test_diagnostics_path());
+        let (stop_one, mut stop_one_rx) = mpsc::channel(1);
+        let (stopped_one, stopped_one_rx) = watch::channel(false);
+        let (stop_two, mut stop_two_rx) = mpsc::channel(1);
+        let (stopped_two, stopped_two_rx) = watch::channel(false);
+        let controls = vec![
+            (
+                "harness-one".into(),
+                HarnessStop {
+                    stop: stop_one,
+                    stopped: stopped_one_rx,
+                    profile_id: None,
+                    thread_id: None,
+                },
+            ),
+            (
+                "harness-two".into(),
+                HarnessStop {
+                    stop: stop_two,
+                    stopped: stopped_two_rx,
+                    profile_id: None,
+                    thread_id: None,
+                },
+            ),
+        ];
+        let run_diagnostics = diagnostics.clone();
+        let waiting =
+            tokio::spawn(
+                async move { stop_harness_controls(&run_diagnostics, controls, "test").await },
+            );
+
+        timeout(Duration::from_millis(100), stop_one_rx.recv())
+            .await
+            .expect("first stop should be requested")
+            .expect("first stop channel should remain open");
+        timeout(Duration::from_millis(100), stop_two_rx.recv())
+            .await
+            .expect("second stop should be requested before either ack")
+            .expect("second stop channel should remain open");
+        stopped_one
+            .send(true)
+            .expect("first waiter should remain subscribed");
+        stopped_two
+            .send(true)
+            .expect("second waiter should remain subscribed");
+
+        let (stopped, error) = waiting.await.expect("stop task should finish");
+        assert_eq!(stopped.len(), 2);
+        assert!(error.is_none());
+        diagnostics.shutdown().expect("diagnostics should stop");
+    }
 
     #[tokio::test]
     async fn waits_for_process_exit_after_requesting_stop() {
@@ -612,5 +697,9 @@ mod tests {
             .await
             .expect("wait task should finish")
             .expect("stop should be confirmed");
+    }
+
+    fn test_diagnostics_path() -> PathBuf {
+        std::env::temp_dir().join(format!("loopcode-broker-test-{}", std::process::id()))
     }
 }

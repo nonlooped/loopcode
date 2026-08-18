@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { IconArrowLeft, IconArrowRight, IconX } from '@tabler/icons-svelte';
+  import IconArrowLeft from '@tabler/icons-svelte/icons/arrow-left';
+  import IconArrowRight from '@tabler/icons-svelte/icons/arrow-right';
+  import IconX from '@tabler/icons-svelte/icons/x';
 
   import { readProjectFile } from '../services/native';
   import { highlightFile, languageForPath } from '../utils/syntax-highlighter';
@@ -52,7 +54,9 @@
         } catch {
           throw new Error('Binary files cannot be previewed.');
         }
-        highlighted = highlightFile(content, requestedPath);
+        const rendered = await highlightFile(content, requestedPath);
+        if (token !== loadToken) return;
+        highlighted = rendered;
       }
     } catch (cause) {
       if (token === loadToken) error = cause instanceof Error ? cause.message : String(cause);

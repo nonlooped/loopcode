@@ -3,46 +3,65 @@ use std::{
     collections::hash_map::DefaultHasher,
     fs::{self, OpenOptions},
     hash::{Hash, Hasher},
-    io::{Read, Write},
+    io::{BufWriter, Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-    time::{SystemTime, UNIX_EPOCH},
+    sync::{
+        Arc, Mutex,
+        mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
+    },
+    thread::{self, JoinHandle},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 const LOG_FILE_NAME: &str = "acp.jsonl";
 const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
 const RETAINED_LOGS: usize = 5;
 const MAX_STRING_CHARS: usize = 2_000;
+const RECORD_QUEUE_CAPACITY: usize = 2_048;
+const FLUSH_INTERVAL: Duration = Duration::from_secs(1);
+
+type CommandResult = Result<(), String>;
+
+enum WriterCommand {
+    Record {
+        line: String,
+        flush: bool,
+    },
+    Export {
+        destination: PathBuf,
+        completed: mpsc::Sender<CommandResult>,
+    },
+    Shutdown {
+        completed: mpsc::Sender<CommandResult>,
+    },
+}
+
+struct DiagnosticsInner {
+    sender: SyncSender<WriterCommand>,
+    worker: Mutex<Option<JoinHandle<()>>>,
+}
 
 #[derive(Clone)]
 pub struct Diagnostics {
-    directory: PathBuf,
-    write_lock: Arc<Mutex<()>>,
+    inner: Arc<DiagnosticsInner>,
 }
 
 impl Diagnostics {
     pub fn new(directory: PathBuf) -> Self {
+        let (sender, receiver) = mpsc::sync_channel(RECORD_QUEUE_CAPACITY);
+        let worker = thread::Builder::new()
+            .name("loopcode-diagnostics".into())
+            .spawn(move || writer_loop(directory, receiver))
+            .expect("diagnostics writer thread should start");
         Self {
-            directory,
-            write_lock: Arc::new(Mutex::new(())),
+            inner: Arc::new(DiagnosticsInner {
+                sender,
+                worker: Mutex::new(Some(worker)),
+            }),
         }
     }
 
     pub fn record(&self, level: &str, event: &str, fields: Value) {
-        let Ok(_guard) = self.write_lock.lock() else {
-            return;
-        };
-        if fs::create_dir_all(&self.directory).is_err() {
-            return;
-        }
-        let path = self.directory.join(LOG_FILE_NAME);
-        if path
-            .metadata()
-            .is_ok_and(|metadata| metadata.len() >= MAX_LOG_BYTES)
-        {
-            rotate(&self.directory);
-        }
-
         let mut entry = Map::new();
         entry.insert("timestampMs".into(), json!(timestamp_ms()));
         entry.insert("level".into(), json!(level));
@@ -53,16 +72,123 @@ impl Diagnostics {
         let Ok(line) = serde_json::to_string(&entry) else {
             return;
         };
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(file, "{line}");
+        let flush = level == "error"
+            || matches!(
+                event,
+                "acp.harness.started"
+                    | "acp.harness.exited"
+                    | "acp.frontend.registered"
+                    | "diagnostics.exported"
+            )
+            || event.starts_with("acp.harness.stop");
+        let command = WriterCommand::Record { line, flush };
+        if event.starts_with("acp.rpc.") && level != "error" {
+            match self.inner.sender.try_send(command) {
+                Ok(()) | Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {}
+            }
+        } else {
+            let _ = self.inner.sender.send(command);
         }
     }
 
     pub fn export_to(&self, destination: &Path) -> Result<(), String> {
-        let _guard = self
-            .write_lock
-            .lock()
+        let (completed, response) = mpsc::channel();
+        self.inner
+            .sender
+            .send(WriterCommand::Export {
+                destination: destination.to_owned(),
+                completed,
+            })
             .map_err(|_| "The diagnostics log is unavailable".to_owned())?;
+        response
+            .recv()
+            .map_err(|_| "The diagnostics export did not complete".to_owned())?
+    }
+
+    pub fn shutdown(&self) -> Result<(), String> {
+        let mut worker = self
+            .inner
+            .worker
+            .lock()
+            .map_err(|_| "The diagnostics writer is unavailable".to_owned())?;
+        let Some(handle) = worker.take() else {
+            return Ok(());
+        };
+        let (completed, response) = mpsc::channel();
+        self.inner
+            .sender
+            .send(WriterCommand::Shutdown { completed })
+            .map_err(|_| "The diagnostics writer stopped unexpectedly".to_owned())?;
+        let result = response
+            .recv()
+            .map_err(|_| "The diagnostics shutdown did not complete".to_owned())?;
+        handle
+            .join()
+            .map_err(|_| "The diagnostics writer thread panicked".to_owned())?;
+        result
+    }
+}
+
+struct WriterState {
+    directory: PathBuf,
+    output: Option<BufWriter<fs::File>>,
+    bytes_written: u64,
+}
+
+impl WriterState {
+    fn new(directory: PathBuf) -> Self {
+        Self {
+            directory,
+            output: None,
+            bytes_written: 0,
+        }
+    }
+
+    fn write_line(&mut self, line: &str) -> CommandResult {
+        let line_bytes = line.len() as u64 + 1;
+        self.ensure_open()?;
+        if self.bytes_written > 0 && self.bytes_written + line_bytes > MAX_LOG_BYTES {
+            self.flush()?;
+            self.output = None;
+            rotate(&self.directory);
+            self.bytes_written = 0;
+            self.ensure_open()?;
+        }
+        let output = self.output.as_mut().expect("diagnostics output is open");
+        writeln!(output, "{line}")
+            .map_err(|error| format!("Could not write the diagnostics log: {error}"))?;
+        self.bytes_written += line_bytes;
+        Ok(())
+    }
+
+    fn ensure_open(&mut self) -> CommandResult {
+        if self.output.is_some() {
+            return Ok(());
+        }
+        fs::create_dir_all(&self.directory)
+            .map_err(|error| format!("Could not create the diagnostics directory: {error}"))?;
+        let path = self.directory.join(LOG_FILE_NAME);
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|error| format!("Could not open the diagnostics log: {error}"))?;
+        self.bytes_written = file.metadata().map_or(0, |metadata| metadata.len());
+        self.output = Some(BufWriter::new(file));
+        Ok(())
+    }
+
+    fn flush(&mut self) -> CommandResult {
+        if let Some(output) = &mut self.output {
+            output
+                .flush()
+                .map_err(|error| format!("Could not flush the diagnostics log: {error}"))?;
+        }
+        Ok(())
+    }
+
+    fn export_to(&mut self, destination: &Path) -> CommandResult {
+        self.flush()?;
         let mut output = OpenOptions::new()
             .create(true)
             .truncate(true)
@@ -77,7 +203,39 @@ impl Diagnostics {
             )?;
         }
         append_file(&self.directory.join(LOG_FILE_NAME), &mut output)?;
-        Ok(())
+        output
+            .flush()
+            .map_err(|error| format!("Could not flush the diagnostics export: {error}"))
+    }
+}
+
+fn writer_loop(directory: PathBuf, receiver: Receiver<WriterCommand>) {
+    let mut state = WriterState::new(directory);
+    loop {
+        match receiver.recv_timeout(FLUSH_INTERVAL) {
+            Ok(WriterCommand::Record { line, flush }) => {
+                if state.write_line(&line).is_ok() && flush {
+                    let _ = state.flush();
+                }
+            }
+            Ok(WriterCommand::Export {
+                destination,
+                completed,
+            }) => {
+                let _ = completed.send(state.export_to(&destination));
+            }
+            Ok(WriterCommand::Shutdown { completed }) => {
+                let _ = completed.send(state.flush());
+                break;
+            }
+            Err(RecvTimeoutError::Timeout) => {
+                let _ = state.flush();
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                let _ = state.flush();
+                break;
+            }
+        }
     }
 }
 
@@ -236,14 +394,21 @@ fn append_file(path: &Path, output: &mut impl Write) -> Result<(), String> {
 mod tests {
     use super::{Diagnostics, rpc_fields, safe_stderr};
     use serde_json::json;
-    use std::{fs, path::PathBuf};
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    static NEXT_TEST_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
 
     struct TestDirectory(PathBuf);
 
     impl TestDirectory {
         fn new() -> Self {
-            let path =
-                std::env::temp_dir().join(format!("loopcode-diagnostics-{}", std::process::id()));
+            let id = NEXT_TEST_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir()
+                .join(format!("loopcode-diagnostics-{}-{id}", std::process::id()));
             let _ = fs::remove_dir_all(&path);
             fs::create_dir_all(&path).expect("test directory should be created");
             Self(path)
@@ -315,5 +480,36 @@ mod tests {
         assert!(contents.contains("acp.client.error"));
         assert!(!contents.contains("private request"));
         assert!(!contents.contains("secret"));
+        diagnostics.shutdown().expect("writer should stop");
+    }
+
+    #[test]
+    fn export_flushes_all_buffered_records() {
+        let directory = TestDirectory::new();
+        let diagnostics = Diagnostics::new(directory.0.clone());
+        for request_id in 0..32 {
+            diagnostics.record("debug", "acp.rpc.sent", json!({ "requestId": request_id }));
+        }
+
+        let export = directory.0.join("export.jsonl");
+        diagnostics.export_to(&export).expect("export should flush");
+        let contents = fs::read_to_string(export).expect("export should be readable");
+        assert_eq!(contents.lines().count(), 32);
+        diagnostics.shutdown().expect("writer should stop");
+    }
+
+    #[test]
+    fn orderly_shutdown_flushes_the_persistent_handle() {
+        let directory = TestDirectory::new();
+        let diagnostics = Diagnostics::new(directory.0.clone());
+        diagnostics.record("debug", "acp.rpc.sent", json!({ "requestId": 7 }));
+
+        diagnostics
+            .shutdown()
+            .expect("writer should flush and stop");
+
+        let contents = fs::read_to_string(directory.0.join("acp.jsonl"))
+            .expect("shutdown log should be readable");
+        assert!(contents.contains("\"requestId\":7"));
     }
 }

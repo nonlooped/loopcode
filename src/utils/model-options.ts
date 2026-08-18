@@ -8,31 +8,33 @@ interface ModelConfigConnection {
 export async function discoverModelOptions(
   connection: ModelConfigConnection,
   state: AcpModelState,
+  selectedModelId: string,
 ) {
   const reasoningOptionsByModel: Record<string, ReasoningModelOption> = {};
   const fastModeOptionsByModel: Record<string, FastModeOption> = {};
   if (!state.modelConfigId) return { reasoningOptionsByModel, fastModeOptionsByModel };
 
-  for (const model of state.models) {
-    try {
-      const modelState =
-        model.id === state.selectedModelId
-          ? state
-          : await connection.setModel(state.modelConfigId, model.id);
-      if (modelState.selectedModelId !== model.id) continue;
-      reasoningOptionsByModel[model.id] = {
-        options: modelState.reasoningOptions,
-        selectedId: modelState.selectedReasoningId,
-      };
-      if (!modelState.fastModeConfigId || modelState.fastModeEnabled === undefined) continue;
-      fastModeOptionsByModel[model.id] = {
+  try {
+    const modelState =
+      selectedModelId === state.selectedModelId
+        ? state
+        : await connection.setModel(state.modelConfigId, selectedModelId);
+    if (modelState.selectedModelId !== selectedModelId) {
+      return { reasoningOptionsByModel, fastModeOptionsByModel };
+    }
+    reasoningOptionsByModel[selectedModelId] = {
+      options: modelState.reasoningOptions,
+      selectedId: modelState.selectedReasoningId,
+    };
+    if (modelState.fastModeConfigId && modelState.fastModeEnabled !== undefined) {
+      fastModeOptionsByModel[selectedModelId] = {
         configId: modelState.fastModeConfigId,
         enabled: modelState.fastModeEnabled,
         description: modelState.fastModeDescription,
       };
-    } catch {
-      // A model that cannot be selected during discovery is simply unavailable.
     }
+  } catch {
+    // Capability probing is best-effort; selection still uses the advertised model list.
   }
   return { reasoningOptionsByModel, fastModeOptionsByModel };
 }

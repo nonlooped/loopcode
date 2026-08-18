@@ -67,6 +67,11 @@
   font-size: 11px;
 }
 
+.work-group:not(.active) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
+
 .work-group > summary {
   display: flex;
   width: fit-content;

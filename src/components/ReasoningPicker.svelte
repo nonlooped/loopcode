@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
-  import { IconBolt, IconCheck } from '@tabler/icons-svelte';
+  import IconBolt from '@tabler/icons-svelte/icons/bolt';
+  import IconCheck from '@tabler/icons-svelte/icons/check';
 
   import type { ProviderSessionState } from '../types';
   import { fastModeAvailable } from '../utils/fast-mode';

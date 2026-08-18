@@ -1,3 +1,4 @@
+mod attachments;
 mod broker;
 mod diagnostics;
 mod persistence;
@@ -100,6 +101,68 @@ async fn save_workspace(app: tauri::AppHandle, workspace: Value) -> Result<(), S
     })
     .await
     .map_err(|error| format!("Could not join the thread-saving task: {error}"))?
+}
+
+#[tauri::command]
+async fn store_attachment(
+    app: tauri::AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let directory = loopcode_data_directory(&app)?;
+    let attachment_id = request
+        .headers()
+        .get("x-loopcode-attachment-id")
+        .ok_or_else(|| "The attachment ID header is missing.".to_owned())?
+        .to_str()
+        .map_err(|_| "The attachment ID header is invalid.".to_owned())?
+        .to_owned();
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        tauri::ipc::InvokeBody::Json(_) => {
+            return Err("Attachment bytes must use a raw IPC body.".to_owned());
+        }
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        attachments::store_in_directory(&directory, &attachment_id, &bytes)
+    })
+    .await
+    .map_err(|error| format!("Could not join the attachment-writing task: {error}"))?
+}
+
+#[tauri::command]
+async fn read_attachment(
+    app: tauri::AppHandle,
+    attachment_id: String,
+) -> Result<tauri::ipc::Response, String> {
+    let directory = loopcode_data_directory(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        attachments::read_from_directory(&directory, &attachment_id).map(tauri::ipc::Response::new)
+    })
+    .await
+    .map_err(|error| format!("Could not join the attachment-reading task: {error}"))?
+}
+
+#[tauri::command]
+async fn delete_attachment(app: tauri::AppHandle, attachment_id: String) -> Result<(), String> {
+    let directory = loopcode_data_directory(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        attachments::delete_from_directory(&directory, &attachment_id)
+    })
+    .await
+    .map_err(|error| format!("Could not join the attachment-deletion task: {error}"))?
+}
+
+#[tauri::command]
+async fn cleanup_attachment_orphans(
+    app: tauri::AppHandle,
+    pending_ids: Vec<String>,
+) -> Result<usize, String> {
+    let directory = loopcode_data_directory(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        attachments::cleanup_in_directory(&directory, &pending_ids, std::time::SystemTime::now())
+    })
+    .await
+    .map_err(|error| format!("Could not join the attachment-cleanup task: {error}"))?
 }
 
 #[tauri::command]
@@ -221,6 +284,10 @@ pub fn run() {
             initial_working_directory,
             load_workspace,
             save_workspace,
+            store_attachment,
+            read_attachment,
+            delete_attachment,
+            cleanup_attachment_orphans,
             record_diagnostic,
             export_diagnostics,
             pick_folder,
@@ -248,7 +315,8 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move {
                     let broker = app.state::<Broker>();
                     let diagnostics = app.state::<Diagnostics>();
-                    if broker.shutdown(&diagnostics).await.is_ok() {
+                    if broker.shutdown(&diagnostics).await.is_ok() && diagnostics.shutdown().is_ok()
+                    {
                         shutdown_completed.store(true, Ordering::Release);
                         app.exit(code.unwrap_or(0));
                     } else {

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { IconAlertCircle, IconLayoutSidebarRight, IconRefresh } from '@tabler/icons-svelte';
+  import IconAlertCircle from '@tabler/icons-svelte/icons/alert-circle';
+  import IconLayoutSidebarRight from '@tabler/icons-svelte/icons/layout-sidebar-right';
+  import IconRefresh from '@tabler/icons-svelte/icons/refresh';
 
   import ProjectFileNode from './ProjectFileNode.svelte';
   import {
@@ -9,6 +10,8 @@
     stopProjectFileWatcher,
     type ProjectFileEntry,
   } from '../services/native';
+  import { changedParentDirectories, pathKey } from '../utils/project-file-changes';
+
   interface Props {
     open: boolean;
     visible: boolean;
@@ -28,19 +31,30 @@
   let loading = $state(true);
   let loadError = $state('');
   let notice = $state('');
-  let revision = $state(0);
-  let refreshTimer: number | undefined;
+  let directoryRevisions = $state<Record<string, number>>({});
+  let manualRevision = $state(0);
   let loadToken = 0;
 
-  onMount(() => {
+  $effect(() => {
+    const watchedRoot = projectRoot;
     let disposed = false;
     let watcherId: number | undefined;
+    let refreshTimer: number | undefined;
+    const changedDirectories = new Set<string>();
 
-    void startProjectFileWatcher(projectRoot, (change) => {
+    void startProjectFileWatcher(watchedRoot, (change) => {
       if (disposed) return;
       filesChanged(change.paths);
+      for (const directory of changedParentDirectories(watchedRoot, change.paths)) {
+        changedDirectories.add(directory);
+      }
       window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => { revision += 1; }, 160);
+      refreshTimer = window.setTimeout(() => {
+        const next = { ...directoryRevisions };
+        for (const directory of changedDirectories) next[directory] = (next[directory] ?? 0) + 1;
+        changedDirectories.clear();
+        directoryRevisions = next;
+      }, 160);
     }).then((id) => {
       if (disposed) void stopProjectFileWatcher(id);
       else watcherId = id;
@@ -56,16 +70,19 @@
   });
 
   $effect(() => {
-    void loadRoot(revision);
+    const requestedRoot = projectRoot;
+    void directoryRevisions[pathKey(requestedRoot)];
+    void manualRevision;
+    void loadRoot(requestedRoot);
   });
 
-  async function loadRoot(requestedRevision: number) {
+  async function loadRoot(requestedRoot: string) {
     const token = ++loadToken;
     loading = true;
     loadError = '';
     try {
-      const nextEntries = await readProjectDirectory(projectRoot, projectRoot);
-      if (token !== loadToken || requestedRevision !== revision) return;
+      const nextEntries = await readProjectDirectory(requestedRoot, requestedRoot);
+      if (token !== loadToken) return;
       entries = nextEntries;
     } catch (error) {
       if (token !== loadToken) return;
@@ -95,7 +112,7 @@
       class="chrome-button project-explorer-refresh"
       aria-label="Refresh project files"
       title="Refresh project files"
-      onclick={() => { revision += 1; }}
+      onclick={() => { manualRevision += 1; }}
     >
       <IconRefresh size={14} stroke={1.55} />
     </button>
@@ -126,7 +143,8 @@
             {entry}
             {projectRoot}
             depth={0}
-            {revision}
+            {directoryRevisions}
+            {manualRevision}
             {activeFilePath}
             {openFile}
             reportError={(message) => { notice = message; }}
