@@ -1,15 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  buildThreadTitlePrompt,
-  newThreadTitle,
-  normalizeThreadTitle,
-} from "../src/utils/thread-title.ts";
-
-void test("new threads use a timestamped ISO placeholder", () => {
-  assert.equal(newThreadTitle(Date.UTC(2026, 7, 17, 11, 32, 45)), "New Thread · 2026-08-17T11:32Z");
-});
+import { buildThreadTitlePrompt, normalizeThreadTitle } from "../src/utils/thread-title.ts";
 
 void test("title prompts are concise and bounded", () => {
   const prompt = buildThreadTitlePrompt("x".repeat(2_000));

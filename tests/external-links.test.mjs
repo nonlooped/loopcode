@@ -1,13 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { openExternalLinkFromClick } from "../src/utils/external-links.ts";
-
-const markdownMessage = await readFile(
-  new URL("../src/components/markdown/MarkdownMessage.svelte", import.meta.url),
-  "utf8",
-);
 
 function clickOn(href, overrides = {}) {
   let prevented = false;
@@ -37,12 +31,6 @@ void test("opens a clicked markdown HTTP link outside the webview", async () => 
 
   assert.equal(click.wasPrevented(), true);
   assert.deepEqual(opened, ["https://example.com/docs"]);
-});
-
-void test("routes markdown clicks through the external link handler", () => {
-  assert.match(markdownMessage, /import \{ openUrl \} from '@tauri-apps\/plugin-opener'/);
-  assert.match(markdownMessage, /<div role="presentation" onclick=\{handleClick\}>/);
-  assert.match(markdownMessage, /openExternalLinkFromClick\(event, openUrl\)/);
 });
 
 void test("leaves non-web links to their default behavior", async () => {

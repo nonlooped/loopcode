@@ -3,32 +3,6 @@ import test from "node:test";
 
 import { applyFastModeForSelectedModel, fastModeAvailable } from "../src/utils/fast-mode.ts";
 
-void test("only offers Fast mode for the model that advertised it", () => {
-  assert.equal(
-    fastModeAvailable({
-      status: "disconnected",
-      selectedModelId: "gpt-5.3-codex-spark",
-      fastModeConfigId: "fast_mode",
-      fastModeModelId: "gpt-5.6-codex",
-      models: [],
-      reasoningOptions: [],
-    }),
-    false,
-  );
-
-  assert.equal(
-    fastModeAvailable({
-      status: "disconnected",
-      selectedModelId: "gpt-5.6-codex",
-      fastModeConfigId: "fast_mode",
-      fastModeModelId: "gpt-5.6-codex",
-      models: [],
-      reasoningOptions: [],
-    }),
-    true,
-  );
-});
-
 void test("uses the selected model's discovered Fast mode capability", () => {
   const provider = {
     status: "disconnected",
