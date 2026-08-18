@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { flip } from 'svelte/animate';
   import { fade, fly } from 'svelte/transition';
   import {
@@ -19,7 +20,7 @@
   import { profileById } from '../config/providers';
   import type { ProjectState, ThreadState } from '../types';
   import { copyText } from '../utils/clipboard';
-  import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
+  import { menuFromEvent, nextMenuItemIndex, type ContextMenuState } from '../utils/context-menu';
   import { folderName, relativeTime, threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -41,7 +42,6 @@
     addThread: () => void;
     addThreadToProject: (projectId: string) => void;
     selectThread: (threadId: string) => void;
-    selectThreadFromKeyboard: (event: KeyboardEvent, threadId: string) => void;
     toggleSettled: (threadId: string) => void;
     renameThread: (threadId: string) => void;
     openThreadFolder: (thread: ThreadState) => void;
@@ -57,6 +57,37 @@
 
   const props: Props = $props();
   let contextMenu = $state<ContextMenuState>();
+  let workspaceTrigger = $state<HTMLButtonElement>();
+  let workspaceMenu = $state<HTMLElement>();
+
+  $effect(() => {
+    if (!props.workspaceDropdownOpen) return;
+    void tick().then(() => {
+      workspaceMenu?.querySelector<HTMLButtonElement>('.workspace-option.active, button:not(:disabled)')?.focus();
+    });
+  });
+
+  function closeWorkspaceMenu(returnFocus = false) {
+    props.setWorkspaceDropdownOpen(false);
+    if (returnFocus) void tick().then(() => workspaceTrigger?.focus());
+  }
+
+  function handleWorkspaceMenuKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeWorkspaceMenu(true);
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !workspaceMenu) return;
+    event.preventDefault();
+    const items = Array.from(workspaceMenu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+    const next = nextMenuItemIndex(
+      items.indexOf(document.activeElement as HTMLButtonElement),
+      items.length,
+      event.key as 'ArrowDown' | 'ArrowUp' | 'Home' | 'End',
+    );
+    items[next]?.focus();
+  }
 
   function openThreadMenu(event: MouseEvent, thread: ThreadState) {
     contextMenu = menuFromEvent(event, [
@@ -104,8 +135,10 @@
   {:else}
     <div class="sidebar-heading">
       <button
+        bind:this={workspaceTrigger}
         class="workspace-identity"
         aria-haspopup="menu"
+        aria-controls="workspace-menu"
         aria-expanded={props.workspaceDropdownOpen}
         onclick={() => props.setWorkspaceDropdownOpen(!props.workspaceDropdownOpen)}
         title="Choose folder"
@@ -125,11 +158,15 @@
         class="dropdown-backdrop"
         tabindex="-1"
         aria-label="Close folder menu"
-        onclick={() => props.setWorkspaceDropdownOpen(false)}
+        onclick={() => closeWorkspaceMenu()}
       ></button>
       <div
+        bind:this={workspaceMenu}
+        id="workspace-menu"
         class="workspace-dropdown"
         role="menu"
+        tabindex="-1"
+        onkeydown={handleWorkspaceMenuKeydown}
         transition:fly={{ y: props.compactMotion ? 0 : -4, duration: props.compactMotion ? 0 : 130 }}
       >
         <button
@@ -173,7 +210,7 @@
       <section class="sidebar-section inbox-section">
         <nav class="thread-list" aria-label="Inbox threads">
           {#if props.inboxThreads.length === 0}
-            <div class="empty-hint">No sessions yet</div>
+            <div class="empty-hint">No threads yet</div>
           {:else}
             {#each props.inboxThreads as thread (thread.id)}
               {@const threadProfile = profileById(thread.profileId)}
@@ -182,13 +219,17 @@
                 <div
                   class:active={thread.id === props.selectedThreadId}
                   class="thread-item"
-                  role="button"
-                  tabindex="0"
-                  onclick={() => props.selectThread(thread.id)}
+                  role="group"
+                  aria-label={thread.title}
                   oncontextmenu={(event) => openThreadMenu(event, thread)}
-                  onkeydown={(event) => props.selectThreadFromKeyboard(event, thread.id)}
                   transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
                 >
+                  <button
+                    type="button"
+                    class="thread-select"
+                    aria-current={thread.id === props.selectedThreadId ? 'page' : undefined}
+                    onclick={() => props.selectThread(thread.id)}
+                  >
                   <span class="thread-copy">
                     <small class="thread-topline">
                       <span class="thread-location">
@@ -222,6 +263,7 @@
                       <span>{threadHarness(thread)}</span>
                     </span>
                   </span>
+                  </button>
                   <span class="thread-actions">
                     <button
                       type="button"
@@ -258,7 +300,7 @@
         {#if props.showSettled}
           <nav class="thread-list settled" aria-label="Archived threads">
             {#if props.settledThreads.length === 0}
-              <div class="empty-hint">No archived sessions</div>
+              <div class="empty-hint">No archived threads</div>
             {:else}
               {#each props.settledThreads as thread (thread.id)}
                 {@const threadProfile = profileById(thread.profileId)}
@@ -266,14 +308,18 @@
                   <div
                     class:active={thread.id === props.selectedThreadId}
                     class="thread-item slim settled"
-                    role="button"
-                    tabindex="0"
-                    onclick={() => props.selectThread(thread.id)}
+                    role="group"
+                    aria-label={thread.title}
                     oncontextmenu={(event) => openThreadMenu(event, thread)}
-                    onkeydown={(event) => props.selectThreadFromKeyboard(event, thread.id)}
                     title={thread.title}
                     transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
                   >
+                    <button
+                      type="button"
+                      class="thread-select"
+                      aria-current={thread.id === props.selectedThreadId ? 'page' : undefined}
+                      onclick={() => props.selectThread(thread.id)}
+                    >
                     <span class="slim-copy">
                       <img src={threadProfile.icon} alt="" />
                       <span class="thread-title-motion">
@@ -283,6 +329,7 @@
                       </span>
                     </span>
                     <span class="slim-updated">{relativeTime(thread.updatedAt)}</span>
+                    </button>
                     <span class="thread-actions">
                       <button
                         type="button"
@@ -318,3 +365,8 @@
 {#if contextMenu}
   <ContextMenu menu={contextMenu} close={() => { contextMenu = undefined; }} />
 {/if}
+
+<svelte:window
+  onblur={() => { if (props.workspaceDropdownOpen) closeWorkspaceMenu(); }}
+  onkeydown={(event) => { if (event.key === 'Escape' && props.workspaceDropdownOpen) closeWorkspaceMenu(true); }}
+/>

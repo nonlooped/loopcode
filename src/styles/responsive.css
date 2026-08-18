@@ -187,7 +187,15 @@
   .app-shell,
   .thread-sidebar,
   .project-explorer,
-  .modal-backdrop {
+  .workspace-dropdown,
+  .model-picker,
+  .reasoning-menu,
+  .context-menu,
+  .modal-backdrop,
+  .permission-modal,
+  .image-preview-backdrop,
+  .image-preview figure,
+  .scroll-to-bottom {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -196,12 +204,24 @@
     background: var(--shell-solid);
   }
 
-  .thread-sidebar {
-    background: rgba(29, 30, 33, 0.84);
+  .thread-sidebar,
+  .project-explorer {
+    background: rgb(29, 30, 33);
   }
 
-  .permission-modal {
-    background: rgba(24, 25, 29, 0.98);
+  .workspace-dropdown,
+  .model-picker,
+  .reasoning-menu,
+  .context-menu,
+  .permission-modal,
+  .image-preview figure,
+  .scroll-to-bottom {
+    background: rgb(30, 31, 35);
+  }
+
+  .modal-backdrop,
+  .image-preview-backdrop {
+    background: rgb(8, 9, 11);
   }
 }
 
@@ -223,9 +243,5 @@
   .title-context,
   .window-chrome {
     transition: none !important;
-  }
-
-  .thread-sidebar {
-    transform: none !important;
   }
 }

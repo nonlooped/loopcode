@@ -53,6 +53,7 @@
   let composerFooter = $state<HTMLElement>();
   let promptTextarea = $state<HTMLTextAreaElement>();
   let imageInput = $state<HTMLInputElement>();
+  let modelTrigger = $state<HTMLButtonElement>();
   let contextMenu = $state<ContextMenuState>();
   let imagePreview = $state<{ src: string; name: string }>();
   const provider = $derived(activeProvider(props.thread));
@@ -64,9 +65,11 @@
     void tick().then(resizePromptTextarea);
   });
 
-  function closePickers() {
+  function closePickers(returnFocus = false) {
+    const restoreModelFocus = returnFocus && modelPickerOpen;
     modelPickerOpen = false;
     reasoningPickerOpen = false;
+    if (restoreModelFocus) void tick().then(() => modelTrigger?.focus());
   }
 
   function activeModelName() {
@@ -207,7 +210,7 @@
 </script>
 
 {#if modelPickerOpen || reasoningPickerOpen}
-  <button class="model-picker-dismiss" tabindex="-1" aria-label="Close picker" onclick={closePickers}></button>
+  <button class="model-picker-dismiss" tabindex="-1" aria-label="Close picker" onclick={() => closePickers()}></button>
 {/if}
 
 <section
@@ -220,8 +223,13 @@
       <div class="attachment-strip" aria-label="Attached images">
         {#each props.images as image (image.id)}
           <div class="image-attachment" role="group" title={image.name} oncontextmenu={(event) => openImageMenu(event, image)}>
-            <img src={image.previewUrl} alt={image.name} />
-            <button type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
+            <button
+              type="button"
+              class="image-attachment-preview"
+              aria-label={`Preview ${image.name}`}
+              onclick={() => { imagePreview = { src: image.previewUrl, name: image.name }; }}
+            ><img src={image.previewUrl} alt="" /></button>
+            <button class="image-attachment-remove" type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
               <IconX size={10} stroke={2} />
             </button>
           </div>
@@ -247,7 +255,7 @@
               : `${threadHarness(props.thread)} unavailable — switch provider or retry`
             : status === 'stopped'
               ? 'Provider stopped — switch provider or reconnect'
-              : 'Do anything...'}
+              : 'Ask anything…'}
       disabled={!canEdit()}
       rows="1"
       oninput={resizePromptTextarea}
@@ -263,6 +271,7 @@
       <div class="composer-context">
         <div class="model-picker-wrap">
           <button
+            bind:this={modelTrigger}
             class="model-picker-trigger"
             aria-expanded={modelPickerOpen}
             aria-haspopup="dialog"
@@ -280,6 +289,7 @@
               choose={chooseModel}
               retryDiscovery={props.retryDiscovery}
               reducedMotion={props.reducedMotion}
+              close={() => closePickers(true)}
             />
           {/if}
         </div>
@@ -329,6 +339,9 @@
   />
 {/if}
 
-<svelte:window onkeydown={(event) => {
-  if (event.key === 'Escape' && (modelPickerOpen || reasoningPickerOpen)) closePickers();
-}} />
+<svelte:window
+  onblur={() => { if (modelPickerOpen || reasoningPickerOpen) closePickers(); }}
+  onkeydown={(event) => {
+    if (event.key === 'Escape' && (modelPickerOpen || reasoningPickerOpen)) closePickers(true);
+  }}
+/>

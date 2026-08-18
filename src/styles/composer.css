@@ -18,7 +18,7 @@
 
 .model-picker,
 .reasoning-menu {
-  background: rgba(30, 31, 35, 0.96);
+  background: var(--floating-surface);
   backdrop-filter: blur(20px) saturate(115%);
   -webkit-backdrop-filter: blur(20px) saturate(115%);
 }
@@ -134,14 +134,24 @@
   background: var(--panel-hover);
 }
 
+.image-attachment-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
 .image-attachment img {
   width: 100%;
   height: 100%;
-  border-radius: 8px;
   object-fit: cover;
 }
 
-.image-attachment button {
+.image-attachment .image-attachment-remove {
   position: absolute;
   top: -5px;
   right: -5px;
@@ -156,7 +166,7 @@
   color: var(--text-soft);
 }
 
-.image-attachment button:hover {
+.image-attachment .image-attachment-remove:hover {
   background: rgba(53, 54, 59, 0.96);
   color: var(--text);
 }

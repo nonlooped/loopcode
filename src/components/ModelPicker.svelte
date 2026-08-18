@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, tick } from 'svelte';
   import { fly } from 'svelte/transition';
   import { IconCheck, IconSearch } from '@tabler/icons-svelte';
 
@@ -11,11 +12,14 @@
     reducedMotion: boolean;
     choose: (profileId: string, model: ModelOption) => void;
     retryDiscovery: (profileId: string) => void;
+    close: () => void;
   }
 
   const props: Props = $props();
   let pickerProviderId = $state<string>();
   let modelSearch = $state('');
+  let dialog = $state<HTMLElement>();
+  let searchInput = $state<HTMLInputElement>();
   const pickerProfile = $derived(profileById(pickerProviderId ?? props.thread.profileId));
   const pickerProvider = $derived(props.thread.providers[pickerProfile.id]);
   const pickerCatalog = $derived(props.catalogs[pickerProfile.id]);
@@ -25,6 +29,33 @@
     const query = modelSearch.trim().toLocaleLowerCase();
     if (!query) return models;
     return models.filter((model) => `${model.name} ${model.id}`.toLocaleLowerCase().includes(query));
+  }
+
+  onMount(() => {
+    void tick().then(() => {
+      if (!searchInput?.disabled) searchInput?.focus();
+      else dialog?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    });
+  });
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      props.close();
+      return;
+    }
+    if (event.key !== 'Tab' || !dialog) return;
+    const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)'));
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
   }
 
   function modelLabel(model: ModelOption) {
@@ -38,10 +69,12 @@
 </script>
 
 <div
+  bind:this={dialog}
   class="model-picker"
   role="dialog"
   aria-label="Choose provider and model"
   tabindex="-1"
+  onkeydown={handleKeydown}
   transition:fly|global={{ y: props.reducedMotion ? 0 : 5, duration: props.reducedMotion ? 0 : 140 }}
 >
   <nav class="model-providers" aria-label="Providers">
@@ -68,6 +101,7 @@
     <label class="model-search">
       <IconSearch size={13} stroke={1.7} />
       <input
+        bind:this={searchInput}
         bind:value={modelSearch}
         aria-label="Search models"
         placeholder="Search models…"

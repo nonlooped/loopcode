@@ -114,6 +114,15 @@
   gap: 7px;
 }
 
+.message-image-button {
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+}
+
 .message-images img {
   display: block;
   max-width: 100%;
@@ -179,7 +188,7 @@
   padding: 0.12em 0.35em;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--recessed-surface);
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 0.9em;
 }
@@ -190,7 +199,7 @@
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: rgba(0, 0, 0, 0.24) !important;
+  background: var(--recessed-surface) !important;
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.55;

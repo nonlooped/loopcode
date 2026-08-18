@@ -70,8 +70,8 @@
       <label class="settings-row settings-row-separated">
         <span class="settings-row-icon" aria-hidden="true"><IconListDetails size={17} stroke={1.55} /></span>
         <span class="settings-row-copy">
-          <strong>Compact session rows</strong>
-          <small>Show more sessions in the sidebar by reducing row spacing.</small>
+          <strong>Compact thread rows</strong>
+          <small>Show more threads in the sidebar by reducing row spacing.</small>
         </span>
         <span class="toggle-control">
           <input

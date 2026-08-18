@@ -16,7 +16,7 @@
         "title": "LoopCode",
         "width": 1440,
         "height": 920,
-        "minWidth": 860,
+        "minWidth": 480,
         "minHeight": 600,
         "center": true,
         "decorations": false,

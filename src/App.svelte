@@ -299,12 +299,6 @@
     if (workspace.selectThread(threadId)) closeThreadSurfaces();
   }
 
-  function selectThreadFromKeyboard(event: KeyboardEvent, threadId: string) {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    selectThread(threadId);
-  }
-
   function toggleSidebar() {
     if (window.matchMedia('(max-width: 880px)').matches) sidebarOpen = !sidebarOpen;
     else sidebarCollapsed = !sidebarCollapsed;
@@ -585,7 +579,6 @@
       {addThread}
       {addThreadToProject}
       {selectThread}
-      {selectThreadFromKeyboard}
       {toggleSettled}
       {renameThread}
       {openThreadFolder}
@@ -624,7 +617,7 @@
             {#if fileHistory.length > 0}
               <div class="file-viewer-resume">
                 <button type="button" class="settings-action" onclick={goForwardInFileHistory}>
-                  Forward to file
+                  Return to file
                 </button>
               </div>
             {/if}
