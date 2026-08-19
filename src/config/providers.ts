@@ -1,4 +1,5 @@
 import claudeIcon from "@lobehub/icons-static-svg/icons/claude.svg?url";
+import cursorIcon from "@lobehub/icons-static-svg/icons/cursor.svg?url";
 import openAiIcon from "@lobehub/icons-static-svg/icons/openai.svg?url";
 import openCodeIcon from "@lobehub/icons-static-svg/icons/opencode.svg?url";
 
@@ -9,6 +10,7 @@ const icons = {
   codex: openAiIcon,
   claude: claudeIcon,
   opencode: openCodeIcon,
+  cursor: cursorIcon,
 };
 
 export const profiles: HarnessProfile[] = providerDefinitions.map((profile) => ({

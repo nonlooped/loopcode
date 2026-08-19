@@ -10,7 +10,11 @@ import type {
   ThreadStatus,
   TurnStatus,
 } from "../types/index.ts";
-import { readModelState, type AcpModelState } from "../utils/model-state.ts";
+import {
+  readCursorAvailableModels,
+  readModelState,
+  type AcpModelState,
+} from "../utils/model-state.ts";
 
 type RpcId = acp.JsonRpcId;
 
@@ -23,6 +27,31 @@ interface PendingPermission {
 interface PendingElicitation {
   fieldId: string;
   resolve: (response: acp.CreateElicitationResponse) => void;
+}
+
+interface CursorAskQuestionRequest {
+  title?: string;
+  questions: Array<{
+    id: string;
+    prompt: string;
+    options: Array<{ id: string; label: string }>;
+  }>;
+}
+
+type CursorAskQuestionResponse = {
+  outcome:
+    | {
+        outcome: "answered";
+        answers: Array<{ questionId: string; selectedOptionIds: string[] }>;
+      }
+    | { outcome: "cancelled" };
+};
+
+interface PendingCursorQuestion {
+  title?: string;
+  questions: CursorAskQuestionRequest["questions"];
+  answers: Array<{ questionId: string; selectedOptionIds: string[] }>;
+  resolve: (response: CursorAskQuestionResponse) => void;
 }
 
 export interface AcpTransport {
@@ -70,6 +99,7 @@ export class AcpConnection {
   #titleSessions = new Map<string, string[]>();
   #permissions = new Map<RpcId, PendingPermission>();
   #elicitations = new Map<RpcId, PendingElicitation>();
+  #cursorQuestions = new Map<RpcId, PendingCursorQuestion>();
   #activeToolIds = new Set<string>();
   #turnActive = false;
   #stopping = false;
@@ -117,6 +147,16 @@ export class AcpConnection {
         )
         .onRequest(acp.methods.client.elicitation.create, ({ params, requestId }) =>
           this.#requestElicitation(requestId, params),
+        )
+        .onRequest("cursor/ask_question", parseCursorAskQuestion, ({ params, requestId }) =>
+          this.#requestCursorQuestion(requestId, params),
+        )
+        .onRequest<unknown, { outcome: { outcome: "rejected"; reason: string } }>(
+          "cursor/create_plan",
+          (params) => params,
+          () => ({
+            outcome: { outcome: "rejected", reason: "LoopCode does not support plan approval." },
+          }),
         );
 
       this.#connection = client.connect({ readable, writable });
@@ -127,6 +167,7 @@ export class AcpConnection {
         clientCapabilities: {
           session: { configOptions: { boolean: {} } },
           elicitation: { form: {} },
+          ...(request.profileId === "cursor" ? { _meta: { parameterizedModelPicker: true } } : {}),
         },
         clientInfo: {
           name: "loopcode",
@@ -195,6 +236,12 @@ export class AcpConnection {
     }
   }
 
+  async listCursorModels() {
+    // TODO: Unsafe undocumented Cursor extension; replace it when stable ACP discovery is sufficient.
+    const response = await this.#requireContext().request("cursor/list_available_models", {});
+    return readCursorAvailableModels(response);
+  }
+
   async prompt(text: string, images: PromptImage[] = []) {
     if (this.#turnActive) throw new Error("This ACP session already has an active turn");
     const context = this.#requireContext();
@@ -245,29 +292,25 @@ export class AcpConnection {
     return this.setConfigOption(configId, modelId);
   }
 
-  async setConfigOption(configId: string, value: string) {
+  async setConfigOption(configId: string, value: string | boolean) {
+    const sessionId = this.#requireSessionId();
+    const params: acp.SetSessionConfigOptionRequest =
+      typeof value === "boolean"
+        ? { sessionId, configId, value, type: "boolean" }
+        : { sessionId, configId, value };
     const response = await this.#requireContext().request(
       acp.methods.agent.session.setConfigOption,
-      {
-        sessionId: this.#requireSessionId(),
-        configId,
-        value,
-      },
+      params,
     );
     return readModelState(response);
   }
 
-  async setBooleanConfigOption(configId: string, value: boolean) {
-    const response = await this.#requireContext().request(
-      acp.methods.agent.session.setConfigOption,
-      {
-        sessionId: this.#requireSessionId(),
-        configId,
-        value,
-        type: "boolean",
-      },
-    );
-    return readModelState(response);
+  setFastModeConfigOption(
+    configId: string,
+    value: boolean,
+    valueType: "boolean" | "string" = "boolean",
+  ) {
+    return this.setConfigOption(configId, valueType === "string" ? String(value) : value);
   }
 
   async generateTitle(cwd: string, prompt: string, selectedModelId: string) {
@@ -306,8 +349,10 @@ export class AcpConnection {
       this.#resolvePermission(requestId, {
         outcome: { outcome: "selected", optionId },
       });
-    } else {
+    } else if (this.#elicitations.has(requestId)) {
       this.#resolveElicitation(requestId, optionId);
+    } else {
+      this.#resolveCursorQuestion(requestId, optionId);
     }
   }
 
@@ -316,8 +361,10 @@ export class AcpConnection {
       this.#resolvePermission(requestId, {
         outcome: { outcome: "cancelled" },
       });
-    } else {
+    } else if (this.#elicitations.has(requestId)) {
       this.#resolveElicitation(requestId);
+    } else {
+      this.#resolveCursorQuestion(requestId);
     }
   }
 
@@ -462,6 +509,34 @@ export class AcpConnection {
     });
   }
 
+  #requestCursorQuestion(requestId: RpcId, params: CursorAskQuestionRequest) {
+    return new Promise<CursorAskQuestionResponse>((resolve) => {
+      this.#cursorQuestions.set(requestId, {
+        title: params.title,
+        questions: params.questions,
+        answers: [],
+        resolve,
+      });
+      this.#showNextCursorQuestion(requestId);
+    });
+  }
+
+  #showNextCursorQuestion(requestId: RpcId) {
+    const pending = this.#cursorQuestions.get(requestId);
+    if (!pending) return;
+    const question = pending.questions[pending.answers.length];
+    this.#callbacks.permission({
+      requestId,
+      type: "question",
+      title: pending.title ?? "Agent question",
+      detail: question.prompt,
+      options: question.options.map((option) => ({
+        optionId: option.id,
+        name: option.label,
+      })),
+    });
+  }
+
   #resolvePermission(requestId: RpcId, response: PermissionResponse) {
     const pending = this.#permissions.get(requestId);
     if (!pending) return;
@@ -480,6 +555,28 @@ export class AcpConnection {
     );
   }
 
+  #resolveCursorQuestion(requestId: RpcId, optionId?: string) {
+    const pending = this.#cursorQuestions.get(requestId);
+    if (!pending) return;
+    if (!optionId) {
+      this.#cursorQuestions.delete(requestId);
+      pending.resolve({ outcome: { outcome: "cancelled" } });
+      return;
+    }
+
+    pending.answers.push({
+      questionId: pending.questions[pending.answers.length].id,
+      selectedOptionIds: [optionId],
+    });
+    if (pending.answers.length < pending.questions.length) {
+      this.#showNextCursorQuestion(requestId);
+      return;
+    }
+
+    this.#cursorQuestions.delete(requestId);
+    pending.resolve({ outcome: { outcome: "answered", answers: pending.answers } });
+  }
+
   #cancelInteractions() {
     for (const pending of this.#permissions.values()) {
       pending.resolve({ outcome: { outcome: "cancelled" } });
@@ -489,6 +586,10 @@ export class AcpConnection {
       pending.resolve({ action: "cancel" });
     }
     this.#elicitations.clear();
+    for (const pending of this.#cursorQuestions.values()) {
+      pending.resolve({ outcome: { outcome: "cancelled" } });
+    }
+    this.#cursorQuestions.clear();
   }
 }
 
@@ -583,6 +684,25 @@ function questionFromInput(rawInput: unknown) {
     text: rawQuestion.question,
     options,
   };
+}
+
+function parseCursorAskQuestion(value: unknown): CursorAskQuestionRequest {
+  if (!isRecord(value) || !Array.isArray(value.questions)) {
+    throw new TypeError("Cursor returned an invalid question");
+  }
+  const questions = value.questions.filter(
+    (question): question is CursorAskQuestionRequest["questions"][number] =>
+      isRecord(question) &&
+      typeof question.id === "string" &&
+      typeof question.prompt === "string" &&
+      Array.isArray(question.options) &&
+      question.options.every(
+        (option) =>
+          isRecord(option) && typeof option.id === "string" && typeof option.label === "string",
+      ),
+  );
+  if (questions.length === 0) throw new TypeError("Cursor returned an invalid question");
+  return { title: typeof value.title === "string" ? value.title : undefined, questions };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

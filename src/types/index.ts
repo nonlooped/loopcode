@@ -109,9 +109,12 @@ export interface ReasoningModelOption {
   selectedId?: string;
 }
 
+export type FastModeValueType = "boolean" | "string";
+
 export interface FastModeOption {
   configId: string;
   enabled: boolean;
+  valueType?: FastModeValueType;
   description?: string;
 }
 
@@ -131,6 +134,7 @@ export interface ProviderSessionState {
   fastModeModelId?: string;
   fastModeOptionsByModel?: Record<string, FastModeOption>;
   fastModeEnabled?: boolean;
+  fastModeValueType?: FastModeValueType;
   fastModeDescription?: string;
   error?: string;
   errorDetails?: AcpErrorDetails;
@@ -179,6 +183,7 @@ export interface ProviderModelCatalog {
   fastModeModelId?: string;
   fastModeOptionsByModel?: Record<string, FastModeOption>;
   fastModeEnabled?: boolean;
+  fastModeValueType?: FastModeValueType;
   fastModeDescription?: string;
   error?: string;
 }

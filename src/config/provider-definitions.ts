@@ -21,6 +21,12 @@ export const providerDefinitions: ProviderDefinition[] = [
     command: "opencode",
     args: ["acp"],
   },
+  {
+    id: "cursor",
+    label: "Cursor",
+    command: "agent.cmd",
+    args: ["acp"],
+  },
 ];
 
 export function providerDefinitionById(profileId: string) {
