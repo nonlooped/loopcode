@@ -28,6 +28,14 @@ export interface ProjectFileChange {
   paths: string[];
 }
 
+export interface ComposerCompletionEntry {
+  kind: "file" | "folder" | "skill";
+  name: string;
+  path: string;
+  relativePath: string;
+  description?: string;
+}
+
 export async function launchHarness(
   request: LaunchRequest,
   onMessage: (event: BrokerEvent) => void,
@@ -84,6 +92,10 @@ export function pickFolder(): Promise<string | null> {
 
 export function getGitBranch(cwd: string): Promise<string | null> {
   return invoke<string | null>("get_git_branch", { cwd });
+}
+
+export function listComposerCompletions(projectRoot: string): Promise<ComposerCompletionEntry[]> {
+  return invoke<ComposerCompletionEntry[]>("list_composer_completions", { projectRoot });
 }
 
 export function readProjectDirectory(

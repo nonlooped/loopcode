@@ -11,6 +11,7 @@ import type {
   MessageImage,
   PermissionMode,
   PermissionRequest,
+  PromptPart,
   QuestionAnswer,
   ProviderModelCatalog,
   ProviderSessionState,
@@ -21,7 +22,7 @@ import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts
 import { discoverModelOptions, modelOptionsFromStates } from "../utils/model-options.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
 import { buildThreadTitlePrompt, normalizeThreadTitle } from "../utils/thread-title.ts";
-import { AcpConnection, readModelState, type AcpModelState } from "./acp.ts";
+import { AcpConnection, readModelState, type AcpModelState, type PromptContent } from "./acp.ts";
 import { recordDiagnostic } from "./native.ts";
 import { SessionUpdateHandler } from "./session-updates.ts";
 
@@ -53,7 +54,7 @@ export class ProviderRuntime {
     this.#permissionMode = mode;
   }
 
-  runTurn(thread: ThreadState, text: string, images: MessageImage[] = []) {
+  runTurn(thread: ThreadState, text: string, images: MessageImage[] = [], content?: PromptPart[]) {
     const profileId = thread.profileId;
     const provider = thread.providers[profileId];
     if (!text && images.length === 0) return;
@@ -69,7 +70,7 @@ export class ProviderRuntime {
     provider.error = undefined;
     provider.errorDetails = undefined;
     if (isFirstPrompt && !text) thread.title = "Image prompt";
-    addMessage(thread, "user", text, images);
+    addMessage(thread, "user", text, images, content);
     this.#updates.startTurn(thread.id, profileId);
 
     return this.#completeTurn(
@@ -78,6 +79,7 @@ export class ProviderRuntime {
       selectedModelId,
       text,
       images,
+      content,
       isFirstPrompt,
       turnToken,
     );
@@ -376,6 +378,7 @@ export class ProviderRuntime {
     selectedModelId: string,
     text: string,
     images: MessageImage[],
+    content: PromptPart[] | undefined,
     isFirstPrompt: boolean,
     turnToken: string,
   ) {
@@ -395,10 +398,7 @@ export class ProviderRuntime {
       return;
     }
 
-    const turnCompletion = connection.prompt(
-      text,
-      images.map(({ data, mimeType }) => ({ type: "image" as const, data, mimeType })),
-    );
+    const turnCompletion = connection.prompt(acpPrompt(content, text, images));
     const titleCompletion =
       isFirstPrompt && text
         ? this.#generateThreadTitle(thread, connection, text, selectedModelId)
@@ -625,6 +625,21 @@ export class ProviderRuntime {
     this.#setError(thread, profileId, details);
     if (thread.profileId === profileId) addMessage(thread, "error", details.message);
   }
+}
+
+function acpPrompt(content: PromptPart[] | undefined, text: string, images: MessageImage[]) {
+  const prompt: PromptContent[] = (content ?? (text ? [{ type: "text", text }] : [])).map((part) =>
+    part.type === "text"
+      ? { type: "text", text: part.text }
+      : {
+          type: "resource_link",
+          uri: part.reference.uri,
+          name: part.reference.name,
+          title: part.reference.relativePath,
+        },
+  );
+  prompt.push(...images.map(({ data, mimeType }) => ({ type: "image" as const, data, mimeType })));
+  return prompt;
 }
 
 function connectionKey(threadId: string, profileId: string) {

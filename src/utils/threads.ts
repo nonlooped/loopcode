@@ -43,6 +43,7 @@ export function createThread(
     messages: [],
     tools: [],
     draft: "",
+    draftReferences: [],
     providers: Object.fromEntries(
       providerDefinitions.map((profile) => [profile.id, createProviderState(profile.id, catalogs)]),
     ),

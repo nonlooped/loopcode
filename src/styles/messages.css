@@ -106,6 +106,10 @@
   line-height: 1.55;
 }
 
+.message-prompt-content {
+  white-space: pre-wrap;
+}
+
 .message-images {
   display: flex;
   max-width: min(420px, 65vw);

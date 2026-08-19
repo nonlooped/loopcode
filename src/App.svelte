@@ -49,6 +49,7 @@
     saveSidebarWidth,
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
+  import { promptParts, promptText } from './utils/prompt-content';
   import { timelineEntries } from './utils/timeline';
   import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
 
@@ -448,16 +449,19 @@
   async function sendPrompt() {
     const thread = selectedThread;
     if (!thread) return;
-    const text = thread.draft.trim();
+    const content = promptParts(thread.draft, thread.draftReferences);
+    const text = promptText(content).trim();
+    const referencedContent = thread.draftReferences.length > 0 ? content : undefined;
     const images: MessageImage[] = composerImages(thread.id)
       .map(({ data, mimeType, name }) => ({ data, mimeType, name }));
     const centeredComposerTop = selectedThreadEmpty && !reducedMotion
       ? threadViewElement?.querySelector<HTMLElement>('.composer-wrap')?.getBoundingClientRect().top
       : undefined;
-    const turn = providers.runTurn(thread, text, images);
+    const turn = providers.runTurn(thread, text, images, referencedContent);
     if (!turn) return;
 
     thread.draft = '';
+    thread.draftReferences = [];
     composerImagesByThread[thread.id] = [];
     attachmentErrorsByThread[thread.id] = '';
     if (centeredComposerTop !== undefined) animateComposerToTranscript(centeredComposerTop);

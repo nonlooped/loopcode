@@ -1,4 +1,4 @@
-import type { MessageImage, ThreadState, TimelineMessage } from "../types/index.ts";
+import type { MessageImage, PromptPart, ThreadState, TimelineMessage } from "../types/index.ts";
 
 export function nextTimestamp(thread: ThreadState) {
   return Math.max(Date.now(), thread.updatedAt + 1);
@@ -9,16 +9,24 @@ export function addMessage(
   role: TimelineMessage["role"],
   text: string,
   images: MessageImage[] = [],
+  content?: PromptPart[],
 ) {
   const createdAt = nextTimestamp(thread);
   thread.messages.push({
     id: crypto.randomUUID(),
     role,
     text,
+    ...(content ? { content: content.map(copyPromptPart) } : {}),
     ...(images.length > 0 ? { images: images.map((image) => ({ ...image })) } : {}),
     createdAt,
   });
   thread.updatedAt = createdAt;
+}
+
+function copyPromptPart(part: PromptPart): PromptPart {
+  return part.type === "text"
+    ? { ...part }
+    : { type: "reference", reference: { ...part.reference } };
 }
 
 export function appendMessage(

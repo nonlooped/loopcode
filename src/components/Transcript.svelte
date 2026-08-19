@@ -10,6 +10,7 @@
   import type { TimelineDisplayEntry } from '../types/timeline';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
+  import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
   import { isStreamingMessage, workGroupMeta } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
@@ -192,7 +193,28 @@
           >
             <header>{message.role === 'user' ? 'You' : threadHarness(thread)}</header>
             <div class="message-body">
-              <MarkdownMessage id={message.id} source={message.text} {streaming} />
+              {#if message.role === 'user' && message.content}
+                <div class="message-prompt-content">
+                  {#each message.content as part}
+                    {#if part.type === 'text'}
+                      <span>{part.text}</span>
+                    {:else}
+                      {@const reference = part.reference}
+                      <span class:skill={reference.kind === 'skill'} class="message-reference" title={reference.relativePath}>
+                        {#if reference.kind === 'skill'}
+                          <span class="composer-reference-mark">$</span>
+                        {:else}
+                          {@const icon = reference.kind === 'folder' ? materialFolderIcon(reference.name, false) : materialFileIcon(reference.name)}
+                          {#if icon}<img src={icon} alt="" />{/if}
+                        {/if}
+                        <span>{reference.name}</span>
+                      </span>
+                    {/if}
+                  {/each}
+                </div>
+              {:else}
+                <MarkdownMessage id={message.id} source={message.text} {streaming} />
+              {/if}
               {#if message.images && message.images.length > 0}
                 <div class="message-images" aria-label="Attached images">
                   {#each message.images as image, index (`${message.id}-image-${index}`)}
