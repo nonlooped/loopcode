@@ -2,17 +2,21 @@ import type { HarnessProfile } from "../types/index.ts";
 
 export type ProviderDefinition = Omit<HarnessProfile, "icon">;
 
+const isWindows =
+  (import.meta as unknown as { env?: Record<string, string> }).env?.TAURI_ENV_PLATFORM ===
+  "windows";
+
 export const providerDefinitions: ProviderDefinition[] = [
   {
     id: "codex",
     label: "Codex",
-    command: "npx",
+    command: isWindows ? "npx.cmd" : "npx",
     args: ["--yes", "@agentclientprotocol/codex-acp@1.4.0"],
   },
   {
     id: "claude",
     label: "Claude",
-    command: "npx",
+    command: isWindows ? "npx.cmd" : "npx",
     args: ["--yes", "@agentclientprotocol/claude-agent-acp@0.69.0"],
   },
   {
@@ -24,7 +28,7 @@ export const providerDefinitions: ProviderDefinition[] = [
   {
     id: "cursor",
     label: "Cursor",
-    command: "agent",
+    command: isWindows ? "agent.cmd" : "agent",
     args: ["acp"],
   },
 ];
