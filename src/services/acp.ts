@@ -48,7 +48,9 @@ type CursorAskQuestionResponse = {
 };
 
 interface PendingCursorQuestion {
-  questionId: string;
+  title?: string;
+  questions: CursorAskQuestionRequest["questions"];
+  answers: Array<{ questionId: string; selectedOptionIds: string[] }>;
   resolve: (response: CursorAskQuestionResponse) => void;
 }
 
@@ -508,19 +510,30 @@ export class AcpConnection {
   }
 
   #requestCursorQuestion(requestId: RpcId, params: CursorAskQuestionRequest) {
-    const question = params.questions[0];
     return new Promise<CursorAskQuestionResponse>((resolve) => {
-      this.#cursorQuestions.set(requestId, { questionId: question.id, resolve });
-      this.#callbacks.permission({
-        requestId,
-        type: "question",
-        title: params.title ?? "Agent question",
-        detail: question.prompt,
-        options: question.options.map((option) => ({
-          optionId: option.id,
-          name: option.label,
-        })),
+      this.#cursorQuestions.set(requestId, {
+        title: params.title,
+        questions: params.questions,
+        answers: [],
+        resolve,
       });
+      this.#showNextCursorQuestion(requestId);
+    });
+  }
+
+  #showNextCursorQuestion(requestId: RpcId) {
+    const pending = this.#cursorQuestions.get(requestId);
+    if (!pending) return;
+    const question = pending.questions[pending.answers.length];
+    this.#callbacks.permission({
+      requestId,
+      type: "question",
+      title: pending.title ?? "Agent question",
+      detail: question.prompt,
+      options: question.options.map((option) => ({
+        optionId: option.id,
+        name: option.label,
+      })),
     });
   }
 
@@ -545,15 +558,23 @@ export class AcpConnection {
   #resolveCursorQuestion(requestId: RpcId, optionId?: string) {
     const pending = this.#cursorQuestions.get(requestId);
     if (!pending) return;
-    this.#cursorQuestions.delete(requestId);
-    pending.resolve({
-      outcome: optionId
-        ? {
-            outcome: "answered",
-            answers: [{ questionId: pending.questionId, selectedOptionIds: [optionId] }],
-          }
-        : { outcome: "cancelled" },
+    if (!optionId) {
+      this.#cursorQuestions.delete(requestId);
+      pending.resolve({ outcome: { outcome: "cancelled" } });
+      return;
+    }
+
+    pending.answers.push({
+      questionId: pending.questions[pending.answers.length].id,
+      selectedOptionIds: [optionId],
     });
+    if (pending.answers.length < pending.questions.length) {
+      this.#showNextCursorQuestion(requestId);
+      return;
+    }
+
+    this.#cursorQuestions.delete(requestId);
+    pending.resolve({ outcome: { outcome: "answered", answers: pending.answers } });
   }
 
   #cancelInteractions() {

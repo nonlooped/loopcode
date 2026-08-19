@@ -232,6 +232,14 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
                     { id: "postgres", label: "Postgres" },
                   ],
                 },
+                {
+                  id: "region",
+                  prompt: "Which region should we use?",
+                  options: [
+                    { id: "us", label: "US" },
+                    { id: "eu", label: "EU" },
+                  ],
+                },
               ],
             },
           },
@@ -598,16 +606,16 @@ void test("presents question tool input as an agent question", async () => {
   assert.deepEqual(response.result, { outcome: { outcome: "selected", optionId: "sqlite" } });
 });
 
-void test("presents Cursor questions and declines Cursor plans", async () => {
+void test("presents every Cursor question and declines Cursor plans", async () => {
   const fake = fakeTransport();
-  let request;
+  const requests = [];
   const connection = new AcpConnection(
     {
       ready: () => {},
       update: () => {},
       permission: (value) => {
-        request = value;
-        connection.answerPermission(value.requestId, "sqlite");
+        requests.push(value);
+        connection.answerPermission(value.requestId, requests.length === 1 ? "sqlite" : "eu");
       },
       stderr: () => {},
       error: () => {},
@@ -621,20 +629,32 @@ void test("presents Cursor questions and declines Cursor plans", async () => {
   fake.requestCursorPlan();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.deepEqual(request, {
-    requestId: 102,
-    type: "question",
-    title: "Storage",
-    detail: "Which database should we use?",
-    options: [
-      { optionId: "sqlite", name: "SQLite" },
-      { optionId: "postgres", name: "Postgres" },
+  assert.deepEqual(
+    requests.map(({ detail, options }) => ({ detail, options })),
+    [
+      {
+        detail: "Which database should we use?",
+        options: [
+          { optionId: "sqlite", name: "SQLite" },
+          { optionId: "postgres", name: "Postgres" },
+        ],
+      },
+      {
+        detail: "Which region should we use?",
+        options: [
+          { optionId: "us", name: "US" },
+          { optionId: "eu", name: "EU" },
+        ],
+      },
     ],
-  });
+  );
   assert.deepEqual(fake.sent.find((message) => message.id === 102 && "result" in message).result, {
     outcome: {
       outcome: "answered",
-      answers: [{ questionId: "database", selectedOptionIds: ["sqlite"] }],
+      answers: [
+        { questionId: "database", selectedOptionIds: ["sqlite"] },
+        { questionId: "region", selectedOptionIds: ["eu"] },
+      ],
     },
   });
   assert.deepEqual(fake.sent.find((message) => message.id === 103 && "result" in message).result, {
