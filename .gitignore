@@ -15,8 +15,13 @@
 
 # Local agent context
 /.agents/
+/.codex/
+/.cursor/
+/.opencode/
+/.pi/
 /AGENTS.md
 /DESIGN.md
+/opencode.json
 skills-lock.json
 
 # Generated reports and logs
