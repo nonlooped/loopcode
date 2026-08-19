@@ -47,6 +47,7 @@
     images: ComposerImage[];
     attachmentError?: string;
     projectName: string;
+    completionRevision: number;
     currentBranch: string | null | undefined;
     reducedMotion: boolean;
     attachImages: (files: File[]) => void;
@@ -117,6 +118,7 @@
   });
 
   $effect(() => {
+    void props.completionRevision;
     void loadCompletionEntries(props.thread.cwd);
   });
 

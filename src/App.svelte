@@ -97,11 +97,13 @@
   let fileHistory = $state<string[]>([]);
   let fileHistoryIndex = $state(-1);
   let fileRevision = $state(0);
+  let composerCompletionRevision = $state(0);
   let fileViewerThreadId = $state('');
   let threadViewElement = $state<HTMLElement>();
   let zoomPercent = $state<number>();
   let currentZoom = 100;
   let zoomNoticeTimer: number | undefined;
+  let completionRefreshTimer: number | undefined;
   let closing = false;
   let branchLookup = 0;
   let stopSidebarResize: (() => void) | undefined;
@@ -211,6 +213,7 @@
       disposed = true;
       stopSidebarResize?.();
       window.clearTimeout(zoomNoticeTimer);
+      window.clearTimeout(completionRefreshTimer);
       unlistenResize?.();
       unlistenClose?.();
     };
@@ -354,6 +357,8 @@
 
   function projectFilesChanged(paths: string[]) {
     if (activeFilePath && paths.includes(activeFilePath)) fileRevision += 1;
+    window.clearTimeout(completionRefreshTimer);
+    completionRefreshTimer = window.setTimeout(() => { composerCompletionRevision += 1; }, 160);
   }
 
   function startSidebarResize(event: PointerEvent, side: 'left' | 'right') {
@@ -689,6 +694,7 @@
                   images={composerImages(selectedThread.id)}
                   attachmentError={attachmentErrorsByThread[selectedThread.id]}
                   projectName={workspace.projectNameForThread(selectedThread)}
+                  completionRevision={composerCompletionRevision}
                   {currentBranch}
                   {reducedMotion}
                   attachImages={(files) => { void attachImages(files, selectedThread.id); }}
