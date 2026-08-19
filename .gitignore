@@ -17,6 +17,7 @@
 /.agents/
 /AGENTS.md
 /DESIGN.md
+skills-lock.json
 
 # Generated reports and logs
 /reports/

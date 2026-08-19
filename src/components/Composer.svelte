@@ -9,6 +9,7 @@
     IconPaperclip,
     IconPlayerStop,
     IconPlugConnected,
+    IconSparkles,
     IconX,
   } from '@tabler/icons-svelte';
 
@@ -17,11 +18,27 @@
   import ModelPicker from './ModelPicker.svelte';
   import ReasoningPicker from './ReasoningPicker.svelte';
   import { profileById } from '../config/providers';
-  import type { ComposerImage, ModelOption, ProviderModelCatalog, ThreadState } from '../types';
+  import {
+    listComposerCompletions,
+    type ComposerCompletionEntry,
+  } from '../services/native';
+  import type {
+    ComposerImage,
+    ComposerReference,
+    ModelOption,
+    ProviderModelCatalog,
+    ThreadState,
+  } from '../types';
   import { copyImage, saveImage } from '../utils/clipboard';
   import { composerLayoutKeyframes, usesExpandedComposerLayout, type LayoutBox } from '../utils/composer-layout';
   import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
   import { fastModeAvailable } from '../utils/fast-mode';
+  import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
+  import {
+    fuzzyScore,
+    hasPromptContent,
+    REFERENCE_PLACEHOLDER,
+  } from '../utils/prompt-content';
   import { activeProvider, threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -30,6 +47,7 @@
     images: ComposerImage[];
     attachmentError?: string;
     projectName: string;
+    completionRevision: number;
     currentBranch: string | null | undefined;
     reducedMotion: boolean;
     attachImages: (files: File[]) => void;
@@ -51,19 +69,76 @@
   let composerElement = $state<HTMLElement>();
   let attachButton = $state<HTMLButtonElement>();
   let composerFooter = $state<HTMLElement>();
-  let promptTextarea = $state<HTMLTextAreaElement>();
+  let promptEditor = $state<HTMLElement>();
   let imageInput = $state<HTMLInputElement>();
   let modelTrigger = $state<HTMLButtonElement>();
   let contextMenu = $state<ContextMenuState>();
   let imagePreview = $state<{ src: string; name: string }>();
+  let completionEntries = $state<ComposerCompletionEntry[]>([]);
+  let completionStatus = $state<'loading' | 'ready' | 'error'>('loading');
+  let completionPrefix = $state<'$' | '@'>();
+  let completionQuery = $state('');
+  let completionIndex = $state(0);
+  let completionRange: Range | undefined;
+  let completionLoadToken = 0;
+  let localDraft = '';
+  let localThreadId = '';
   const provider = $derived(activeProvider(props.thread));
   const status = $derived(threadStatus(props.thread));
+  const completionResults = $derived.by(() => {
+    const prefix = completionPrefix;
+    if (!prefix || completionStatus !== 'ready') return [];
+    const query = completionQuery;
+    return completionEntries
+      .filter((entry) => prefix === '$' ? entry.kind === 'skill' : entry.kind !== 'skill')
+      .flatMap((entry) => {
+        const score = query ? fuzzyScore(`${entry.name} ${entry.relativePath}`, query) : 0;
+        return score === undefined ? [] : [{ entry, score }];
+      })
+      .sort((left, right) =>
+        right.score - left.score
+        || Number(right.entry.kind === 'folder') - Number(left.entry.kind === 'folder')
+        || left.entry.relativePath.localeCompare(right.entry.relativePath),
+      )
+      .slice(0, 40)
+      .map(({ entry }) => entry);
+  });
 
   $effect(() => {
-    const draft = props.thread.draft;
-    void draft;
-    void tick().then(resizePromptTextarea);
+    const { id, draft } = props.thread;
+    const references = props.thread.draftReferences;
+    if (!promptEditor || (id === localThreadId && draft === localDraft)) return;
+    if (id !== localThreadId) closeCompletion();
+    localThreadId = id;
+    localDraft = draft;
+    void tick().then(() => {
+      renderDraft(draft, references);
+      resizePromptEditor();
+    });
   });
+
+  $effect(() => {
+    void props.completionRevision;
+    void loadCompletionEntries(props.thread.cwd);
+  });
+
+  async function loadCompletionEntries(cwd: string) {
+    const token = ++completionLoadToken;
+    completionStatus = 'loading';
+    void tick().then(updateMissingPills);
+    try {
+      const entries = await listComposerCompletions(cwd);
+      if (token !== completionLoadToken) return;
+      completionEntries = entries;
+      completionStatus = 'ready';
+      updateMissingPills();
+    } catch {
+      if (token === completionLoadToken) {
+        completionStatus = 'error';
+        updateMissingPills();
+      }
+    }
+  }
 
   function closePickers(returnFocus = false) {
     const restoreModelFocus = returnFocus && modelPickerOpen;
@@ -94,23 +169,23 @@
       && Boolean(provider.selectedModelId);
   }
 
-  function resizePromptTextarea() {
-    if (!promptTextarea) return;
+  function resizePromptEditor() {
+    if (!promptEditor) return;
     const nextExpanded = usesExpandedComposerLayout(measureCompactPromptHeight());
     const previousLayout = nextExpanded === expanded ? undefined : captureComposerLayout();
     expanded = nextExpanded;
     if (previousLayout) {
       void tick().then(() => {
-        sizePromptTextarea();
+        sizePromptEditor();
         animateComposerLayout(previousLayout);
       });
     } else {
-      sizePromptTextarea();
+      sizePromptEditor();
     }
   }
 
   function measureCompactPromptHeight() {
-    if (!composerElement || !promptTextarea || !attachButton || !composerFooter) return 0;
+    if (!composerElement || !promptEditor || !attachButton || !composerFooter) return 0;
     const composerStyle = getComputedStyle(composerElement);
     const horizontalPadding = Number.parseFloat(composerStyle.paddingLeft)
       + Number.parseFloat(composerStyle.paddingRight);
@@ -120,25 +195,25 @@
       - attachButton.offsetWidth
       - composerFooter.offsetWidth
       - columnGap * 2;
-    const previousWidth = promptTextarea.style.width;
-    const previousHeight = promptTextarea.style.height;
-    promptTextarea.style.width = `${Math.max(1, compactWidth)}px`;
-    promptTextarea.style.height = 'auto';
-    const height = promptTextarea.scrollHeight;
-    promptTextarea.style.width = previousWidth;
-    promptTextarea.style.height = previousHeight;
+    const previousWidth = promptEditor.style.width;
+    const previousHeight = promptEditor.style.height;
+    promptEditor.style.width = `${Math.max(1, compactWidth)}px`;
+    promptEditor.style.height = 'auto';
+    const height = promptEditor.scrollHeight;
+    promptEditor.style.width = previousWidth;
+    promptEditor.style.height = previousHeight;
     return height;
   }
 
-  function sizePromptTextarea() {
-    if (!promptTextarea) return;
-    promptTextarea.style.height = 'auto';
-    const maxHeight = Number.parseFloat(getComputedStyle(promptTextarea).maxHeight);
+  function sizePromptEditor() {
+    if (!promptEditor) return;
+    promptEditor.style.height = 'auto';
+    const maxHeight = Number.parseFloat(getComputedStyle(promptEditor).maxHeight);
     const height = Number.isFinite(maxHeight)
-      ? Math.min(promptTextarea.scrollHeight, maxHeight)
-      : promptTextarea.scrollHeight;
-    promptTextarea.style.height = `${height}px`;
-    promptTextarea.style.overflowY = promptTextarea.scrollHeight > height ? 'auto' : 'hidden';
+      ? Math.min(promptEditor.scrollHeight, maxHeight)
+      : promptEditor.scrollHeight;
+    promptEditor.style.height = `${height}px`;
+    promptEditor.style.overflowY = promptEditor.scrollHeight > height ? 'auto' : 'hidden';
   }
 
   function layoutBox(element: Element): LayoutBox {
@@ -147,10 +222,10 @@
   }
 
   function captureComposerLayout() {
-    if (!composerElement || !promptTextarea || !attachButton || !composerFooter) return;
+    if (!composerElement || !promptEditor || !attachButton || !composerFooter) return;
     return {
       composerHeight: composerElement.getBoundingClientRect().height,
-      elements: [promptTextarea, attachButton, composerFooter].map((element) => ({
+      elements: [promptEditor, attachButton, composerFooter].map((element) => ({
         element,
         previous: layoutBox(element),
       })),
@@ -174,6 +249,231 @@
     }
   }
 
+  function closeCompletion() {
+    completionPrefix = undefined;
+    completionQuery = '';
+    completionIndex = 0;
+    completionRange = undefined;
+  }
+
+  function detectCompletion() {
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    if (!promptEditor || !node || node.nodeType !== Node.TEXT_NODE || !promptEditor.contains(node)) {
+      closeCompletion();
+      return;
+    }
+    const text = node.textContent?.slice(0, selection?.anchorOffset ?? 0) ?? '';
+    const match = /(?:^|\s)([$@])([^\s$@]*)$/.exec(text);
+    if (!match) {
+      closeCompletion();
+      return;
+    }
+    if (!completionPrefix && completionStatus !== 'ready') {
+      void loadCompletionEntries(props.thread.cwd);
+    }
+    completionPrefix = match[1] === '$' ? '$' : '@';
+    completionQuery = match[2];
+    completionIndex = 0;
+    const end = selection?.anchorOffset ?? 0;
+    completionRange = document.createRange();
+    completionRange.setStart(node, end - completionQuery.length - 1);
+    completionRange.setEnd(node, end);
+  }
+
+  function referenceAvailable(reference: ComposerReference) {
+    return completionEntries.some((entry) => entry.kind === reference.kind && entry.path === reference.path);
+  }
+
+  function hasMissingReferences() {
+    return completionStatus === 'ready'
+      && props.thread.draftReferences.some((reference) => !referenceAvailable(reference));
+  }
+
+  function createReferenceElement(reference: ComposerReference) {
+    const pill = document.createElement('span');
+    pill.className = `composer-reference ${reference.kind === 'skill' ? 'skill' : ''}`;
+    pill.contentEditable = 'false';
+    pill.dataset.referenceId = reference.id;
+    pill.title = reference.relativePath;
+    pill.setAttribute('aria-label', `${reference.kind} ${reference.name}`);
+
+    if (reference.kind === 'skill') {
+      const mark = document.createElement('span');
+      mark.className = 'composer-reference-mark';
+      mark.textContent = '$';
+      pill.append(mark);
+    } else {
+      const icon = reference.kind === 'folder'
+        ? materialFolderIcon(reference.name, false)
+        : materialFileIcon(reference.name);
+      if (icon) {
+        const image = document.createElement('img');
+        image.src = icon;
+        image.alt = '';
+        pill.append(image);
+      }
+    }
+    const label = document.createElement('span');
+    label.textContent = reference.name;
+    pill.append(label);
+    return pill;
+  }
+
+  function renderDraft(draft: string, references: ComposerReference[]) {
+    if (!promptEditor) return;
+    promptEditor.replaceChildren();
+    const texts = draft.split(REFERENCE_PLACEHOLDER);
+    for (const [index, text] of texts.entries()) {
+      if (text) promptEditor.append(document.createTextNode(text));
+      const reference = references[index];
+      if (reference) promptEditor.append(createReferenceElement(reference));
+    }
+    updateMissingPills();
+  }
+
+  function updateMissingPills() {
+    if (!promptEditor) return;
+    const references = new Map(props.thread.draftReferences.map((reference) => [reference.id, reference]));
+    for (const pill of promptEditor.querySelectorAll<HTMLElement>('[data-reference-id]')) {
+      const reference = references.get(pill.dataset.referenceId ?? '');
+      const missing = completionStatus === 'ready' && reference && !referenceAvailable(reference);
+      pill.classList.toggle('missing', Boolean(missing));
+      if (reference) pill.title = missing ? `${reference.relativePath} is missing` : reference.relativePath;
+    }
+  }
+
+  function readEditorDraft() {
+    if (!promptEditor) return { draft: '', references: [] as ComposerReference[] };
+    const known = new Map(props.thread.draftReferences.map((reference) => [reference.id, reference]));
+    const references: ComposerReference[] = [];
+    let draft = '';
+    const readNode = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        draft += node.textContent ?? '';
+        return;
+      }
+      if (!(node instanceof HTMLElement)) return;
+      const reference = known.get(node.dataset.referenceId ?? '');
+      if (reference) {
+        draft += REFERENCE_PLACEHOLDER;
+        references.push(reference);
+        return;
+      }
+      if (node.tagName === 'BR') {
+        draft += '\n';
+        return;
+      }
+      for (const child of node.childNodes) readNode(child);
+    };
+    for (const child of promptEditor.childNodes) readNode(child);
+    return { draft, references };
+  }
+
+  function syncDraftFromEditor() {
+    const { draft, references } = readEditorDraft();
+    props.thread.draft = draft;
+    props.thread.draftReferences = references;
+    localDraft = draft;
+    updateMissingPills();
+  }
+
+  function insertText(text: string) {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const node = document.createTextNode(text);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    syncDraftFromEditor();
+    detectCompletion();
+    resizePromptEditor();
+  }
+
+  function fileUri(path: string) {
+    const normalized = path.replace(/^\\\\\?\\/, '').replaceAll('\\', '/');
+    return new URL(normalized.startsWith('//') ? `file:${normalized}` : `file://${normalized.startsWith('/') ? '' : '/'}${normalized}`).href;
+  }
+
+  function chooseCompletion(entry: ComposerCompletionEntry) {
+    const range = completionRange?.cloneRange();
+    if (!promptEditor || !range || !promptEditor.contains(range.commonAncestorContainer)) return;
+    const reference: ComposerReference = {
+      id: crypto.randomUUID(),
+      kind: entry.kind,
+      name: entry.name,
+      path: entry.path,
+      relativePath: entry.relativePath,
+      uri: fileUri(entry.path),
+    };
+    props.thread.draftReferences = [...props.thread.draftReferences, reference];
+    range.deleteContents();
+    const pill = createReferenceElement(reference);
+    const trailingSpace = document.createTextNode(' ');
+    range.insertNode(trailingSpace);
+    range.insertNode(pill);
+    range.setStart(trailingSpace, 1);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    closeCompletion();
+    syncDraftFromEditor();
+    resizePromptEditor();
+    promptEditor.focus();
+  }
+
+  function handleEditorInput() {
+    if (promptEditor?.childNodes.length === 1 && promptEditor.firstChild?.nodeName === 'BR') {
+      promptEditor.replaceChildren();
+    }
+    syncDraftFromEditor();
+    detectCompletion();
+    resizePromptEditor();
+  }
+
+  function handleEditorKeydown(event: KeyboardEvent) {
+    if (completionPrefix) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (completionResults.length > 0) {
+          completionIndex = (completionIndex + (event.key === 'ArrowDown' ? 1 : -1) + completionResults.length) % completionResults.length;
+          void tick().then(() =>
+            document.getElementById(`composer-completion-${completionIndex}`)?.scrollIntoView({ block: 'nearest' }),
+          );
+        }
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        if (event.key === 'Enter' && completionStatus === 'loading') {
+          event.preventDefault();
+          return;
+        }
+        const entry = completionResults[completionIndex];
+        if (entry) {
+          event.preventDefault();
+          chooseCompletion(entry);
+          return;
+        }
+        closeCompletion();
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeCompletion();
+        return;
+      }
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (event.shiftKey) insertText('\n');
+      else if (!hasMissingReferences()) props.send();
+    }
+  }
+
   function openImageMenu(event: MouseEvent, image: ComposerImage) {
     contextMenu = menuFromEvent(event, [
       { label: 'Open preview', action: () => { imagePreview = { src: image.previewUrl, name: image.name }; } },
@@ -191,15 +491,16 @@
   }
 
   function handlePaste(event: ClipboardEvent) {
+    event.preventDefault();
     const files = Array.from(event.clipboardData?.items ?? [])
       .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
       .flatMap((item) => {
         const file = item.getAsFile();
         return file ? [file] : [];
       });
-    if (files.length === 0) return;
-    if (!event.clipboardData?.getData('text/plain')) event.preventDefault();
-    props.attachImages(files);
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    if (text) insertText(text);
+    if (files.length > 0) props.attachImages(files);
   }
 
   function chooseModel(profileId: string, model: ModelOption) {
@@ -241,11 +542,22 @@
     <button bind:this={attachButton} class="attach-button" type="button" aria-label="Attach images" title="Attach images (you can also paste them)" disabled={!canEdit()} onclick={() => imageInput?.click()}>
       <IconPaperclip size={16} stroke={1.7} />
     </button>
-    <textarea
-      bind:this={promptTextarea}
-      bind:value={props.thread.draft}
+    <!-- svelte-ignore a11y_role_supports_aria_props -->
+    <div
+      bind:this={promptEditor}
+      class="prompt-editor"
+      role="combobox"
       aria-label="Prompt"
-      placeholder={status === 'running'
+      aria-autocomplete="list"
+      aria-haspopup="listbox"
+      aria-expanded={Boolean(completionPrefix)}
+      aria-controls={completionPrefix ? 'composer-autocomplete' : undefined}
+      aria-activedescendant={completionPrefix && completionResults[completionIndex] ? `composer-completion-${completionIndex}` : undefined}
+      aria-disabled={!canEdit()}
+      aria-multiline="true"
+      tabindex={canEdit() ? 0 : -1}
+      contenteditable={canEdit()}
+      data-placeholder={status === 'running'
         ? 'Agent is working...'
         : status === 'connecting'
           ? `Starting ${threadHarness(props.thread)}...`
@@ -256,17 +568,48 @@
             : status === 'stopped'
               ? 'Provider stopped — switch provider or reconnect'
               : 'Ask anything…'}
-      disabled={!canEdit()}
-      rows="1"
-      oninput={resizePromptTextarea}
+      oninput={handleEditorInput}
       onpaste={handlePaste}
-      onkeydown={(event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault();
-          props.send();
-        }
-      }}
-    ></textarea>
+      onkeydown={handleEditorKeydown}
+      onblur={() => { window.setTimeout(closeCompletion, 100); }}
+    ></div>
+    {#if completionPrefix}
+      <div id="composer-autocomplete" class="composer-autocomplete" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : 'Workspace files'}>
+        {#if completionStatus === 'loading'}
+          <p>Loading…</p>
+        {:else if completionStatus === 'error'}
+          <p>Autocomplete unavailable.</p>
+        {:else if completionResults.length === 0}
+          <p>No matches.</p>
+        {:else}
+          {#each completionResults as entry, index (`${entry.kind}-${entry.path}`)}
+            <button
+              id={`composer-completion-${index}`}
+              type="button"
+              role="option"
+              aria-selected={index === completionIndex}
+              class:active={index === completionIndex}
+              onpointerenter={() => { completionIndex = index; }}
+              onpointerdown={(event) => {
+                event.preventDefault();
+                chooseCompletion(entry);
+              }}
+            >
+              {#if entry.kind === 'skill'}
+                <span class="composer-completion-skill"><IconSparkles size={14} stroke={1.7} /></span>
+              {:else}
+                {@const icon = entry.kind === 'folder' ? materialFolderIcon(entry.name, false) : materialFileIcon(entry.name)}
+                {#if icon}<img src={icon} alt="" />{/if}
+              {/if}
+              <span class="composer-completion-copy">
+                <strong>{entry.name}</strong>
+                <small>{entry.description ?? entry.relativePath}</small>
+              </span>
+            </button>
+          {/each}
+        {/if}
+      </div>
+    {/if}
     <div bind:this={composerFooter} class="composer-footer">
       <div class="composer-context">
         <div class="model-picker-wrap">
@@ -309,7 +652,7 @@
       {:else if status === 'error' || status === 'stopped'}
         <button class="reconnect-button" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.7} /></button>
       {:else}
-        <button class="send-button" aria-label="Send prompt" title="Send prompt" disabled={(!props.thread.draft.trim() && props.images.length === 0) || !canSend()} onclick={props.send}>
+        <button class="send-button" aria-label="Send prompt" title={hasMissingReferences() ? 'Remove missing references before sending' : 'Send prompt'} disabled={(!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
           <IconArrowUp size={17} stroke={2} />
         </button>
       {/if}
@@ -340,8 +683,13 @@
 {/if}
 
 <svelte:window
-  onblur={() => { if (modelPickerOpen || reasoningPickerOpen) closePickers(); }}
+  onblur={() => {
+    closeCompletion();
+    if (modelPickerOpen || reasoningPickerOpen) closePickers();
+  }}
   onkeydown={(event) => {
-    if (event.key === 'Escape' && (modelPickerOpen || reasoningPickerOpen)) closePickers(true);
+    if (event.key !== 'Escape') return;
+    if (completionPrefix) closeCompletion();
+    else if (modelPickerOpen || reasoningPickerOpen) closePickers(true);
   }}
 />

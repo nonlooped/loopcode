@@ -1,7 +1,9 @@
 import { providerDefinitionById } from "../config/provider-definitions.ts";
 import type {
+  ComposerReference,
   MessageImage,
   PersistedWorkspace,
+  PromptPart,
   ProjectState,
   ProviderModelCatalog,
   ThreadState,
@@ -35,10 +37,12 @@ export function workspaceSnapshot(
       cwd: thread.cwd,
       messages: thread.messages.map((message) => ({
         ...message,
+        content: message.content?.map(copyPromptPart),
         images: message.images?.map((image) => ({ ...image })),
       })),
       tools: thread.tools.map((tool) => ({ ...tool, locations: [...tool.locations] })),
       draft: thread.draft,
+      draftReferences: thread.draftReferences.map((reference) => ({ ...reference })),
       updatedAt: thread.updatedAt,
       settled: thread.settled,
       projectId: thread.projectId ?? null,
@@ -147,6 +151,7 @@ function restoreThread(
     messages,
     tools,
     draft: typeof value.draft === "string" ? value.draft : "",
+    draftReferences: restoreReferences(value.draftReferences),
     updatedAt,
     settled: value.settled === true,
     projectId: typeof value.projectId === "string" ? value.projectId : null,
@@ -186,7 +191,55 @@ function restoreMessage(value: unknown): TimelineMessage | undefined {
   ) {
     return undefined;
   }
-  return { id, role, text, images: restoreMessageImages(value.images), createdAt };
+  return {
+    id,
+    role,
+    text,
+    content: restorePromptParts(value.content),
+    images: restoreMessageImages(value.images),
+    createdAt,
+  };
+}
+
+function copyPromptPart(part: PromptPart): PromptPart {
+  return part.type === "text"
+    ? { ...part }
+    : { type: "reference", reference: { ...part.reference } };
+}
+
+function restorePromptParts(value: unknown): PromptPart[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const parts = value.flatMap((part): PromptPart[] => {
+    if (!isObject(part)) return [];
+    if (part.type === "text" && typeof part.text === "string")
+      return [{ type: "text", text: part.text }];
+    const reference = part.type === "reference" ? restoreReference(part.reference) : undefined;
+    return reference ? [{ type: "reference", reference }] : [];
+  });
+  return parts.length > 0 ? parts : undefined;
+}
+
+function restoreReferences(value: unknown): ComposerReference[] {
+  return Array.isArray(value)
+    ? value.flatMap((item) => {
+        const reference = restoreReference(item);
+        return reference ? [reference] : [];
+      })
+    : [];
+}
+
+function restoreReference(value: unknown): ComposerReference | undefined {
+  if (!isObject(value)) return undefined;
+  const { kind } = value;
+  if (kind !== "file" && kind !== "folder" && kind !== "skill") return undefined;
+  const id = stringValue(value.id);
+  const name = stringValue(value.name);
+  const path = stringValue(value.path);
+  const relativePath = stringValue(value.relativePath);
+  const uri = stringValue(value.uri);
+  return id && name && path && relativePath && uri
+    ? { id, kind, name, path, relativePath, uri }
+    : undefined;
 }
 
 function restoreMessageImages(value: unknown): MessageImage[] | undefined {

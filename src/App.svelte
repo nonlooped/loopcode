@@ -49,6 +49,7 @@
     saveSidebarWidth,
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
+  import { promptParts, promptText } from './utils/prompt-content';
   import { timelineEntries } from './utils/timeline';
   import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
 
@@ -96,11 +97,13 @@
   let fileHistory = $state<string[]>([]);
   let fileHistoryIndex = $state(-1);
   let fileRevision = $state(0);
+  let composerCompletionRevision = $state(0);
   let fileViewerThreadId = $state('');
   let threadViewElement = $state<HTMLElement>();
   let zoomPercent = $state<number>();
   let currentZoom = 100;
   let zoomNoticeTimer: number | undefined;
+  let completionRefreshTimer: number | undefined;
   let closing = false;
   let branchLookup = 0;
   let stopSidebarResize: (() => void) | undefined;
@@ -210,6 +213,7 @@
       disposed = true;
       stopSidebarResize?.();
       window.clearTimeout(zoomNoticeTimer);
+      window.clearTimeout(completionRefreshTimer);
       unlistenResize?.();
       unlistenClose?.();
     };
@@ -353,6 +357,8 @@
 
   function projectFilesChanged(paths: string[]) {
     if (activeFilePath && paths.includes(activeFilePath)) fileRevision += 1;
+    window.clearTimeout(completionRefreshTimer);
+    completionRefreshTimer = window.setTimeout(() => { composerCompletionRevision += 1; }, 160);
   }
 
   function startSidebarResize(event: PointerEvent, side: 'left' | 'right') {
@@ -448,16 +454,19 @@
   async function sendPrompt() {
     const thread = selectedThread;
     if (!thread) return;
-    const text = thread.draft.trim();
+    const content = promptParts(thread.draft, thread.draftReferences);
+    const text = promptText(content).trim();
+    const referencedContent = thread.draftReferences.length > 0 ? content : undefined;
     const images: MessageImage[] = composerImages(thread.id)
       .map(({ data, mimeType, name }) => ({ data, mimeType, name }));
     const centeredComposerTop = selectedThreadEmpty && !reducedMotion
       ? threadViewElement?.querySelector<HTMLElement>('.composer-wrap')?.getBoundingClientRect().top
       : undefined;
-    const turn = providers.runTurn(thread, text, images);
+    const turn = providers.runTurn(thread, text, images, referencedContent);
     if (!turn) return;
 
     thread.draft = '';
+    thread.draftReferences = [];
     composerImagesByThread[thread.id] = [];
     attachmentErrorsByThread[thread.id] = '';
     if (centeredComposerTop !== undefined) animateComposerToTranscript(centeredComposerTop);
@@ -685,6 +694,7 @@
                   images={composerImages(selectedThread.id)}
                   attachmentError={attachmentErrorsByThread[selectedThread.id]}
                   projectName={workspace.projectNameForThread(selectedThread)}
+                  completionRevision={composerCompletionRevision}
                   {currentBranch}
                   {reducedMotion}
                   attachImages={(files) => { void attachImages(files, selectedThread.id); }}

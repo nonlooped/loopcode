@@ -75,6 +75,7 @@ const nativeTransport: AcpTransport = {
 };
 
 export type PromptImage = acp.ImageContent & { type: "image" };
+export type PromptContent = acp.ContentBlock;
 
 export interface AcpCallbacks {
   connectionStatus?: (status: ConnectionStatus) => void;
@@ -249,7 +250,7 @@ export class AcpConnection {
     return readCursorAvailableModels(response);
   }
 
-  async prompt(text: string, images: PromptImage[] = []) {
+  async prompt(prompt: string | PromptContent[], images: PromptImage[] = []) {
     if (this.#turnActive) throw new Error("This ACP session already has an active turn");
     const context = this.#requireContext();
     const sessionId = this.#requireSessionId();
@@ -260,7 +261,10 @@ export class AcpConnection {
     try {
       await context.request(acp.methods.agent.session.prompt, {
         sessionId,
-        prompt: [...(text ? [{ type: "text" as const, text }] : []), ...images],
+        prompt:
+          typeof prompt === "string"
+            ? [...(prompt ? [{ type: "text" as const, text: prompt }] : []), ...images]
+            : prompt,
       });
       if (this.#activeToolIds.size > 0) {
         const error = new Error(

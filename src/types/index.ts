@@ -22,10 +22,26 @@ export interface MessageImage {
   name: string;
 }
 
+export type ComposerReferenceKind = "file" | "folder" | "skill";
+
+export interface ComposerReference {
+  id: string;
+  kind: ComposerReferenceKind;
+  name: string;
+  path: string;
+  relativePath: string;
+  uri: string;
+}
+
+export type PromptPart =
+  | { type: "text"; text: string }
+  | { type: "reference"; reference: ComposerReference };
+
 export interface TimelineMessage {
   id: string;
   role: MessageRole;
   text: string;
+  content?: PromptPart[];
   images?: MessageImage[];
   createdAt: number;
 }
@@ -55,6 +71,7 @@ export interface ThreadState {
   messages: TimelineMessage[];
   tools: ToolActivity[];
   draft: string;
+  draftReferences: ComposerReference[];
   providers: Record<string, ProviderSessionState>;
   updatedAt: number;
   settled: boolean;
@@ -69,6 +86,7 @@ export interface PersistedThreadState {
   messages: TimelineMessage[];
   tools: ToolActivity[];
   draft: string;
+  draftReferences?: ComposerReference[];
   updatedAt: number;
   settled?: boolean;
   projectId?: string | null;

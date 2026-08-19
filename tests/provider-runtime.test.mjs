@@ -31,6 +31,7 @@ function thread(connectionStatus) {
     messages: [],
     tools: [],
     draft: "",
+    draftReferences: [],
     providers: {
       codex: provider(connectionStatus),
       claude: provider(),
@@ -45,8 +46,8 @@ const hooks = { permission() {}, clearPermission() {} };
 void test("ProviderRuntime owns prompt and title lifecycle", async () => {
   const calls = [];
   const connection = {
-    async prompt(text, images) {
-      calls.push({ text, images });
+    async prompt(content) {
+      calls.push(content);
     },
     async generateTitle() {
       return "**Runtime Owns Turns.**";
@@ -60,17 +61,39 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
 
   const state = thread();
   const runtime = new Runtime(catalogs, hooks);
-  const completion = runtime.runTurn(state, "Implement this", [
-    { data: "image-data", mimeType: "image/png", name: "reference.png" },
-  ]);
+  const completion = runtime.runTurn(
+    state,
+    "Implement this @src/Composer.svelte",
+    [{ data: "image-data", mimeType: "image/png", name: "reference.png" }],
+    [
+      { type: "text", text: "Implement this " },
+      {
+        type: "reference",
+        reference: {
+          id: "ref-1",
+          kind: "file",
+          name: "Composer.svelte",
+          path: "C:\\workspace\\src\\Composer.svelte",
+          relativePath: "src/Composer.svelte",
+          uri: "file:///C:/workspace/src/Composer.svelte",
+        },
+      },
+    ],
+  );
 
   assert.ok(completion);
   await completion;
   assert.deepEqual(calls, [
-    {
-      text: "Implement this",
-      images: [{ type: "image", data: "image-data", mimeType: "image/png" }],
-    },
+    [
+      { type: "text", text: "Implement this " },
+      {
+        type: "resource_link",
+        uri: "file:///C:/workspace/src/Composer.svelte",
+        name: "Composer.svelte",
+        title: "src/Composer.svelte",
+      },
+      { type: "image", data: "image-data", mimeType: "image/png" },
+    ],
   ]);
   assert.equal(state.messages[0].role, "user");
   assert.equal(state.messages[0].images[0].name, "reference.png");

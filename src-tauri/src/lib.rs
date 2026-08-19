@@ -8,8 +8,9 @@ use broker::{
 };
 use diagnostics::Diagnostics;
 use project_files::{
-    ProjectFileWatchers, open_project_file, open_project_path, read_project_directory,
-    read_project_file, reveal_project_path, start_project_file_watcher, stop_project_file_watcher,
+    ProjectFileWatchers, list_composer_completions, open_project_file, open_project_path,
+    read_project_directory, read_project_file, reveal_project_path, start_project_file_watcher,
+    stop_project_file_watcher,
 };
 use serde_json::Value;
 use std::{
@@ -225,6 +226,7 @@ pub fn run() {
             export_diagnostics,
             pick_folder,
             get_git_branch,
+            list_composer_completions,
             read_project_directory,
             read_project_file,
             open_project_file,
