@@ -16,7 +16,7 @@ npm install
 npm run tauri -- dev
 ```
 
-Codex and Claude use the npm adapters pinned in `src/config/provider-definitions.ts`; their first launch may need network access. OpenCode expects `opencode` on `PATH`. Authenticate with the provider CLI before using it.
+Codex and Claude use the npm adapters pinned in `src/config/provider-definitions.ts`; their first launch may need network access. OpenCode expects `opencode` on `PATH`, and Cursor expects `agent.cmd` on `PATH`. Authenticate with the provider CLI before using it (`agent login` for Cursor).
 
 ## Runtime model
 

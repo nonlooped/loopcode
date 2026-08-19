@@ -37,6 +37,8 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
       } else if (message.method === "session/new") {
         session += 1;
         reply(message.id, { sessionId: `session-${session}`, configOptions });
+      } else if (message.method === "cursor/list_available_models") {
+        reply(message.id, { models: [{ value: "claude-opus-5", name: "Claude Opus 5" }] });
       } else if (message.method === "session/load") {
         onEvent({
           event: "rpc",
@@ -210,6 +212,45 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
         },
       });
     },
+    requestCursorQuestion() {
+      onEvent({
+        event: "rpc",
+        data: {
+          message: {
+            jsonrpc: "2.0",
+            id: 102,
+            method: "cursor/ask_question",
+            params: {
+              toolCallId: "tool-3",
+              title: "Storage",
+              questions: [
+                {
+                  id: "database",
+                  prompt: "Which database should we use?",
+                  options: [
+                    { id: "sqlite", label: "SQLite" },
+                    { id: "postgres", label: "Postgres" },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      });
+    },
+    requestCursorPlan() {
+      onEvent({
+        event: "rpc",
+        data: {
+          message: {
+            jsonrpc: "2.0",
+            id: 103,
+            method: "cursor/create_plan",
+            params: { toolCallId: "tool-4", plan: "Do the work", todos: [] },
+          },
+        },
+      });
+    },
   };
 }
 
@@ -237,7 +278,7 @@ void test("uses the official SDK to initialize, create a session, and route upda
   );
 
   await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
-  await connection.setBooleanConfigOption("fast_mode", true);
+  await connection.setConfigOption("fast_mode", true);
   await connection.prompt("Hello");
 
   assert.deepEqual(
@@ -254,6 +295,45 @@ void test("uses the official SDK to initialize, create a session, and route upda
   assert.deepEqual(
     updates.map((update) => update.sessionUpdate),
     ["agent_message_chunk"],
+  );
+});
+
+void test("enables Cursor's parameterized model picker", async () => {
+  const fake = fakeTransport();
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({
+    cwd: "C:\\workspace",
+    command: "agent.cmd",
+    args: ["acp"],
+    profileId: "cursor",
+  });
+
+  assert.deepEqual(
+    fake.sent.find((message) => message.method === "initialize")?.params.clientCapabilities._meta,
+    { parameterizedModelPicker: true },
+  );
+  assert.deepEqual(
+    (await connection.listCursorModels()).map(({ model }) => model),
+    [{ id: "claude-opus-5", name: "Claude Opus 5" }],
+  );
+  await connection.setFastModeConfigOption("fast", true, "string");
+  assert.deepEqual(
+    fake.sent.find(
+      (message) =>
+        message.method === "session/set_config_option" && message.params.configId === "fast",
+    )?.params,
+    { sessionId: "session-1", configId: "fast", value: "true" },
   );
 });
 
@@ -516,6 +596,50 @@ void test("presents question tool input as an agent question", async () => {
   });
   const response = fake.sent.find((message) => message.id === 100 && "result" in message);
   assert.deepEqual(response.result, { outcome: { outcome: "selected", optionId: "sqlite" } });
+});
+
+void test("presents Cursor questions and declines Cursor plans", async () => {
+  const fake = fakeTransport();
+  let request;
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: (value) => {
+        request = value;
+        connection.answerPermission(value.requestId, "sqlite");
+      },
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  fake.requestCursorQuestion();
+  fake.requestCursorPlan();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(request, {
+    requestId: 102,
+    type: "question",
+    title: "Storage",
+    detail: "Which database should we use?",
+    options: [
+      { optionId: "sqlite", name: "SQLite" },
+      { optionId: "postgres", name: "Postgres" },
+    ],
+  });
+  assert.deepEqual(fake.sent.find((message) => message.id === 102 && "result" in message).result, {
+    outcome: {
+      outcome: "answered",
+      answers: [{ questionId: "database", selectedOptionIds: ["sqlite"] }],
+    },
+  });
+  assert.deepEqual(fake.sent.find((message) => message.id === 103 && "result" in message).result, {
+    outcome: { outcome: "rejected", reason: "LoopCode does not support plan approval." },
+  });
 });
 
 void test("automatically approves permissions in full access mode without answering questions", async () => {

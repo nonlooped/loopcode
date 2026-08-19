@@ -14,5 +14,6 @@ export function applyFastModeForSelectedModel(provider: ProviderSessionState) {
   provider.fastModeConfigId = option?.configId;
   provider.fastModeModelId = option ? modelId : undefined;
   provider.fastModeEnabled = option?.enabled;
+  provider.fastModeValueType = option?.valueType;
   provider.fastModeDescription = option?.description;
 }

@@ -17,7 +17,7 @@ import type {
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
-import { discoverModelOptions } from "../utils/model-options.ts";
+import { discoverModelOptions, modelOptionsFromStates } from "../utils/model-options.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
 import { buildThreadTitlePrompt, normalizeThreadTitle } from "../utils/thread-title.ts";
 import { AcpConnection, readModelState, type AcpModelState } from "./acp.ts";
@@ -117,7 +117,17 @@ export class ProviderRuntime {
     });
 
     try {
-      await connection.connect({ cwd, command: profile.command, args: profile.args });
+      await connection.connect({
+        cwd,
+        command: profile.command,
+        args: profile.args,
+        profileId: profile.id,
+      });
+      const cursorModels = profile.id === "cursor" ? await connection.listCursorModels() : [];
+      if (profile.id === "cursor") {
+        if (cursorModels.length === 0) throw new Error("Cursor did not advertise any models.");
+        discovered.models = cursorModels.map(({ model }) => model);
+      }
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
       }
@@ -126,10 +136,10 @@ export class ProviderRuntime {
         advertisedModelId && discovered.models.some((model) => model.id === advertisedModelId)
           ? advertisedModelId
           : discovered.models[0].id;
-      const { reasoningOptionsByModel, fastModeOptionsByModel } = await discoverModelOptions(
-        connection,
-        discovered,
-      );
+      const { reasoningOptionsByModel, fastModeOptionsByModel } =
+        profile.id === "cursor"
+          ? modelOptionsFromStates(cursorModels)
+          : await discoverModelOptions(connection, discovered);
       const selectedReasoning = reasoningOptionsByModel[selectedModelId];
       const selectedFastMode = fastModeOptionsByModel[selectedModelId];
       this.#catalogs[profile.id] = {
@@ -143,6 +153,7 @@ export class ProviderRuntime {
         fastModeModelId: selectedFastMode ? selectedModelId : undefined,
         fastModeOptionsByModel,
         fastModeEnabled: selectedFastMode?.enabled,
+        fastModeValueType: selectedFastMode?.valueType,
         fastModeDescription: selectedFastMode?.description,
       };
     } catch (error) {
@@ -334,9 +345,10 @@ export class ProviderRuntime {
         provider.fastModeConfigId &&
         provider.fastModeEnabled !== fastModeEnabled
       ) {
-        const fastModeState = await connection.setBooleanConfigOption(
+        const fastModeState = await connection.setFastModeConfigOption(
           provider.fastModeConfigId,
           fastModeEnabled,
+          provider.fastModeValueType,
         );
         applyProviderConfigState(provider, fastModeState);
       }
@@ -500,7 +512,11 @@ export class ProviderRuntime {
       if (!connection) {
         throw new Error(`${providerDefinitionById(thread.profileId).label} is not connected`);
       }
-      const updated = await connection.setBooleanConfigOption(provider.fastModeConfigId, enabled);
+      const updated = await connection.setFastModeConfigOption(
+        provider.fastModeConfigId,
+        enabled,
+        provider.fastModeValueType,
+      );
       if (updated.fastModeEnabled !== enabled) {
         throw new Error(
           `${providerDefinitionById(thread.profileId).label} did not apply Fast mode.`,
@@ -628,6 +644,7 @@ export function applyProviderConfigState(provider: ProviderSessionState, state: 
       fastModeOptionsByModel[modelId] = {
         configId: state.fastModeConfigId,
         enabled: state.fastModeEnabled,
+        valueType: state.fastModeValueType,
         description: state.fastModeDescription,
       };
     } else {
@@ -638,6 +655,7 @@ export function applyProviderConfigState(provider: ProviderSessionState, state: 
   provider.fastModeConfigId = state.fastModeConfigId;
   provider.fastModeModelId = state.fastModeConfigId ? modelId : undefined;
   provider.fastModeEnabled = state.fastModeEnabled;
+  provider.fastModeValueType = state.fastModeValueType;
   provider.fastModeDescription = state.fastModeDescription;
 }
 
