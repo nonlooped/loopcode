@@ -18,7 +18,8 @@
 /AGENTS.md
 /DESIGN.md
 
-# Logs
+# Generated reports and logs
+/reports/
 *.log
 
 # Editors and operating systems
