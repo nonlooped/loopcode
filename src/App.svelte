@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { fade } from 'svelte/transition';
+  import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
   import Composer from './components/Composer.svelte';
@@ -50,6 +52,7 @@
   import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
 
   const appWindow = getCurrentWindow();
+  const appWebview = getCurrentWebview();
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const initialCatalogs = Object.fromEntries(
     profiles.map((profile) => [
@@ -94,6 +97,9 @@
   let fileRevision = $state(0);
   let fileViewerThreadId = $state('');
   let threadViewElement = $state<HTMLElement>();
+  let zoomPercent = $state<number>();
+  let currentZoom = 100;
+  let zoomNoticeTimer: number | undefined;
   let closing = false;
   let branchLookup = 0;
   let stopSidebarResize: (() => void) | undefined;
@@ -202,10 +208,24 @@
     return () => {
       disposed = true;
       stopSidebarResize?.();
+      window.clearTimeout(zoomNoticeTimer);
       unlistenResize?.();
       unlistenClose?.();
     };
   });
+
+  function handleAppKeydown(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const direction = event.key === '-' ? -1 : event.key === '+' || event.key === '=' ? 1 : 0;
+    if (!direction) return;
+
+    event.preventDefault();
+    currentZoom = Math.min(1000, Math.max(20, currentZoom + direction * 20));
+    void appWebview.setZoom(currentZoom / 100);
+    zoomPercent = currentZoom;
+    window.clearTimeout(zoomNoticeTimer);
+    zoomNoticeTimer = window.setTimeout(() => { zoomPercent = undefined; }, 1200);
+  }
 
   function closeThreadSurfaces() {
     sidebarOpen = false;
@@ -560,6 +580,11 @@
     minimize={() => { void appWindow.minimize(); }}
     toggleMaximize={() => { void appWindow.toggleMaximize(); }}
   />
+  {#if zoomPercent}
+    <div class="zoom-indicator" role="status" transition:fade={{ duration: reducedMotion ? 0 : 120 }}>
+      {zoomPercent}%
+    </div>
+  {/if}
   <Sidebar
       open={sidebarOpen}
       {settingsOpen}
@@ -685,6 +710,7 @@
 </div>
 
 <svelte:window onkeydown={(event) => {
+  handleAppKeydown(event);
   if (event.key === 'Escape' && workspaceDropdownOpen) workspaceDropdownOpen = false;
 }} />
 

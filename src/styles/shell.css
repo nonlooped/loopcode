@@ -17,6 +17,22 @@
   border-radius: 0;
 }
 
+.zoom-indicator {
+  position: fixed;
+  z-index: 30;
+  top: calc(var(--titlebar-height) + 10px);
+  left: 50%;
+  padding: 5px 9px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--floating-surface);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
 .titlebar {
   position: relative;
   z-index: 10;
