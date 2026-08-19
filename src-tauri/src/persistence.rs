@@ -180,11 +180,8 @@ mod tests {
         let directory = TestDirectory::new();
         let workspace = r#"{"version":1,"threads":[{"id":"recoverable"}]}"#;
         save_to_directory(&directory.0, workspace).expect("workspace should save");
-        fs::copy(
-            directory.0.join(THREADS_FILE_NAME),
-            directory.0.join(BACKUP_FILE_NAME),
-        )
-        .expect("backup fixture should copy");
+        fs::write(directory.0.join(BACKUP_FILE_NAME), workspace)
+            .expect("backup fixture should write");
         fs::write(directory.0.join(THREADS_FILE_NAME), "{not-json")
             .expect("primary fixture should corrupt");
 
