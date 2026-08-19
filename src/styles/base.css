@@ -33,6 +33,10 @@
   --titlebar-height: 38px;
 }
 
+:root[data-platform="linux"] {
+  --shell-tint: var(--shell-solid);
+}
+
 * {
   box-sizing: border-box;
 }

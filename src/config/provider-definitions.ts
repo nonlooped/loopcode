@@ -6,13 +6,13 @@ export const providerDefinitions: ProviderDefinition[] = [
   {
     id: "codex",
     label: "Codex",
-    command: "npx.cmd",
+    command: "npx",
     args: ["--yes", "@agentclientprotocol/codex-acp@1.4.0"],
   },
   {
     id: "claude",
     label: "Claude",
-    command: "npx.cmd",
+    command: "npx",
     args: ["--yes", "@agentclientprotocol/claude-agent-acp@0.69.0"],
   },
   {
@@ -24,7 +24,7 @@ export const providerDefinitions: ProviderDefinition[] = [
   {
     id: "cursor",
     label: "Cursor",
-    command: "agent.cmd",
+    command: "agent",
     args: ["acp"],
   },
 ];

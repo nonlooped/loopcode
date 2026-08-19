@@ -6,17 +6,17 @@ LoopCode is a Windows desktop workbench for coding agents that use the Agent Cli
 
 Requirements:
 
-- Windows 10 or 11 with WebView2
+- Windows 10 or 11 with WebView2, or Linux with WebKit2GTK 4.1 and a compositor (GNOME/KDE recommended)
 - Node.js 24+ and npm 12+
-- Current Rust and the Tauri Windows prerequisites
+- Current Rust and the Tauri prerequisites for your OS ([Windows](https://v2.tauri.app/start/prerequisites/#windows) / [Linux](https://v2.tauri.app/start/prerequisites/#linux))
 - A configured ACP harness
 
-```powershell
+```sh
 npm install
 npm run tauri -- dev
 ```
 
-Codex and Claude use the npm adapters pinned in `src/config/provider-definitions.ts`; their first launch may need network access. OpenCode expects `opencode` on `PATH`, and Cursor expects `agent.cmd` on `PATH`. Authenticate with the provider CLI before using it (`agent login` for Cursor).
+Codex and Claude use the npm adapters pinned in `src/config/provider-definitions.ts`; their first launch may need network access. OpenCode expects `opencode` on `PATH`, and Cursor expects `agent` on `PATH`. Authenticate with the provider CLI before using it (`agent login` for Cursor).
 
 ## Runtime model
 
@@ -48,13 +48,13 @@ Agent instructions live in [`AGENTS.md`](AGENTS.md). Visual rules live in [`DESI
 
 The available frontend commands are defined in `package.json`; Rust commands use `src-tauri/Cargo.toml`. Run only the checks covering the changed area.
 
-```powershell
+```sh
 npm run check
 npm test
 npm run build
-cargo fmt --manifest-path src-tauri\Cargo.toml -- --check
-cargo test --manifest-path src-tauri\Cargo.toml
-cargo check --manifest-path src-tauri\Cargo.toml
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
 ## Current boundaries
@@ -63,4 +63,4 @@ cargo check --manifest-path src-tauri\Cargo.toml
 - No authentication flow, agent-owned session browser, MCP injection, citation UI, specialized tool renderers, or non-model configuration beyond advertised Fast mode.
 - Permission requests are supported; filesystem and terminal client capabilities are not advertised.
 - Each active thread/provider pair owns one harness process. There is no pooling, crash recovery, queue backpressure, or log export.
-- Acrylic and responsive behavior require manual verification on target Windows hardware.
+- Acrylic (Windows) and responsive behavior require manual verification on target hardware.
