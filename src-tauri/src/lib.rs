@@ -192,8 +192,8 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
 }
 
 pub fn run() {
-    let home = std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
     let shutdown_started = Arc::new(AtomicBool::new(false));
