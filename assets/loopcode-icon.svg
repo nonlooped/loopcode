@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">LoopCode</title>
+  <desc id="description">A continuous looped path with two round terminals.</desc>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="#17181b"/>
+  <rect x="48" y="48" width="928" height="928" rx="208" fill="none" stroke="#91949c" stroke-opacity=".34" stroke-width="8"/>
+  <path d="M 292 332 H 654 C 780 332 842 402 842 512 C 842 622 780 692 654 692 H 292" fill="none" stroke="#ececee" stroke-width="104" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="292" cy="332" r="94" fill="#ececee"/>
+  <circle cx="292" cy="692" r="94" fill="#ececee"/>
+</svg>
