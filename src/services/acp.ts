@@ -7,6 +7,8 @@ import type {
   ConnectionStatus,
   PermissionMode,
   PermissionRequest,
+  QuestionAnswer,
+  QuestionRequest,
   ThreadStatus,
   TurnStatus,
 } from "../types/index.ts";
@@ -24,9 +26,21 @@ interface PendingPermission {
   resolve: (response: PermissionResponse) => void;
 }
 
-interface PendingElicitation {
-  fieldId: string;
-  resolve: (response: acp.CreateElicitationResponse) => void;
+interface QuestionSpec {
+  id: string;
+  title: string;
+  prompt: string;
+  options: QuestionRequest["options"];
+  allowMultiple: boolean;
+  allowCustomAnswer: boolean;
+  customFieldId?: string;
+  required: boolean;
+}
+
+interface PendingQuestions {
+  questions: QuestionSpec[];
+  answers: QuestionAnswer[];
+  resolve: (answers?: QuestionAnswer[]) => void;
 }
 
 interface CursorAskQuestionRequest {
@@ -35,6 +49,7 @@ interface CursorAskQuestionRequest {
     id: string;
     prompt: string;
     options: Array<{ id: string; label: string }>;
+    allowMultiple?: boolean;
   }>;
 }
 
@@ -46,13 +61,6 @@ type CursorAskQuestionResponse = {
       }
     | { outcome: "cancelled" };
 };
-
-interface PendingCursorQuestion {
-  title?: string;
-  questions: CursorAskQuestionRequest["questions"];
-  answers: Array<{ questionId: string; selectedOptionIds: string[] }>;
-  resolve: (response: CursorAskQuestionResponse) => void;
-}
 
 export interface AcpTransport {
   launch: (request: ConnectRequest, onEvent: (event: BrokerEvent) => void) => Promise<string>;
@@ -98,8 +106,7 @@ export class AcpConnection {
   #loadingSession = false;
   #titleSessions = new Map<string, string[]>();
   #permissions = new Map<RpcId, PendingPermission>();
-  #elicitations = new Map<RpcId, PendingElicitation>();
-  #cursorQuestions = new Map<RpcId, PendingCursorQuestion>();
+  #questions = new Map<RpcId, PendingQuestions>();
   #activeToolIds = new Set<string>();
   #turnActive = false;
   #stopping = false;
@@ -349,11 +356,19 @@ export class AcpConnection {
       this.#resolvePermission(requestId, {
         outcome: { outcome: "selected", optionId },
       });
-    } else if (this.#elicitations.has(requestId)) {
-      this.#resolveElicitation(requestId, optionId);
-    } else {
-      this.#resolveCursorQuestion(requestId, optionId);
+      return;
     }
+    this.#resolveQuestion(requestId, { selectedOptionIds: [optionId] });
+  }
+
+  answerQuestion(requestId: RpcId, answer: QuestionAnswer) {
+    if (this.#permissions.has(requestId)) {
+      const [optionId] = answer.selectedOptionIds;
+      if (optionId) this.answerPermission(requestId, optionId);
+      else this.cancelPermission(requestId);
+      return;
+    }
+    this.#resolveQuestion(requestId, answer);
   }
 
   cancelPermission(requestId: RpcId) {
@@ -361,11 +376,9 @@ export class AcpConnection {
       this.#resolvePermission(requestId, {
         outcome: { outcome: "cancelled" },
       });
-    } else if (this.#elicitations.has(requestId)) {
-      this.#resolveElicitation(requestId);
-    } else {
-      this.#resolveCursorQuestion(requestId);
+      return;
     }
+    this.#resolveQuestion(requestId);
   }
 
   async stop() {
@@ -500,40 +513,75 @@ export class AcpConnection {
     if (sessionId && this.#titleSessions.has(sessionId)) {
       return Promise.resolve<acp.CreateElicitationResponse>({ action: "cancel" });
     }
-    const question = questionFromElicitation(params);
-    if (!question) return Promise.resolve<acp.CreateElicitationResponse>({ action: "cancel" });
+    const questions = questionsFromElicitation(params);
+    if (questions.length === 0) {
+      return Promise.resolve<acp.CreateElicitationResponse>({ action: "cancel" });
+    }
 
     return new Promise<acp.CreateElicitationResponse>((resolve) => {
-      this.#elicitations.set(requestId, { fieldId: question.fieldId, resolve });
-      this.#callbacks.permission(question.request(requestId));
+      this.#requestQuestions(requestId, {
+        questions,
+        answers: [],
+        resolve: (answers) =>
+          resolve(
+            answers
+              ? { action: "accept", content: elicitationContent(questions, answers) }
+              : { action: "cancel" },
+          ),
+      });
     });
   }
 
   #requestCursorQuestion(requestId: RpcId, params: CursorAskQuestionRequest) {
     return new Promise<CursorAskQuestionResponse>((resolve) => {
-      this.#cursorQuestions.set(requestId, {
-        title: params.title,
-        questions: params.questions,
+      const questions = params.questions.map((question) => ({
+        id: question.id,
+        title: params.title ?? "Agent question",
+        prompt: question.prompt,
+        options: question.options.map((option) => ({ optionId: option.id, name: option.label })),
+        allowMultiple: question.allowMultiple === true,
+        allowCustomAnswer: false,
+        required: true,
+      }));
+      this.#requestQuestions(requestId, {
+        questions,
         answers: [],
-        resolve,
+        resolve: (answers) =>
+          resolve(
+            answers
+              ? {
+                  outcome: {
+                    outcome: "answered",
+                    answers: answers.map((answer, index) => ({
+                      questionId: questions[index].id,
+                      selectedOptionIds: answer.selectedOptionIds,
+                    })),
+                  },
+                }
+              : { outcome: { outcome: "cancelled" } },
+          ),
       });
-      this.#showNextCursorQuestion(requestId);
     });
   }
 
-  #showNextCursorQuestion(requestId: RpcId) {
-    const pending = this.#cursorQuestions.get(requestId);
+  #requestQuestions(requestId: RpcId, pending: PendingQuestions) {
+    this.#questions.set(requestId, pending);
+    this.#showNextQuestion(requestId);
+  }
+
+  #showNextQuestion(requestId: RpcId) {
+    const pending = this.#questions.get(requestId);
     if (!pending) return;
     const question = pending.questions[pending.answers.length];
     this.#callbacks.permission({
       requestId,
       type: "question",
-      title: pending.title ?? "Agent question",
+      title: question.title,
       detail: question.prompt,
-      options: question.options.map((option) => ({
-        optionId: option.id,
-        name: option.label,
-      })),
+      options: question.options,
+      allowMultiple: question.allowMultiple,
+      allowCustomAnswer: question.allowCustomAnswer,
+      required: question.required,
     });
   }
 
@@ -544,37 +592,33 @@ export class AcpConnection {
     pending.resolve(response);
   }
 
-  #resolveElicitation(requestId: RpcId, optionId?: string) {
-    const pending = this.#elicitations.get(requestId);
+  #resolveQuestion(requestId: RpcId, answer?: QuestionAnswer) {
+    const pending = this.#questions.get(requestId);
     if (!pending) return;
-    this.#elicitations.delete(requestId);
-    pending.resolve(
-      optionId
-        ? { action: "accept", content: { [pending.fieldId]: optionId } }
-        : { action: "cancel" },
-    );
-  }
-
-  #resolveCursorQuestion(requestId: RpcId, optionId?: string) {
-    const pending = this.#cursorQuestions.get(requestId);
-    if (!pending) return;
-    if (!optionId) {
-      this.#cursorQuestions.delete(requestId);
-      pending.resolve({ outcome: { outcome: "cancelled" } });
+    if (!answer) {
+      this.#questions.delete(requestId);
+      pending.resolve();
       return;
     }
 
+    const question = pending.questions[pending.answers.length];
+    const optionIds = new Set(question.options.map((option) => option.optionId));
+    const selectedOptionIds = answer.selectedOptionIds.filter((optionId) =>
+      optionIds.has(optionId),
+    );
     pending.answers.push({
-      questionId: pending.questions[pending.answers.length].id,
-      selectedOptionIds: [optionId],
+      selectedOptionIds: question.allowMultiple ? selectedOptionIds : selectedOptionIds.slice(0, 1),
+      customAnswer: question.allowCustomAnswer
+        ? answer.customAnswer?.trim() || undefined
+        : undefined,
     });
     if (pending.answers.length < pending.questions.length) {
-      this.#showNextCursorQuestion(requestId);
+      this.#showNextQuestion(requestId);
       return;
     }
 
-    this.#cursorQuestions.delete(requestId);
-    pending.resolve({ outcome: { outcome: "answered", answers: pending.answers } });
+    this.#questions.delete(requestId);
+    pending.resolve(pending.answers);
   }
 
   #cancelInteractions() {
@@ -582,14 +626,8 @@ export class AcpConnection {
       pending.resolve({ outcome: { outcome: "cancelled" } });
     }
     this.#permissions.clear();
-    for (const pending of this.#elicitations.values()) {
-      pending.resolve({ action: "cancel" });
-    }
-    this.#elicitations.clear();
-    for (const pending of this.#cursorQuestions.values()) {
-      pending.resolve({ outcome: { outcome: "cancelled" } });
-    }
-    this.#cursorQuestions.clear();
+    for (const pending of this.#questions.values()) pending.resolve();
+    this.#questions.clear();
   }
 }
 
@@ -616,41 +654,147 @@ function permissionFromAcp(
   const rawInput = params.toolCall.rawInput;
   const question = questionFromInput(rawInput);
   const detail = question?.text ?? requestDetail(rawInput);
+  const options = params.options.map((option) => ({
+    optionId: option.optionId,
+    name: option.name,
+    description: question?.options.get(option.name),
+    kind: option.kind,
+  }));
+  if (question) {
+    return {
+      requestId,
+      type: "question",
+      title: question.title,
+      detail,
+      options,
+      allowMultiple: false,
+      allowCustomAnswer: false,
+      required: true,
+    };
+  }
   return {
     requestId,
-    type: question ? "question" : "permission",
-    title: question?.title ?? params.toolCall.title ?? "Allow the harness to continue?",
+    type: "permission",
+    title: params.toolCall.title ?? "Allow the harness to continue?",
     detail,
-    options: params.options.map((option) => ({
-      optionId: option.optionId,
-      name: option.name,
-      description: question?.options.get(option.name),
-      kind: option.kind,
-    })),
+    options,
   };
 }
 
-function questionFromElicitation(params: acp.CreateElicitationRequest) {
-  if (!acp.CreateElicitationRequest.isForm(params)) return;
-  const [fieldId, schema] = Object.entries(params.requestedSchema.properties ?? {})[0] ?? [];
-  if (!fieldId || !schema || !acp.ElicitationPropertySchema.isString(schema)) return;
-  const options = schema.oneOf;
-  if (!options) return;
+function questionsFromElicitation(params: acp.CreateElicitationRequest): QuestionSpec[] {
+  if (!acp.CreateElicitationRequest.isForm(params)) return [];
+  const properties = params.requestedSchema.properties ?? {};
+  if (Object.values(properties).some((schema) => !supportsQuestionField(schema))) return [];
 
+  const required = new Set(params.requestedSchema.required ?? []);
+  const customFields = new Map<string, string>();
+  for (const [fieldId, schema] of Object.entries(properties)) {
+    const target = customAnswerTarget(schema);
+    if (target) customFields.set(target, fieldId);
+  }
+
+  const questions: QuestionSpec[] = [];
+  for (const [fieldId, schema] of Object.entries(properties)) {
+    if (customAnswerTarget(schema)) continue;
+    const customFieldId = customFields.get(fieldId);
+    if (acp.ElicitationPropertySchema.isString(schema)) {
+      const options = stringOptions(schema);
+      questions.push({
+        id: fieldId,
+        title: schema.title ?? "Agent question",
+        prompt: schema.description ?? params.message,
+        options,
+        allowMultiple: false,
+        allowCustomAnswer: Boolean(customFieldId) || options.length === 0,
+        customFieldId,
+        required: required.has(fieldId),
+      });
+      continue;
+    }
+    if (acp.ElicitationPropertySchema.isArray(schema)) {
+      const options = multiSelectOptions(schema.items);
+      questions.push({
+        id: fieldId,
+        title: schema.title ?? "Agent question",
+        prompt: schema.description ?? params.message,
+        options,
+        allowMultiple: true,
+        allowCustomAnswer: Boolean(customFieldId),
+        customFieldId,
+        required: required.has(fieldId),
+      });
+    }
+  }
+  return questions;
+}
+
+function supportsQuestionField(schema: acp.ElicitationPropertySchema) {
+  if (acp.ElicitationPropertySchema.isString(schema)) {
+    return (
+      schema.minLength == null &&
+      schema.maxLength == null &&
+      schema.pattern == null &&
+      schema.format == null
+    );
+  }
+  return (
+    acp.ElicitationPropertySchema.isArray(schema) &&
+    schema.minItems == null &&
+    schema.maxItems == null &&
+    multiSelectOptions(schema.items).length > 0
+  );
+}
+
+function stringOptions(schema: acp.StringPropertySchema): QuestionRequest["options"] {
+  if (schema.oneOf) return schema.oneOf.map(optionFromEnum);
+  return (schema.enum ?? []).map((value) => ({ optionId: value, name: value }));
+}
+
+function multiSelectOptions(items: acp.MultiSelectItems): QuestionRequest["options"] {
+  if (acp.MultiSelectItems.isTitled(items)) return items.anyOf.map(optionFromEnum);
+  if (acp.MultiSelectItems.isString(items)) {
+    return items.enum.map((value) => ({ optionId: value, name: value }));
+  }
+  return [];
+}
+
+function optionFromEnum(option: acp.EnumOption): QuestionRequest["options"][number] {
+  const optionMeta = option._meta?.["_claude/askUserQuestionOption"];
+  const preview =
+    isRecord(optionMeta) && typeof optionMeta.preview === "string" ? optionMeta.preview : undefined;
   return {
-    fieldId,
-    request: (requestId: RpcId) => ({
-      requestId,
-      type: "question" as const,
-      title: schema.title ?? "Agent question",
-      detail: schema.description ?? params.message,
-      options: options.map((option) => ({
-        optionId: option.const,
-        name: option.title,
-        description: option.description ?? undefined,
-      })),
-    }),
+    optionId: option.const,
+    name: option.title,
+    description: option.description ?? undefined,
+    ...(preview ? { preview } : {}),
   };
+}
+
+function customAnswerTarget(schema: acp.ElicitationPropertySchema) {
+  const meta = isRecord(schema._meta) ? schema._meta : {};
+  const shared = meta["_askUserQuestionCustomAnswer"];
+  if (isRecord(shared) && shared.isCustomAnswer === true && typeof shared.questionId === "string") {
+    return shared.questionId;
+  }
+  const codex = meta.codex;
+  if (isRecord(codex) && codex.isOtherAnswer === true && typeof codex.questionId === "string") {
+    return codex.questionId;
+  }
+}
+
+function elicitationContent(questions: QuestionSpec[], answers: QuestionAnswer[]) {
+  const content: Record<string, string | string[]> = {};
+  questions.forEach((question, index) => {
+    const answer = answers[index];
+    if (answer.customAnswer) {
+      content[question.customFieldId ?? question.id] = answer.customAnswer;
+    } else if (question.allowMultiple) {
+      content[question.id] = answer.selectedOptionIds;
+    } else if (answer.selectedOptionIds[0]) {
+      content[question.id] = answer.selectedOptionIds[0];
+    }
+  });
+  return content;
 }
 
 export function preferredAllowOptionId(request: PermissionRequest) {
@@ -699,7 +843,8 @@ function parseCursorAskQuestion(value: unknown): CursorAskQuestionRequest {
       question.options.every(
         (option) =>
           isRecord(option) && typeof option.id === "string" && typeof option.label === "string",
-      ),
+      ) &&
+      (question.allowMultiple === undefined || typeof question.allowMultiple === "boolean"),
   );
   if (questions.length === 0) throw new TypeError("Cursor returned an invalid question");
   return { title: typeof value.title === "string" ? value.title : undefined, questions };

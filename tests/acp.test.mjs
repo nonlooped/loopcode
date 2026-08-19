@@ -177,6 +177,99 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
         },
       });
     },
+    requestUnsupportedElicitation() {
+      onEvent({
+        event: "rpc",
+        data: {
+          message: {
+            jsonrpc: "2.0",
+            id: 103,
+            method: "elicitation/create",
+            params: {
+              sessionId: "session-1",
+              mode: "form",
+              message: "Enter an access token.",
+              requestedSchema: {
+                type: "object",
+                properties: {
+                  token: { type: "string", minLength: 20 },
+                },
+                required: ["token"],
+              },
+            },
+          },
+        },
+      });
+    },
+    requestClaudeQuestions() {
+      onEvent({
+        event: "rpc",
+        data: {
+          message: {
+            jsonrpc: "2.0",
+            id: 104,
+            method: "elicitation/create",
+            params: {
+              sessionId: "session-1",
+              mode: "form",
+              message: "Please answer the following questions.",
+              requestedSchema: {
+                type: "object",
+                properties: {
+                  question_0: {
+                    type: "string",
+                    title: "Approach",
+                    description: "Which approach should I take?",
+                    oneOf: [
+                      {
+                        const: "Balanced",
+                        title: "Balanced",
+                        description: "Keep the change focused.",
+                        _meta: {
+                          "_claude/askUserQuestionOption": { preview: "small diff" },
+                        },
+                      },
+                      { const: "Thorough", title: "Thorough" },
+                    ],
+                  },
+                  question_0_custom: {
+                    type: "string",
+                    title: "Other",
+                    _meta: {
+                      _askUserQuestionCustomAnswer: {
+                        questionId: "question_0",
+                        isCustomAnswer: true,
+                      },
+                    },
+                  },
+                  question_1: {
+                    type: "array",
+                    title: "Checks",
+                    description: "Which checks should I run?",
+                    items: {
+                      anyOf: [
+                        { const: "Tests", title: "Tests" },
+                        { const: "Docs", title: "Docs" },
+                      ],
+                    },
+                  },
+                  question_1_custom: {
+                    type: "string",
+                    title: "Other",
+                    _meta: {
+                      _askUserQuestionCustomAnswer: {
+                        questionId: "question_1",
+                        isCustomAnswer: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    },
     requestQuestion() {
       onEvent({
         event: "rpc",
@@ -552,9 +645,118 @@ void test("presents ACP form elicitations as agent questions", async () => {
         description: "A networked database service.",
       },
     ],
+    allowMultiple: false,
+    allowCustomAnswer: false,
+    required: true,
   });
   const response = fake.sent.find((message) => message.id === 101 && "result" in message);
   assert.deepEqual(response.result, { action: "accept", content: { database: "sqlite" } });
+});
+
+void test("cancels elicitations with unsupported constraints", async () => {
+  const fake = fakeTransport();
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: () => assert.fail("unsupported forms must not be rendered"),
+      stderr: () => {},
+      error: (message) => {
+        throw new Error(message);
+      },
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  fake.requestUnsupportedElicitation();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const response = fake.sent.find((message) => message.id === 103 && "result" in message);
+  assert.deepEqual(response.result, { action: "cancel" });
+});
+
+void test("supports Claude single-select, multi-select, custom answers, and previews", async () => {
+  const fake = fakeTransport();
+  const requests = [];
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: (request) => {
+        requests.push(request);
+        if (requests.length === 1) {
+          connection.answerQuestion(request.requestId, {
+            selectedOptionIds: ["Balanced"],
+            customAnswer: "Keep the public API unchanged",
+          });
+        } else {
+          connection.answerQuestion(request.requestId, {
+            selectedOptionIds: ["Tests", "Docs"],
+          });
+        }
+      },
+      stderr: () => {},
+      error: (message) => {
+        throw new Error(message);
+      },
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  fake.requestClaudeQuestions();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(
+    requests.map((request) => ({
+      title: request.title,
+      detail: request.detail,
+      options: request.options,
+      allowMultiple: request.allowMultiple,
+      allowCustomAnswer: request.allowCustomAnswer,
+      required: request.required,
+    })),
+    [
+      {
+        title: "Approach",
+        detail: "Which approach should I take?",
+        options: [
+          {
+            optionId: "Balanced",
+            name: "Balanced",
+            description: "Keep the change focused.",
+            preview: "small diff",
+          },
+          { optionId: "Thorough", name: "Thorough", description: undefined },
+        ],
+        allowMultiple: false,
+        allowCustomAnswer: true,
+        required: false,
+      },
+      {
+        title: "Checks",
+        detail: "Which checks should I run?",
+        options: [
+          { optionId: "Tests", name: "Tests", description: undefined },
+          { optionId: "Docs", name: "Docs", description: undefined },
+        ],
+        allowMultiple: true,
+        allowCustomAnswer: true,
+        required: false,
+      },
+    ],
+  );
+  const response = fake.sent.find((message) => message.id === 104 && "result" in message);
+  assert.deepEqual(response.result, {
+    action: "accept",
+    content: {
+      question_0_custom: "Keep the public API unchanged",
+      question_1: ["Tests", "Docs"],
+    },
+  });
 });
 
 void test("presents question tool input as an agent question", async () => {
@@ -567,7 +769,7 @@ void test("presents question tool input as an agent question", async () => {
       update: () => {},
       permission: (value) => {
         request = value;
-        connection.answerPermission(value.requestId, "sqlite");
+        connection.answerQuestion(value.requestId, { selectedOptionIds: ["sqlite"] });
       },
       stderr: () => {},
       error: (message) => {
@@ -601,6 +803,9 @@ void test("presents question tool input as an agent question", async () => {
         kind: "allow_once",
       },
     ],
+    allowMultiple: false,
+    allowCustomAnswer: false,
+    required: true,
   });
   const response = fake.sent.find((message) => message.id === 100 && "result" in message);
   assert.deepEqual(response.result, { outcome: { outcome: "selected", optionId: "sqlite" } });

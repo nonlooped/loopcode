@@ -296,7 +296,8 @@
 }
 
 .question-composer-option:hover,
-.question-composer-option:focus-visible {
+.question-composer-option:focus-visible,
+.question-composer-option.selected {
   border-color: var(--line-strong);
   background: var(--panel-hover);
 }
@@ -311,4 +312,85 @@
   color: var(--muted);
   font-size: 10px;
   line-height: 1.45;
+}
+
+.question-composer-option pre {
+  max-height: 180px;
+  margin: 8px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text-soft);
+  font:
+    10px/1.45 "Cascadia Mono",
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+}
+
+.question-composer-custom {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.question-composer-custom input {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text);
+  font: inherit;
+}
+
+.question-composer-custom input:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+}
+
+.question-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.question-composer-cancel,
+.question-composer-submit {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.question-composer-cancel:hover,
+.question-composer-cancel:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+  color: var(--text-soft);
+}
+
+.question-composer-submit {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.88);
+  color: rgba(12, 12, 14, 0.94);
+  font-weight: 600;
+}
+
+.question-composer-submit:hover,
+.question-composer-submit:focus-visible {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.question-composer-submit:disabled {
+  cursor: default;
+  opacity: 0.38;
 }

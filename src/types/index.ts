@@ -161,15 +161,33 @@ export interface PermissionOption {
   optionId: string;
   name: string;
   description?: string;
+  preview?: string;
   kind?: string;
 }
 
-export interface PermissionRequest {
+interface InteractionRequest {
   requestId: string | number | null;
-  type: "permission" | "question";
   title: string;
   detail: string;
   options: PermissionOption[];
+}
+
+export interface PermissionDecisionRequest extends InteractionRequest {
+  type: "permission";
+}
+
+export interface QuestionRequest extends InteractionRequest {
+  type: "question";
+  allowMultiple: boolean;
+  allowCustomAnswer: boolean;
+  required: boolean;
+}
+
+export type PermissionRequest = PermissionDecisionRequest | QuestionRequest;
+
+export interface QuestionAnswer {
+  selectedOptionIds: string[];
+  customAnswer?: string;
 }
 
 export interface ProviderModelCatalog {

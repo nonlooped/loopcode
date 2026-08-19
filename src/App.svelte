@@ -35,6 +35,7 @@
     PermissionMode,
     PermissionRequest,
     ProjectState,
+    QuestionAnswer,
     ProviderModelCatalog,
     ThreadState,
   } from './types';
@@ -536,6 +537,18 @@
     );
   }
 
+  function answerQuestion(answer: QuestionAnswer) {
+    const active = selectedInteraction;
+    if (!active || active.request.type !== 'question') return;
+    delete interactions[interactionKey(active.threadId, active.profileId)];
+    providers.answerQuestion(
+      active.threadId,
+      active.profileId,
+      active.request.requestId,
+      answer,
+    );
+  }
+
   async function closeApp() {
     if (closing) return;
     closing = true;
@@ -657,12 +670,14 @@
                 {/key}
               {/if}
               {#if selectedInteraction?.request.type === 'question'}
-                <QuestionComposer
-                  request={selectedInteraction.request}
-                  {reducedMotion}
-                  answer={(optionId) => answerPermission(optionId)}
-                  dismiss={() => answerPermission()}
-                />
+                {#key selectedInteraction.request}
+                  <QuestionComposer
+                    request={selectedInteraction.request}
+                    {reducedMotion}
+                    answer={answerQuestion}
+                    dismiss={() => answerPermission()}
+                  />
+                {/key}
               {:else}
                 <Composer
                   thread={selectedThread}

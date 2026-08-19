@@ -11,6 +11,7 @@ import type {
   MessageImage,
   PermissionMode,
   PermissionRequest,
+  QuestionAnswer,
   ProviderModelCatalog,
   ProviderSessionState,
   ThreadState,
@@ -559,6 +560,15 @@ export class ProviderRuntime {
     if (!connection) return;
     if (optionId) connection.answerPermission(requestId, optionId);
     else connection.cancelPermission(requestId);
+  }
+
+  answerQuestion(
+    threadId: string,
+    profileId: string,
+    requestId: string | number | null,
+    answer: QuestionAnswer,
+  ) {
+    this.connection(threadId, profileId)?.answerQuestion(requestId, answer);
   }
 
   #setConnectionStatus(thread: ThreadState, profileId: string, status: ConnectionStatus) {
