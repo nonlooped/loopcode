@@ -177,6 +177,16 @@
   .permission-actions {
     grid-template-columns: 1fr;
   }
+
+  .transparency-setting {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .transparency-control {
+    grid-column: 2;
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

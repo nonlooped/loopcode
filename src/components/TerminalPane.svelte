@@ -42,7 +42,7 @@
   onMount(() => {
     if (!host) return;
     terminal = new Terminal({
-      allowTransparency: false,
+      allowTransparency: true,
       cursorBlink: !reducedMotion,
       fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace',
       fontSize: 12,
@@ -162,7 +162,7 @@
     const styles = getComputedStyle(document.documentElement);
     const color = (name: string) => styles.getPropertyValue(name).trim();
     return {
-      background: color('--shell-solid'),
+      background: '#00000000',
       foreground: color('--text-soft'),
       cursor: color('--text'),
       cursorAccent: color('--shell-solid'),

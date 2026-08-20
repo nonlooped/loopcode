@@ -4,11 +4,15 @@ const PERMISSION_MODE_KEY = "loopcode.permission-mode";
 const LEFT_SIDEBAR_WIDTH_KEY = "loopcode.left-sidebar-width";
 const RIGHT_SIDEBAR_WIDTH_KEY = "loopcode.right-sidebar-width";
 const TERMINAL_HEIGHT_KEY = "loopcode.terminal-height";
+const LINUX_SHELL_TRANSPARENCY_KEY = "loopcode.linux-shell-transparency-level";
+const LEGACY_LINUX_SHELL_TRANSPARENCY_KEY = "loopcode.linux-shell-transparency";
 
 export const LEFT_SIDEBAR_WIDTH_RANGE = { min: 190, max: 480 } as const;
 export const RIGHT_SIDEBAR_WIDTH_RANGE = { min: 210, max: 520 } as const;
 export const TERMINAL_HEIGHT_RANGE = { min: 140, max: 520 } as const;
 export const DEFAULT_TERMINAL_HEIGHT = 260;
+export const LINUX_SHELL_TRANSPARENCY_RANGE = { min: 0, max: 100 } as const;
+export const MAX_LINUX_SHELL_TRANSPARENCY = 20;
 
 export interface SidebarWidths {
   left: number | null;
@@ -82,6 +86,42 @@ export function saveTerminalHeight(
   } catch {
     // Layout persistence is best-effort when web storage is unavailable.
   }
+}
+
+export function loadLinuxShellTransparency(storage: Pick<Storage, "getItem"> = localStorage) {
+  try {
+    const savedLevel = storedWidth(
+      storage.getItem(LINUX_SHELL_TRANSPARENCY_KEY),
+      LINUX_SHELL_TRANSPARENCY_RANGE,
+    );
+    if (savedLevel !== null) return savedLevel;
+
+    const legacyTransparency = storedWidth(storage.getItem(LEGACY_LINUX_SHELL_TRANSPARENCY_KEY), {
+      min: 0,
+      max: MAX_LINUX_SHELL_TRANSPARENCY,
+    });
+    return legacyTransparency === null
+      ? LINUX_SHELL_TRANSPARENCY_RANGE.min
+      : Math.round((legacyTransparency / MAX_LINUX_SHELL_TRANSPARENCY) * 100);
+  } catch {
+    return LINUX_SHELL_TRANSPARENCY_RANGE.min;
+  }
+}
+
+export function saveLinuxShellTransparency(
+  transparency: number,
+  storage: Pick<Storage, "setItem"> = localStorage,
+) {
+  const clamped = Math.min(
+    LINUX_SHELL_TRANSPARENCY_RANGE.max,
+    Math.max(LINUX_SHELL_TRANSPARENCY_RANGE.min, Math.round(transparency)),
+  );
+  try {
+    storage.setItem(LINUX_SHELL_TRANSPARENCY_KEY, String(clamped));
+  } catch {
+    // Settings persistence is best-effort when web storage is unavailable.
+  }
+  return clamped;
 }
 
 function storedWidth(value: string | null, range: { min: number; max: number }) {

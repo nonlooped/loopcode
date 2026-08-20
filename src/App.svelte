@@ -47,9 +47,13 @@
     LEFT_SIDEBAR_WIDTH_RANGE,
     RIGHT_SIDEBAR_WIDTH_RANGE,
     TERMINAL_HEIGHT_RANGE,
+    LINUX_SHELL_TRANSPARENCY_RANGE,
+    MAX_LINUX_SHELL_TRANSPARENCY,
+    loadLinuxShellTransparency,
     loadPermissionMode,
     loadSidebarWidths,
     loadTerminalHeight,
+    saveLinuxShellTransparency,
     savePermissionMode,
     saveSidebarWidth,
     saveTerminalHeight,
@@ -61,6 +65,7 @@
 
   const appWindow = getCurrentWindow();
   const appWebview = getCurrentWebview();
+  const isLinux = navigator.userAgent.includes('Linux');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const initialCatalogs = Object.fromEntries(
     profiles.map((profile) => [
@@ -95,6 +100,7 @@
   let compactLayout = $state(window.matchMedia('(max-width: 880px)').matches);
   let settingsOpen = $state(false);
   let compactSessionRows = $state(false);
+  let linuxShellTransparency = $state(isLinux ? loadLinuxShellTransparency() : 0);
   const initialPermissionMode = loadPermissionMode();
   let permissionMode = $state<PermissionMode>(initialPermissionMode);
   let showSettled = $state(false);
@@ -122,6 +128,9 @@
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
     `--terminal-height: ${terminalHeight}px`,
+    isLinux
+      ? `--linux-shell-opacity: ${1 - (linuxShellTransparency / 100) * MAX_LINUX_SHELL_TRANSPARENCY / 100}`
+      : '',
   ].filter(Boolean).join('; '));
 
   const workspace = new Workspace(workspaceState, providerCatalogs);
@@ -619,6 +628,10 @@
     if (selectedThread) void providers.connect(selectedThread, selectedThread.profileId);
   }
 
+  function setLinuxShellTransparency(transparency: number) {
+    linuxShellTransparency = saveLinuxShellTransparency(transparency);
+  }
+
   function setPermissionMode(mode: PermissionMode) {
     permissionMode = mode;
     providers.setPermissionMode(mode);
@@ -690,6 +703,7 @@
 
 <div
   class:maximized={windowMaximized}
+  class:linux-shell={isLinux}
   class:sidebar-collapsed={sidebarCollapsed}
   class:project-explorer-collapsed={!explorerRoot || (!compactLayout && projectExplorerCollapsed)}
   class:compact-session-rows={compactSessionRows}
@@ -751,9 +765,13 @@
         {#if settingsOpen}
           <SettingsPage
             {compactSessionRows}
+            {isLinux}
+            {linuxShellTransparency}
             {permissionMode}
             {reducedMotion}
             setCompactSessionRows={(value) => { compactSessionRows = value; }}
+            setLinuxShellTransparency={setLinuxShellTransparency}
+            linuxShellTransparencyRange={LINUX_SHELL_TRANSPARENCY_RANGE}
             {setPermissionMode}
           />
         {:else if selectedThread}

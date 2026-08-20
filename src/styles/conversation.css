@@ -189,6 +189,30 @@
   line-height: 1.35;
 }
 
+.transparency-control {
+  display: grid;
+  width: 164px;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.transparency-control output {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.transparency-control input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.transparency-control input:focus-visible {
+  outline: 2px solid rgba(230, 231, 234, 0.58);
+  outline-offset: 2px;
+}
+
 .toggle-control {
   position: relative;
   width: 36px;

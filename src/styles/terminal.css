@@ -7,7 +7,7 @@
   min-height: 0;
   overflow: hidden;
   border-top: 1px solid transparent;
-  background: var(--shell-solid);
+  background: transparent;
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
@@ -135,6 +135,10 @@ body.resizing-terminal .terminal-drawer {
 .terminal-host .xterm-viewport,
 .terminal-host .xterm-screen {
   min-width: 0;
+}
+
+.terminal-host .xterm-viewport {
+  background-color: transparent !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

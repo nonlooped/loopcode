@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  loadLinuxShellTransparency,
   loadPermissionMode,
   loadSidebarWidths,
   loadTerminalHeight,
+  saveLinuxShellTransparency,
   savePermissionMode,
   saveSidebarWidth,
   saveTerminalHeight,
@@ -22,6 +24,26 @@ void test("permission mode defaults to restricted and persists valid choices", (
   assert.equal(loadPermissionMode(storage), "full");
   values.set("loopcode.permission-mode", "unexpected");
   assert.equal(loadPermissionMode(storage), "restricted");
+});
+
+void test("Linux shell transparency maps the old 20% ceiling to 100%", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+
+  assert.equal(loadLinuxShellTransparency(storage), 0);
+  values.set("loopcode.linux-shell-transparency", "20");
+  assert.equal(loadLinuxShellTransparency(storage), 100);
+  values.set("loopcode.linux-shell-transparency", "0");
+  assert.equal(loadLinuxShellTransparency(storage), 0);
+
+  assert.equal(saveLinuxShellTransparency(80.4, storage), 80);
+  assert.equal(loadLinuxShellTransparency(storage), 80);
+  values.set("loopcode.linux-shell-transparency-level", "invalid");
+  values.set("loopcode.linux-shell-transparency", "invalid");
+  assert.equal(loadLinuxShellTransparency(storage), 0);
 });
 
 void test("sidebar widths retain CSS defaults until resized and persist valid sizes", () => {

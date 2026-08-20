@@ -1,19 +1,33 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
-  import { IconDownload, IconListDetails, IconShieldLock } from '@tabler/icons-svelte';
+  import { IconContrast, IconDownload, IconListDetails, IconShieldLock } from '@tabler/icons-svelte';
 
   import { exportDiagnostics } from '../services/native';
   import type { PermissionMode } from '../types';
 
   interface Props {
     compactSessionRows: boolean;
+    isLinux: boolean;
+    linuxShellTransparency: number;
+    linuxShellTransparencyRange: { min: number; max: number };
     permissionMode: PermissionMode;
     reducedMotion: boolean;
     setCompactSessionRows: (value: boolean) => void;
+    setLinuxShellTransparency: (value: number) => void;
     setPermissionMode: (value: PermissionMode) => void;
   }
 
-  const { compactSessionRows, permissionMode, reducedMotion, setCompactSessionRows, setPermissionMode }: Props = $props();
+  const {
+    compactSessionRows,
+    isLinux,
+    linuxShellTransparency,
+    linuxShellTransparencyRange,
+    permissionMode,
+    reducedMotion,
+    setCompactSessionRows,
+    setLinuxShellTransparency,
+    setPermissionMode,
+  }: Props = $props();
   let exportState = $state<'idle' | 'exporting' | 'exported' | 'error'>('idle');
 
   async function exportLogs() {
@@ -82,6 +96,27 @@
           <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
         </span>
       </label>
+      {#if isLinux}
+        <div class="settings-row settings-row-separated transparency-setting">
+          <span class="settings-row-icon" aria-hidden="true"><IconContrast size={17} stroke={1.55} /></span>
+          <span class="settings-row-copy">
+            <strong>Background transparency</strong>
+            <small>Shows the desktop behind LoopCode. Your desktop environment controls whether it is available.</small>
+          </span>
+          <label class="transparency-control" for="linux-shell-transparency">
+            <output>{linuxShellTransparency}%</output>
+            <input
+              id="linux-shell-transparency"
+              type="range"
+              min={linuxShellTransparencyRange.min}
+              max={linuxShellTransparencyRange.max}
+              step="1"
+              value={linuxShellTransparency}
+              oninput={(event) => setLinuxShellTransparency(Number(event.currentTarget.value))}
+            />
+          </label>
+        </div>
+      {/if}
       <div class="settings-row settings-row-separated">
         <span class="settings-row-icon" aria-hidden="true"><IconDownload size={17} stroke={1.55} /></span>
         <span class="settings-row-copy">
