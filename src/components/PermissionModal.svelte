@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
   import { z } from 'zod';
 
@@ -13,7 +12,8 @@
   }
 
   const { request, reducedMotion, answer, decline }: Props = $props();
-  let dialog = $state<HTMLDivElement>();
+  let dialog = $state<HTMLDialogElement>();
+  let returnFocus: HTMLElement | null = null;
 
   const primaryOptionId = $derived(
     request.options.find((option) => option.kind === 'allow_once')?.optionId ??
@@ -54,102 +54,79 @@
     return undefined;
   }
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      decline();
-      return;
-    }
-
-    if (event.key !== 'Tab' || !dialog) return;
-    const controls = [...dialog.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-    if (controls.length === 0) return;
-
-    const first = controls[0];
-    const last = controls.at(-1)!;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
-  onMount(() => {
-    if (!dialog) return;
-    const preferred = dialog.querySelector<HTMLButtonElement>('[data-primary="true"]');
-    (preferred ?? dialog).focus();
+  $effect(() => {
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog?.showModal();
+    return () => returnFocus?.focus();
   });
+
+  function handleCancel(event: Event) {
+    event.preventDefault();
+    decline();
+  }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<div
-  class="modal-backdrop"
-  role="presentation"
-  transition:fade|global={{ duration: reducedMotion ? 0 : 150 }}
+<dialog
+  bind:this={dialog}
+  class="permission-modal"
+  role="alertdialog"
+  aria-labelledby="permission-title"
+  aria-describedby="permission-description"
+  transition:scale|global={{ start: reducedMotion ? 1 : 0.985, duration: reducedMotion ? 0 : 170 }}
+  oncancel={handleCancel}
 >
-  <div
-    bind:this={dialog}
-    class="permission-modal"
-    role="alertdialog"
-    aria-modal="true"
-    aria-labelledby="permission-title"
-    aria-describedby="permission-description"
-    tabindex="-1"
-    transition:scale|global={{ start: reducedMotion ? 1 : 0.985, duration: reducedMotion ? 0 : 170 }}
-  >
-    <header class="permission-header">
-      <h2 id="permission-title">{title}</h2>
-      {#if detail.command}
-        <p>A coding agent is asking to run the command below.</p>
-      {/if}
-    </header>
-
-    <div id="permission-description" class="permission-detail">
-      {#if detail.command}
-        <section class="permission-field">
-          <span>Command</span>
-          <pre>{detail.command}</pre>
-        </section>
-        {#if detail.cwd}
-          <section class="permission-field">
-            <span>Working folder</span>
-            <pre>{detail.cwd}</pre>
-          </section>
-        {/if}
-        {#if detail.extra}
-          <details>
-            <summary>Additional details</summary>
-            <pre>{detail.extra}</pre>
-          </details>
-        {/if}
-      {:else}
-        <pre class="permission-raw">{detail.raw}</pre>
-      {/if}
-    </div>
-
-    {#if request.options.length > 0}
-      <p class="permission-prompt">Choose how to proceed</p>
+  <header class="permission-header">
+    <h2 id="permission-title">{title}</h2>
+    {#if detail.command}
+      <p>A coding agent is asking to run the command below.</p>
     {/if}
-    <footer class="permission-actions">
-      {#each request.options as option}
-        <button
-          class:primary={option.optionId === primaryOptionId}
-          class:reject={option.kind?.startsWith('reject')}
-          data-primary={option.optionId === primaryOptionId}
-          onclick={() => answer(option.optionId)}
-        >
-          <strong>{option.name}</strong>
-          {#if option.description ?? optionDescription(option.kind)}
-            <span>{option.description ?? optionDescription(option.kind)}</span>
-          {/if}
-        </button>
-      {/each}
-      {#if request.options.length === 0}
-        <button class="primary" data-primary="true" onclick={decline}><strong>Dismiss</strong></button>
+  </header>
+
+  <div id="permission-description" class="permission-detail">
+    {#if detail.command}
+      <section class="permission-field">
+        <span>Command</span>
+        <pre>{detail.command}</pre>
+      </section>
+      {#if detail.cwd}
+        <section class="permission-field">
+          <span>Working folder</span>
+          <pre>{detail.cwd}</pre>
+        </section>
       {/if}
-    </footer>
+      {#if detail.extra}
+        <details>
+          <summary>Additional details</summary>
+          <pre>{detail.extra}</pre>
+        </details>
+      {/if}
+    {:else}
+      <pre class="permission-raw">{detail.raw}</pre>
+    {/if}
   </div>
-</div>
+
+  {#if request.options.length > 0}
+    <p class="permission-prompt">Choose how to proceed</p>
+  {/if}
+  <footer class="permission-actions">
+    <!-- svelte-ignore a11y_autofocus --><!-- Modal autofocus is the spec-recommended way to move focus into a showModal() dialog. -->
+    {#each request.options as option}
+      <button
+        class:primary={option.optionId === primaryOptionId}
+        class:reject={option.kind?.startsWith('reject')}
+        data-primary={option.optionId === primaryOptionId}
+        autofocus={option.optionId === primaryOptionId || null}
+        onclick={() => answer(option.optionId)}
+      >
+        <strong>{option.name}</strong>
+        {#if option.description ?? optionDescription(option.kind)}
+          <span>{option.description ?? optionDescription(option.kind)}</span>
+        {/if}
+      </button>
+    {/each}
+    {#if request.options.length === 0}
+      <!-- svelte-ignore a11y_autofocus --><!-- Modal autofocus is the spec-recommended way to move focus into a showModal() dialog. -->
+      <button class="primary" data-primary="true" autofocus onclick={decline}><strong>Dismiss</strong></button>
+    {/if}
+  </footer>
+</dialog>

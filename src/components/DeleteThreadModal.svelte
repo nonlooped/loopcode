@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
 
   interface Props {
@@ -10,53 +9,37 @@
   }
 
   const { title, reducedMotion, cancel, confirm }: Props = $props();
-  let dialog = $state<HTMLDivElement>();
+  let dialog = $state<HTMLDialogElement>();
+  let returnFocus: HTMLElement | null = null;
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      cancel();
-      return;
-    }
+  $effect(() => {
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog?.showModal();
+    return () => returnFocus?.focus();
+  });
 
-    if (event.key !== 'Tab' || !dialog) return;
-    const controls = [...dialog.querySelectorAll<HTMLButtonElement>('button')];
-    const first = controls[0];
-    const last = controls.at(-1);
-    if (!first || !last) return;
-
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+  function handleCancel(event: Event) {
+    event.preventDefault();
+    cancel();
   }
-
-  onMount(() => dialog?.querySelector<HTMLButtonElement>('[data-primary="true"]')?.focus());
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<div class="modal-backdrop" role="presentation" transition:fade|global={{ duration: reducedMotion ? 0 : 150 }}>
-  <div
-    bind:this={dialog}
-    class="permission-modal confirmation-modal"
-    role="alertdialog"
-    aria-modal="true"
-    aria-labelledby="delete-thread-title"
-    aria-describedby="delete-thread-description"
-    tabindex="-1"
-    transition:scale|global={{ start: reducedMotion ? 1 : 0.985, duration: reducedMotion ? 0 : 170 }}
-  >
-    <header class="permission-header">
-      <h2 id="delete-thread-title">Delete thread?</h2>
-      <p id="delete-thread-description">“{title}” and its history will be permanently deleted.</p>
-    </header>
-    <footer class="confirmation-actions">
-      <button data-primary="true" onclick={cancel}>Cancel</button>
-      <button class="danger" onclick={confirm}>Delete</button>
-    </footer>
-  </div>
-</div>
+<dialog
+  bind:this={dialog}
+  class="permission-modal confirmation-modal"
+  role="alertdialog"
+  aria-labelledby="delete-thread-title"
+  aria-describedby="delete-thread-description"
+  transition:scale|global={{ start: reducedMotion ? 1 : 0.985, duration: reducedMotion ? 0 : 170 }}
+  oncancel={handleCancel}
+>
+  <header class="permission-header">
+    <h2 id="delete-thread-title">Delete thread?</h2>
+    <p id="delete-thread-description">“{title}” and its history will be permanently deleted.</p>
+  </header>
+  <footer class="confirmation-actions">
+    <!-- svelte-ignore a11y_autofocus --><!-- Modal autofocus is the spec-recommended way to move focus into a showModal() dialog. -->
+    <button data-primary="true" autofocus onclick={cancel}>Cancel</button>
+    <button class="danger" onclick={confirm}>Delete</button>
+  </footer>
+</dialog>

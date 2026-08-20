@@ -1,17 +1,5 @@
-.modal-backdrop {
-  position: fixed;
-  z-index: 30;
-  inset: 0;
-  display: grid;
-  padding: 20px;
-  place-items: center;
-  background: rgba(5, 6, 8, 0.38);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-}
-
 .permission-modal {
-  width: min(540px, 100%);
+  width: min(540px, calc(100vw - 40px));
   padding: 18px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
@@ -23,6 +11,25 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.025);
   backdrop-filter: blur(20px) saturate(115%);
   -webkit-backdrop-filter: blur(20px) saturate(115%);
+}
+
+.permission-modal::backdrop {
+  background: rgba(5, 6, 8, 0.38);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .permission-modal[open]::backdrop,
+  .image-preview[open]::backdrop {
+    animation: modal-backdrop-in 150ms ease;
+  }
+}
+
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .permission-header h2 {
@@ -157,7 +164,7 @@
 }
 
 .confirmation-modal {
-  width: min(400px, 100%);
+  width: min(400px, calc(100vw - 40px));
 }
 
 .confirmation-actions {
