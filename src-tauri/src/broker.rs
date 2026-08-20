@@ -418,9 +418,14 @@ fn request_key(message: &Value) -> Option<String> {
 #[tauri::command]
 pub async fn register_frontend(
     broker: State<'_, Broker>,
+    terminals: State<'_, crate::terminal::TerminalManager>,
     diagnostics: State<'_, Diagnostics>,
 ) -> Result<u64, String> {
-    broker.register_frontend(&diagnostics).await
+    let generation = broker.register_frontend(&diagnostics).await?;
+    terminals
+        .register_frontend(generation, &diagnostics)
+        .await?;
+    Ok(generation)
 }
 
 #[tauri::command]

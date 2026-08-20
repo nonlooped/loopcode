@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
-  import { IconLayoutSidebar, IconPlus, IconSettings } from '@tabler/icons-svelte';
+  import { IconLayoutSidebar, IconPlus, IconSettings, IconTerminal2 } from '@tabler/icons-svelte';
 
   import ContextMenu from './ContextMenu.svelte';
   import { profileById } from '../config/providers';
@@ -13,7 +13,9 @@
     selectedThread?: ThreadState;
     windowMaximized: boolean;
     reducedMotion: boolean;
+    terminalOpen: boolean;
     toggleSidebar: () => void;
+    toggleTerminal: () => void;
     addThread: () => void;
     closeApp: () => void;
     minimize: () => void;
@@ -25,7 +27,9 @@
     selectedThread,
     windowMaximized,
     reducedMotion,
+    terminalOpen,
     toggleSidebar,
+    toggleTerminal,
     addThread,
     closeApp,
     minimize,
@@ -74,6 +78,18 @@
         {/if}
       </span>
     {/key}
+    {#if !settingsOpen && selectedThread}
+      <button
+        class:active={terminalOpen}
+        class="chrome-button title-terminal-toggle"
+        aria-label={terminalOpen ? 'Close terminal drawer' : 'Open terminal drawer'}
+        aria-pressed={terminalOpen}
+        title={`${terminalOpen ? 'Close' : 'Open'} terminal (Ctrl/Cmd+\`)`}
+        onclick={toggleTerminal}
+      >
+        <IconTerminal2 size={14} stroke={1.55} />
+      </button>
+    {/if}
   </div>
 </header>
 
