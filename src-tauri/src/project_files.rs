@@ -1,5 +1,5 @@
 use ignore::WalkBuilder;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -41,6 +41,19 @@ pub struct ComposerCompletionEntry {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectFileChange {
     paths: Vec<String>,
+}
+
+fn project_file_change(event: Event) -> Option<ProjectFileChange> {
+    if event.kind.is_access() {
+        return None;
+    }
+    Some(ProjectFileChange {
+        paths: event
+            .paths
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect(),
+    })
 }
 
 fn resolve_project_path(project_root: &str, candidate: &str) -> Result<PathBuf, String> {
@@ -381,13 +394,8 @@ pub fn start_project_file_watcher(
 
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         let Ok(event) = result else { return };
-        let _ = on_change.send(ProjectFileChange {
-            paths: event
-                .paths
-                .into_iter()
-                .map(|path| path.to_string_lossy().into_owned())
-                .collect(),
-        });
+        let Some(change) = project_file_change(event) else { return };
+        let _ = on_change.send(change);
     })
     .map_err(|error| format!("Could not create project watcher: {error}"))?;
     watcher
@@ -420,8 +428,9 @@ pub fn stop_project_file_watcher(
 mod tests {
     use super::{
         composer_project_entries, frontmatter_value, project_directory_entries,
-        project_image_media_type, resolve_project_path,
+        project_file_change, project_image_media_type, resolve_project_path,
     };
+    use notify::{Event, EventKind, event::AccessKind};
     use std::{fs, path::Path, path::PathBuf};
 
     struct TestDirectory(PathBuf);
@@ -445,6 +454,11 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn ignores_non_mutating_file_access_events() {
+        assert!(project_file_change(Event::new(EventKind::Access(AccessKind::Read))).is_none());
     }
 
     #[test]
