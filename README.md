@@ -25,7 +25,7 @@ LoopCode runs providers locally through the [Agent Client Protocol](https://agen
 
 ## Get started
 
-LoopCode currently builds from source. Packaged downloads are not available yet.
+LoopCode currently builds from source. Version tags publish unsigned Windows and Linux packages to [GitHub Releases](https://github.com/nonlooped/loopcode/releases).
 
 You will need:
 
@@ -76,3 +76,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
+
+## Releases
+
+Push a `v<version>` tag matching `src-tauri/tauri.conf.json`. CI runs the checks above, builds Windows and Linux packages, then publishes them together in a GitHub Release.
