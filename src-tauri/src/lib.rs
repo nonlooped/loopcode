@@ -2,6 +2,7 @@ mod broker;
 mod diagnostics;
 mod persistence;
 mod project_files;
+mod terminal;
 
 use broker::{
     Broker, launch_harness, register_frontend, send_rpc, stop_all_harnesses, stop_harness,
@@ -21,6 +22,10 @@ use std::{
     },
 };
 use tauri::Manager;
+use terminal::{
+    TerminalManager, resize_terminal, start_terminal, stop_all_terminals, stop_terminal,
+    stop_terminal_for_thread, write_terminal,
+};
 
 fn git_command() -> Command {
     let mut command = Command::new("git");
@@ -203,6 +208,7 @@ pub fn run() {
         .manage(Broker::default())
         .manage(Diagnostics::new(home.join(".loopcode").join("logs")))
         .manage(ProjectFileWatchers::default())
+        .manage(TerminalManager::default())
         .setup(|app| {
             #[cfg(windows)]
             {
@@ -234,6 +240,12 @@ pub fn run() {
             reveal_project_path,
             start_project_file_watcher,
             stop_project_file_watcher,
+            start_terminal,
+            write_terminal,
+            resize_terminal,
+            stop_terminal,
+            stop_terminal_for_thread,
+            stop_all_terminals,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build LoopCode");
@@ -249,8 +261,11 @@ pub fn run() {
                 let shutdown_completed = Arc::clone(&shutdown_completed);
                 tauri::async_runtime::spawn(async move {
                     let broker = app.state::<Broker>();
+                    let terminals = app.state::<TerminalManager>();
                     let diagnostics = app.state::<Diagnostics>();
-                    if broker.shutdown(&diagnostics).await.is_ok() {
+                    let harnesses_stopped = broker.shutdown(&diagnostics).await.is_ok();
+                    let terminals_stopped = terminals.shutdown(&diagnostics).await.is_ok();
+                    if harnesses_stopped && terminals_stopped {
                         shutdown_completed.store(true, Ordering::Release);
                         app.exit(code.unwrap_or(0));
                     } else {
