@@ -1,12 +1,9 @@
-use std::{
-    fs::{self, OpenOptions},
-    io::Write,
-    path::Path,
-};
+use std::{fs, io::Write, path::Path};
+
+use atomic_write_file::AtomicWriteFile;
 
 pub const THREADS_FILE_NAME: &str = "threads.json";
 const BACKUP_FILE_NAME: &str = "threads.json.bak";
-const TEMP_FILE_NAME: &str = "threads.json.tmp";
 
 pub fn load_from_directory<T>(
     directory: &Path,
@@ -56,9 +53,13 @@ pub fn save_to_directory(directory: &Path, workspace_json: &str) -> Result<(), S
 
     let target = directory.join(THREADS_FILE_NAME);
     let backup = directory.join(BACKUP_FILE_NAME);
-    let temporary = directory.join(TEMP_FILE_NAME);
 
-    write_temporary_file(&temporary, workspace_json)?;
+    let mut file = AtomicWriteFile::open(&target)
+        .map_err(|error| format!("Could not open {}: {error}", target.display()))?;
+    file.write_all(workspace_json.as_bytes())
+        .and_then(|()| file.write_all(b"\n"))
+        .map_err(|error| format!("Could not write {}: {error}", target.display()))?;
+
     if backup.exists() {
         fs::remove_file(&backup)
             .map_err(|error| format!("Could not replace backup {}: {error}", backup.display()))?;
@@ -73,29 +74,15 @@ pub fn save_to_directory(directory: &Path, workspace_json: &str) -> Result<(), S
         })?;
     }
 
-    if let Err(error) = fs::rename(&temporary, &target) {
+    if let Err(error) = file.commit() {
         restore_backup(&backup, &target);
         return Err(format!(
-            "Could not move {} to {}: {error}",
-            temporary.display(),
+            "Could not publish {} atomically: {error}",
             target.display()
         ));
     }
 
     Ok(())
-}
-
-fn write_temporary_file(path: &Path, workspace_json: &str) -> Result<(), String> {
-    let mut file = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(path)
-        .map_err(|error| format!("Could not open {}: {error}", path.display()))?;
-    file.write_all(workspace_json.as_bytes())
-        .and_then(|()| file.write_all(b"\n"))
-        .and_then(|()| file.sync_all())
-        .map_err(|error| format!("Could not write {}: {error}", path.display()))
 }
 
 fn restore_backup(backup: &Path, target: &Path) {
@@ -173,6 +160,12 @@ mod tests {
             load(&directory.0).expect("workspace should load"),
             Some(latest.to_owned())
         );
+        let leftovers: Vec<_> = fs::read_dir(&directory.0)
+            .expect("directory should list")
+            .map(|entry| entry.expect("entry should read").file_name())
+            .filter(|name| name != THREADS_FILE_NAME && name != BACKUP_FILE_NAME)
+            .collect();
+        assert!(leftovers.is_empty(), "stray files: {leftovers:?}");
     }
 
     #[test]
