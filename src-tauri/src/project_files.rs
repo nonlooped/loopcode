@@ -394,7 +394,9 @@ pub fn start_project_file_watcher(
 
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         let Ok(event) = result else { return };
-        let Some(change) = project_file_change(event) else { return };
+        let Some(change) = project_file_change(event) else {
+            return;
+        };
         let _ = on_change.send(change);
     })
     .map_err(|error| format!("Could not create project watcher: {error}"))?;
