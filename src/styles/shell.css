@@ -124,7 +124,8 @@
   display: grid;
   gap: 7px;
   overflow: hidden;
-  padding: 0 42px 0 14px;
+  padding: 0 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
   white-space: nowrap;
 }
 
@@ -134,6 +135,15 @@
   grid-area: 1 / 1;
   align-items: center;
   gap: 7px;
+}
+
+.title-terminal-toggle {
+  grid-area: 1 / 2;
+}
+
+.title-terminal-toggle.active {
+  background: var(--panel-hover);
+  color: var(--text-soft);
 }
 
 .title-thread-context {

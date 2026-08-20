@@ -1,5 +1,6 @@
 import type { AnyMessage } from "@agentclientprotocol/sdk";
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { z } from "zod";
 
 import type { PersistedWorkspace } from "../types/index.ts";
 import { jsonValueSchema, type JsonValue } from "../utils/json.ts";
@@ -30,6 +31,29 @@ export interface ProjectFileEntry {
 export interface ProjectFileChange {
   paths: string[];
 }
+
+export interface StartTerminalRequest {
+  threadId: string;
+  cwd: string;
+  cols: number;
+  rows: number;
+}
+
+const terminalEventSchema = z.discriminatedUnion("event", [
+  z.object({
+    event: z.literal("output"),
+    data: z.object({ bytes: z.array(z.number().int().min(0).max(255)).max(8192) }),
+  }),
+  z.object({
+    event: z.literal("exited"),
+    data: z.object({ code: z.number().int().nonnegative(), success: z.boolean() }),
+  }),
+  z.object({ event: z.literal("error"), data: z.object({ message: z.string() }) }),
+]);
+
+const startTerminalResultSchema = z.object({ terminalId: z.string().min(1) });
+
+export type TerminalEvent = z.infer<typeof terminalEventSchema>;
 
 export interface ComposerCompletionEntry {
   kind: "file" | "folder" | "skill";
@@ -67,6 +91,49 @@ export function stopHarness(harnessId: string): Promise<void> {
 
 export function stopAllHarnesses(): Promise<void> {
   return invoke("stop_all_harnesses");
+}
+
+export async function startTerminal(
+  request: StartTerminalRequest,
+  onMessage: (event: TerminalEvent) => void,
+): Promise<string> {
+  if (frontendGeneration === undefined) throw new Error("The frontend is not registered");
+  const onEvent = new Channel<unknown>();
+  onEvent.onmessage = (value) => {
+    const event = terminalEventSchema.safeParse(value);
+    onMessage(
+      event.success
+        ? event.data
+        : { event: "error", data: { message: "The terminal returned an invalid event" } },
+    );
+  };
+  const result = startTerminalResultSchema.parse(
+    await invoke("start_terminal", {
+      request: { ...request, frontendGeneration },
+      onEvent,
+    }),
+  );
+  return result.terminalId;
+}
+
+export function writeTerminal(terminalId: string, data: string): Promise<void> {
+  return invoke("write_terminal", { terminalId, data });
+}
+
+export function resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void> {
+  return invoke("resize_terminal", { terminalId, cols, rows });
+}
+
+export function stopTerminal(terminalId: string): Promise<void> {
+  return invoke("stop_terminal", { terminalId });
+}
+
+export function stopTerminalForThread(threadId: string): Promise<void> {
+  return invoke("stop_terminal_for_thread", { threadId });
+}
+
+export function stopAllTerminals(): Promise<void> {
+  return invoke("stop_all_terminals");
 }
 
 export function getInitialWorkingDirectory(): Promise<string> {

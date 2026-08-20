@@ -3,9 +3,12 @@ import type { PermissionMode } from "../types/index.ts";
 const PERMISSION_MODE_KEY = "loopcode.permission-mode";
 const LEFT_SIDEBAR_WIDTH_KEY = "loopcode.left-sidebar-width";
 const RIGHT_SIDEBAR_WIDTH_KEY = "loopcode.right-sidebar-width";
+const TERMINAL_HEIGHT_KEY = "loopcode.terminal-height";
 
 export const LEFT_SIDEBAR_WIDTH_RANGE = { min: 190, max: 480 } as const;
 export const RIGHT_SIDEBAR_WIDTH_RANGE = { min: 210, max: 520 } as const;
+export const TERMINAL_HEIGHT_RANGE = { min: 140, max: 520 } as const;
+export const DEFAULT_TERMINAL_HEIGHT = 260;
 
 export interface SidebarWidths {
   left: number | null;
@@ -54,6 +57,28 @@ export function saveSidebarWidth(
       side === "left" ? LEFT_SIDEBAR_WIDTH_KEY : RIGHT_SIDEBAR_WIDTH_KEY,
       String(width),
     );
+  } catch {
+    // Layout persistence is best-effort when web storage is unavailable.
+  }
+}
+
+export function loadTerminalHeight(storage: Pick<Storage, "getItem"> = localStorage) {
+  try {
+    return (
+      storedWidth(storage.getItem(TERMINAL_HEIGHT_KEY), TERMINAL_HEIGHT_RANGE) ??
+      DEFAULT_TERMINAL_HEIGHT
+    );
+  } catch {
+    return DEFAULT_TERMINAL_HEIGHT;
+  }
+}
+
+export function saveTerminalHeight(
+  height: number,
+  storage: Pick<Storage, "setItem"> = localStorage,
+) {
+  try {
+    storage.setItem(TERMINAL_HEIGHT_KEY, String(height));
   } catch {
     // Layout persistence is best-effort when web storage is unavailable.
   }

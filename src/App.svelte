@@ -12,6 +12,7 @@
   import QuestionComposer from './components/QuestionComposer.svelte';
   import SettingsPage from './components/SettingsPage.svelte';
   import Sidebar from './components/Sidebar.svelte';
+  import TerminalDrawer from './components/TerminalDrawer.svelte';
   import Titlebar from './components/Titlebar.svelte';
   import Transcript from './components/Transcript.svelte';
   import { profileById, profiles } from './config/providers';
@@ -25,6 +26,8 @@
     registerFrontend,
     revealProjectPath,
     stopAllHarnesses,
+    stopAllTerminals,
+    stopTerminalForThread,
   } from './services/native';
   import { ProviderRuntime } from './services/provider-runtime';
   import { createWorkspaceState, Workspace } from './services/workspace';
@@ -43,10 +46,13 @@
   import {
     LEFT_SIDEBAR_WIDTH_RANGE,
     RIGHT_SIDEBAR_WIDTH_RANGE,
+    TERMINAL_HEIGHT_RANGE,
     loadPermissionMode,
     loadSidebarWidths,
+    loadTerminalHeight,
     savePermissionMode,
     saveSidebarWidth,
+    saveTerminalHeight,
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
   import { promptParts, promptText } from './utils/prompt-content';
@@ -80,6 +86,9 @@
   let sidebarCollapsed = $state(false);
   let projectExplorerOpen = $state(false);
   let projectExplorerCollapsed = $state(false);
+  let terminalOpen = $state(false);
+  let terminalThreadIds = $state<string[]>([]);
+  let terminalHeight = $state(loadTerminalHeight());
   const savedSidebarWidths = loadSidebarWidths();
   let leftSidebarWidth = $state<number | null>(savedSidebarWidths.left);
   let rightSidebarWidth = $state<number | null>(savedSidebarWidths.right);
@@ -107,10 +116,12 @@
   let closing = false;
   let branchLookup = 0;
   let stopSidebarResize: (() => void) | undefined;
+  let stopTerminalResize: (() => void) | undefined;
 
-  const sidebarWidthStyle = $derived([
+  const layoutStyle = $derived([
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
+    `--terminal-height: ${terminalHeight}px`,
   ].filter(Boolean).join('; '));
 
   const workspace = new Workspace(workspaceState, providerCatalogs);
@@ -150,6 +161,20 @@
     compactLayout ? projectExplorerOpen : !projectExplorerCollapsed,
   );
   const activeFilePath = $derived(fileHistoryIndex >= 0 ? fileHistory[fileHistoryIndex] ?? null : null);
+  const terminalVisible = $derived(terminalOpen && !settingsOpen && Boolean(selectedThread));
+  const terminalThreads = $derived(
+    terminalThreadIds.flatMap((threadId) => {
+      const thread = threads.find((item) => item.id === threadId);
+      return thread ? [thread] : [];
+    }),
+  );
+
+  $effect(() => {
+    const threadId = selectedThread?.id;
+    if (terminalVisible && threadId && !terminalThreadIds.includes(threadId)) {
+      terminalThreadIds = [...terminalThreadIds, threadId];
+    }
+  });
 
   $effect(() => {
     if (selectedThreadId === fileViewerThreadId) return;
@@ -212,6 +237,7 @@
     return () => {
       disposed = true;
       stopSidebarResize?.();
+      stopTerminalResize?.();
       window.clearTimeout(zoomNoticeTimer);
       window.clearTimeout(completionRefreshTimer);
       unlistenResize?.();
@@ -221,6 +247,11 @@
 
   function handleAppKeydown(event: KeyboardEvent) {
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (event.code === 'Backquote' && selectedThread && !settingsOpen) {
+      event.preventDefault();
+      toggleTerminal();
+      return;
+    }
     const direction = event.key === '-' ? -1 : event.key === '+' || event.key === '=' ? 1 : 0;
     if (!direction) return;
 
@@ -311,7 +342,14 @@
 
   async function removeThread(threadId: string) {
     threadPendingRemoval = undefined;
-    await providers.removeThread(threadId);
+    const thread = threads.find((item) => item.id === threadId);
+    try {
+      await Promise.all([providers.removeThread(threadId), stopTerminalForThread(threadId)]);
+    } catch (error) {
+      if (thread) addMessage(thread, 'error', `Could not stop the thread: ${errorMessage(error)}`);
+      return;
+    }
+    terminalThreadIds = terminalThreadIds.filter((id) => id !== threadId);
     delete composerImagesByThread[threadId];
     delete attachmentErrorsByThread[threadId];
     for (const [key, interaction] of Object.entries(interactions)) {
@@ -332,6 +370,27 @@
   function toggleProjectExplorer() {
     if (compactLayout) projectExplorerOpen = !projectExplorerOpen;
     else projectExplorerCollapsed = !projectExplorerCollapsed;
+  }
+
+  function toggleTerminal() {
+    if (!selectedThread || settingsOpen) return;
+    if (terminalOpen) {
+      closeTerminal();
+      return;
+    }
+    terminalOpen = true;
+  }
+
+  function closeTerminal() {
+    terminalOpen = false;
+    void tick().then(() => {
+      document.querySelector<HTMLButtonElement>('.title-terminal-toggle')?.focus();
+    });
+  }
+
+  function terminalExited(threadId: string) {
+    terminalThreadIds = terminalThreadIds.filter((id) => id !== threadId);
+    if (threadId === selectedThreadId && terminalOpen) closeTerminal();
   }
 
   function openFile(path: string) {
@@ -396,6 +455,51 @@
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
     stopSidebarResize = finish;
+  }
+
+  function startTerminalResize(event: PointerEvent) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    stopTerminalResize?.();
+    const conversation = document.querySelector<HTMLElement>('.conversation');
+    if (!conversation) return;
+    const startY = event.clientY;
+    const startHeight = terminalHeight;
+    const maxHeight = Math.max(
+      TERMINAL_HEIGHT_RANGE.min,
+      Math.min(TERMINAL_HEIGHT_RANGE.max, conversation.getBoundingClientRect().height - 120),
+    );
+    document.body.classList.add('resizing-terminal');
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      terminalHeight = Math.round(Math.min(
+        maxHeight,
+        Math.max(TERMINAL_HEIGHT_RANGE.min, startHeight + startY - moveEvent.clientY),
+      ));
+    };
+    const finish = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      document.body.classList.remove('resizing-terminal');
+      saveTerminalHeight(terminalHeight);
+      stopTerminalResize = undefined;
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    stopTerminalResize = finish;
+  }
+
+  function resizeTerminalDrawerBy(delta: number) {
+    const conversationHeight = document.querySelector<HTMLElement>('.conversation')
+      ?.getBoundingClientRect().height ?? window.innerHeight - 38;
+    terminalHeight = Math.round(Math.min(
+      TERMINAL_HEIGHT_RANGE.max,
+      Math.max(TERMINAL_HEIGHT_RANGE.min, Math.min(conversationHeight - 120, terminalHeight + delta)),
+    ));
+    saveTerminalHeight(terminalHeight);
   }
 
   function openSettings() {
@@ -564,6 +668,7 @@
     try {
       await workspace.flush();
       await stopAllHarnesses();
+      await stopAllTerminals();
       await appWindow.destroy();
     } catch (error) {
       closing = false;
@@ -589,14 +694,16 @@
   class:project-explorer-collapsed={!explorerRoot || (!compactLayout && projectExplorerCollapsed)}
   class:compact-session-rows={compactSessionRows}
   class="app-shell"
-  style={sidebarWidthStyle}
+  style={layoutStyle}
 >
   <Titlebar
     {settingsOpen}
     {selectedThread}
     {windowMaximized}
     {reducedMotion}
+    terminalOpen={terminalVisible}
     {toggleSidebar}
+    {toggleTerminal}
     {addThread}
     {closeApp}
     minimize={() => { void appWindow.minimize(); }}
@@ -715,6 +822,19 @@
           {/if}
         {/if}
       </div>
+      {#if terminalThreads.length > 0}
+        <TerminalDrawer
+          threads={terminalThreads}
+          {selectedThreadId}
+          open={terminalVisible}
+          height={terminalHeight}
+          {reducedMotion}
+          close={closeTerminal}
+          {terminalExited}
+          startResize={startTerminalResize}
+          resizeBy={resizeTerminalDrawerBy}
+        />
+      {/if}
     </main>
     {#if explorerRoot}
       {#key explorerRoot}
