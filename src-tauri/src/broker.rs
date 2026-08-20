@@ -1,4 +1,9 @@
 use crate::diagnostics::{Diagnostics, rpc_fields, safe_stderr};
+#[cfg(unix)]
+use process_wrap::tokio::ProcessGroup;
+use process_wrap::tokio::{CommandWrap, KillOnDrop};
+#[cfg(windows)]
+use process_wrap::tokio::{CreationFlags, JobObject};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -18,8 +23,22 @@ use tokio::{
     sync::{Mutex, mpsc, watch},
     time::{Duration, timeout},
 };
+#[cfg(windows)]
+use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
 const HARNESS_STOP_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn wrap_harness_command(command: Command) -> CommandWrap {
+    let mut command = CommandWrap::from(command);
+    command.wrap(KillOnDrop);
+    #[cfg(unix)]
+    command.wrap(ProcessGroup::leader());
+    #[cfg(windows)]
+    command
+        .wrap(CreationFlags(CREATE_NO_WINDOW))
+        .wrap(JobObject);
+    command
+}
 
 #[derive(Default)]
 pub struct Broker {
@@ -130,24 +149,21 @@ pub async fn launch_harness(
         .stderr(Stdio::piped())
         .env("NO_COLOR", "1");
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        command.as_std_mut().creation_flags(0x0800_0000);
-    }
-
-    let mut child = command
+    let mut child = wrap_harness_command(command)
         .spawn()
         .map_err(|error| format!("Could not start {command_name}: {error}"))?;
     let stdin = Arc::new(Mutex::new(
-        child.stdin.take().ok_or("The harness did not open stdin")?,
+        child
+            .stdin()
+            .take()
+            .ok_or("The harness did not open stdin")?,
     ));
     let stdout = child
-        .stdout
+        .stdout()
         .take()
         .ok_or("The harness did not open stdout")?;
     let stderr = child
-        .stderr
+        .stderr()
         .take()
         .ok_or("The harness did not open stderr")?;
     let harness_id = format!(
@@ -288,7 +304,7 @@ pub async fn launch_harness(
         let status = tokio::select! {
             result = child.wait() => result,
             _ = stop_rx.recv() => {
-                let _ = child.kill().await;
+                let _ = child.start_kill();
                 child.wait().await
             }
         };
@@ -590,11 +606,57 @@ async fn wait_for_harness_stop(
 
 #[cfg(test)]
 mod tests {
-    use super::wait_for_harness_stop;
+    use super::{wait_for_harness_stop, wrap_harness_command};
+    #[cfg(unix)]
+    use std::process::Stdio;
+    #[cfg(unix)]
+    use tokio::{io::AsyncBufReadExt, io::BufReader, process::Command, time::sleep};
     use tokio::{
         sync::{mpsc, watch},
         time::{Duration, timeout},
     };
+
+    #[cfg(unix)]
+    fn process_exists(pid: &str) -> bool {
+        std::process::Command::new("kill")
+            .args(["-0", pid])
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn killing_harness_kills_descendants() {
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "sleep 30 & echo $!; wait"])
+            .stdout(Stdio::piped());
+        let mut child = wrap_harness_command(command)
+            .spawn()
+            .expect("harness should start");
+        let stdout = child.stdout().take().expect("stdout should be piped");
+        let descendant_pid = BufReader::new(stdout)
+            .lines()
+            .next_line()
+            .await
+            .expect("pid should be readable")
+            .expect("pid should be printed");
+
+        child.start_kill().expect("harness should stop");
+        child.wait().await.expect("harness should exit");
+        for _ in 0..20 {
+            if !process_exists(&descendant_pid) {
+                return;
+            }
+            sleep(Duration::from_millis(25)).await;
+        }
+
+        let _ = std::process::Command::new("kill")
+            .args(["-KILL", &descendant_pid])
+            .status();
+        panic!("descendant {descendant_pid} survived harness stop");
+    }
 
     #[tokio::test]
     async fn waits_for_process_exit_after_requesting_stop() {
