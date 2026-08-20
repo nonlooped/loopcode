@@ -79,9 +79,8 @@ fn initial_working_directory() -> Result<String, String> {
 
 fn loopcode_data_directory(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     app.path()
-        .home_dir()
-        .map(|home| home.join(".loopcode"))
-        .map_err(|error| format!("Could not resolve the user home directory: {error}"))
+        .app_data_dir()
+        .map_err(|error| format!("Could not resolve the application data directory: {error}"))
 }
 
 #[tauri::command]
@@ -197,16 +196,11 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
 }
 
 pub fn run() {
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
     let shutdown_started = Arc::new(AtomicBool::new(false));
     let shutdown_completed = Arc::new(AtomicBool::new(false));
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Broker::default())
-        .manage(Diagnostics::new(home.join(".loopcode").join("logs")))
         .manage(ProjectFileWatchers::default())
         .manage(TerminalManager::default())
         .setup(|app| {
@@ -216,6 +210,12 @@ pub fn run() {
                     configure_native_window(&window)?;
                 }
             }
+
+            let log_dir = app
+                .path()
+                .app_log_dir()
+                .map_err(|error| format!("Could not resolve the log directory: {error}"))?;
+            app.manage(Diagnostics::new(log_dir));
 
             Ok(())
         })
