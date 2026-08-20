@@ -433,30 +433,7 @@ mod tests {
         project_file_change, project_image_media_type, resolve_project_path,
     };
     use notify::{Event, EventKind, event::AccessKind};
-    use std::{fs, path::Path, path::PathBuf};
-
-    struct TestDirectory(PathBuf);
-
-    impl TestDirectory {
-        fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "loopcode-project-files-test-{}-{}",
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .expect("clock should be after the Unix epoch")
-                    .as_nanos()
-            ));
-            fs::create_dir_all(&path).expect("test directory should be created");
-            Self(path)
-        }
-    }
-
-    impl Drop for TestDirectory {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
+    use std::{fs, path::Path};
 
     #[test]
     fn ignores_non_mutating_file_access_events() {
@@ -465,9 +442,9 @@ mod tests {
 
     #[test]
     fn rejects_paths_outside_the_project() {
-        let directory = TestDirectory::new();
-        let project = directory.0.join("project");
-        let outside = directory.0.join("outside.txt");
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        let project = directory.path().join("project");
+        let outside = directory.path().join("outside.txt");
         fs::create_dir(&project).expect("project should be created");
         fs::write(&outside, "outside").expect("outside file should be created");
 
@@ -479,13 +456,13 @@ mod tests {
 
     #[test]
     fn orders_directories_before_files_by_name() {
-        let directory = TestDirectory::new();
-        fs::create_dir(directory.0.join("z-folder")).expect("folder should be created");
-        fs::create_dir(directory.0.join("A-folder")).expect("folder should be created");
-        fs::write(directory.0.join("z.txt"), "z").expect("file should be created");
-        fs::write(directory.0.join("A.txt"), "a").expect("file should be created");
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        fs::create_dir(directory.path().join("z-folder")).expect("folder should be created");
+        fs::create_dir(directory.path().join("A-folder")).expect("folder should be created");
+        fs::write(directory.path().join("z.txt"), "z").expect("file should be created");
+        fs::write(directory.path().join("A.txt"), "a").expect("file should be created");
 
-        let path = directory.0.to_string_lossy();
+        let path = directory.path().to_string_lossy();
         let names = project_directory_entries(&path, &path)
             .expect("directory should be read")
             .into_iter()
@@ -497,16 +474,17 @@ mod tests {
 
     #[test]
     fn composer_entries_honor_gitignore_without_git_repository() {
-        let directory = TestDirectory::new();
-        fs::create_dir(directory.0.join("ignored")).expect("ignored directory should be created");
-        fs::write(directory.0.join(".gitignore"), "ignored/\n")
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        fs::create_dir(directory.path().join("ignored"))
+            .expect("ignored directory should be created");
+        fs::write(directory.path().join(".gitignore"), "ignored/\n")
             .expect("gitignore should be written");
-        fs::write(directory.0.join("visible.txt"), "visible")
+        fs::write(directory.path().join("visible.txt"), "visible")
             .expect("visible file should be written");
-        fs::write(directory.0.join("ignored/hidden.txt"), "hidden")
+        fs::write(directory.path().join("ignored/hidden.txt"), "hidden")
             .expect("ignored file should be written");
 
-        let paths = composer_project_entries(&directory.0)
+        let paths = composer_project_entries(&directory.path())
             .expect("project entries should load")
             .into_iter()
             .map(|entry| entry.relative_path)

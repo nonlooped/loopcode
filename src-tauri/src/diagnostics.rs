@@ -236,25 +236,7 @@ fn append_file(path: &Path, output: &mut impl Write) -> Result<(), String> {
 mod tests {
     use super::{Diagnostics, rpc_fields, safe_stderr};
     use serde_json::json;
-    use std::{fs, path::PathBuf};
-
-    struct TestDirectory(PathBuf);
-
-    impl TestDirectory {
-        fn new() -> Self {
-            let path =
-                std::env::temp_dir().join(format!("loopcode-diagnostics-{}", std::process::id()));
-            let _ = fs::remove_dir_all(&path);
-            fs::create_dir_all(&path).expect("test directory should be created");
-            Self(path)
-        }
-    }
-
-    impl Drop for TestDirectory {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
+    use std::fs;
 
     #[test]
     fn rpc_envelopes_exclude_prompt_content_and_keep_error_metadata() {
@@ -300,14 +282,14 @@ mod tests {
             safe_stderr("Authorization: Bearer secret"),
             "<REDACTED sensitive text>"
         );
-        let directory = TestDirectory::new();
-        let diagnostics = Diagnostics::new(directory.0.clone());
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        let diagnostics = Diagnostics::new(directory.path().to_path_buf());
         diagnostics.record(
             "error",
             "acp.client.error",
             json!({ "message": "failed", "prompt": "private request", "apiKey": "secret" }),
         );
-        let export = directory.0.join("export.jsonl");
+        let export = directory.path().join("export.jsonl");
         diagnostics
             .export_to(&export)
             .expect("diagnostics should export");
