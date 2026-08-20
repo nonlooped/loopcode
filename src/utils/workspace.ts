@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { providerDefinitionById } from "../config/provider-definitions.ts";
 import type {
   ComposerReference,
@@ -10,7 +12,7 @@ import type {
   TimelineMessage,
   ToolActivity,
 } from "../types/index.ts";
-import { finiteNumber, isObject, stringValue } from "./json.ts";
+import { finiteNumber, isObject, stringValue, type JsonValue } from "./json.ts";
 import { createThread } from "./threads.ts";
 
 export interface RestoredWorkspace {
@@ -53,7 +55,7 @@ export function workspaceSnapshot(
 }
 
 export function restoreWorkspace(
-  value: unknown,
+  value: JsonValue,
   defaultWorkingFolder: string,
   catalogs: Record<string, ProviderModelCatalog>,
 ): RestoredWorkspace | undefined {
@@ -106,18 +108,18 @@ export function restoreWorkspace(
   };
 }
 
-function restoreProject(value: unknown): ProjectState | undefined {
+function restoreProject(value: JsonValue): ProjectState | undefined {
   if (!isObject(value)) return undefined;
   const id = stringValue(value.id);
   const name = stringValue(value.name);
-  const path = typeof value.path === "string" ? value.path : undefined;
+  const path = stringValue(value.path);
   const createdAt = finiteNumber(value.createdAt);
   if (!id || !name || !path || createdAt === undefined) return undefined;
   return { id, name, path, createdAt };
 }
 
 function restoreThread(
-  value: unknown,
+  value: JsonValue,
   defaultWorkingFolder: string,
   catalogs: Record<string, ProviderModelCatalog>,
 ): ThreadState | undefined {
@@ -126,9 +128,7 @@ function restoreThread(
   const title = stringValue(value.title);
   if (!id || !title) return undefined;
 
-  const profile = providerDefinitionById(
-    typeof value.profileId === "string" ? value.profileId : "",
-  );
+  const profile = providerDefinitionById(stringValue(value.profileId) ?? "");
   const messages = Array.isArray(value.messages)
     ? value.messages.map(restoreMessage).filter((message) => message !== undefined)
     : [];
@@ -147,19 +147,20 @@ function restoreThread(
     id,
     title,
     profileId: profile.id,
-    cwd: typeof value.cwd === "string" && value.cwd ? value.cwd : defaultWorkingFolder,
+    cwd: stringValue(value.cwd) ?? defaultWorkingFolder,
     messages,
     tools,
-    draft: typeof value.draft === "string" ? value.draft : "",
+    draft: z.string().safeParse(value.draft).data ?? "",
     draftReferences: restoreReferences(value.draftReferences),
     updatedAt,
     settled: value.settled === true,
-    projectId: typeof value.projectId === "string" ? value.projectId : null,
+    projectId: stringValue(value.projectId) ?? null,
   };
   if (isObject(value.providerSessionIds)) {
     for (const [profileId, sessionId] of Object.entries(value.providerSessionIds)) {
-      if (thread.providers[profileId] && typeof sessionId === "string" && sessionId) {
-        thread.providers[profileId].sessionId = sessionId;
+      const restoredSessionId = stringValue(sessionId);
+      if (thread.providers[profileId] && restoredSessionId) {
+        thread.providers[profileId].sessionId = restoredSessionId;
       }
     }
   }
@@ -173,10 +174,10 @@ function providerSessionIds(thread: ThreadState) {
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
-function restoreMessage(value: unknown): TimelineMessage | undefined {
+function restoreMessage(value: JsonValue): TimelineMessage | undefined {
   if (!isObject(value)) return undefined;
   const id = stringValue(value.id);
-  const text = typeof value.text === "string" ? value.text : undefined;
+  const text = z.string().safeParse(value.text).data;
   const createdAt = finiteNumber(value.createdAt);
   const role = value.role;
   if (
@@ -207,19 +208,19 @@ function copyPromptPart(part: PromptPart): PromptPart {
     : { type: "reference", reference: { ...part.reference } };
 }
 
-function restorePromptParts(value: unknown): PromptPart[] | undefined {
+function restorePromptParts(value: JsonValue | undefined): PromptPart[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const parts = value.flatMap((part): PromptPart[] => {
     if (!isObject(part)) return [];
-    if (part.type === "text" && typeof part.text === "string")
-      return [{ type: "text", text: part.text }];
+    const text = z.string().safeParse(part.text).data;
+    if (part.type === "text" && text !== undefined) return [{ type: "text", text }];
     const reference = part.type === "reference" ? restoreReference(part.reference) : undefined;
     return reference ? [{ type: "reference", reference }] : [];
   });
   return parts.length > 0 ? parts : undefined;
 }
 
-function restoreReferences(value: unknown): ComposerReference[] {
+function restoreReferences(value: JsonValue | undefined): ComposerReference[] {
   return Array.isArray(value)
     ? value.flatMap((item) => {
         const reference = restoreReference(item);
@@ -228,7 +229,7 @@ function restoreReferences(value: unknown): ComposerReference[] {
     : [];
 }
 
-function restoreReference(value: unknown): ComposerReference | undefined {
+function restoreReference(value: JsonValue): ComposerReference | undefined {
   if (!isObject(value)) return undefined;
   const { kind } = value;
   if (kind !== "file" && kind !== "folder" && kind !== "skill") return undefined;
@@ -242,7 +243,7 @@ function restoreReference(value: unknown): ComposerReference | undefined {
     : undefined;
 }
 
-function restoreMessageImages(value: unknown): MessageImage[] | undefined {
+function restoreMessageImages(value: JsonValue | undefined): MessageImage[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const images = value.filter(isObject).flatMap((image) => {
     const data = stringValue(image.data);
@@ -254,7 +255,7 @@ function restoreMessageImages(value: unknown): MessageImage[] | undefined {
   return images.length > 0 ? images : undefined;
 }
 
-function restoreTool(value: unknown): ToolActivity | undefined {
+function restoreTool(value: JsonValue): ToolActivity | undefined {
   if (!isObject(value)) return undefined;
   const id = stringValue(value.id);
   const title = stringValue(value.title);
@@ -267,9 +268,12 @@ function restoreTool(value: unknown): ToolActivity | undefined {
     title,
     kind,
     status,
-    detail: typeof value.detail === "string" ? value.detail : undefined,
+    detail: z.string().safeParse(value.detail).data,
     locations: Array.isArray(value.locations)
-      ? value.locations.filter((location): location is string => typeof location === "string")
+      ? value.locations.flatMap((location) => {
+          const restored = z.string().safeParse(location).data;
+          return restored === undefined ? [] : [restored];
+        })
       : [],
     createdAt,
   };

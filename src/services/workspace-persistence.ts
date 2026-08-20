@@ -16,8 +16,8 @@ export class WorkspacePersistence {
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
-      void this.flush().catch((error: unknown) => {
-        console.error("Could not persist LoopCode threads", error);
+      void this.flush().catch((cause: unknown) => {
+        console.error("Could not persist LoopCode threads", cause);
       });
     }, 200);
   }

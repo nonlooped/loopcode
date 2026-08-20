@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fade, scale } from 'svelte/transition';
+  import { z } from 'zod';
 
   import type { PermissionRequest } from '../types';
 
@@ -25,20 +26,14 @@
       : request.title,
   );
 
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-  }
+  const permissionDetailSchema = z.object({
+    command: z.string().optional(),
+    cwd: z.string().optional(),
+  }).loose();
 
   function parsePermissionDetail(value: string) {
     try {
-      const parsed: unknown = JSON.parse(value);
-      if (!isRecord(parsed)) throw new Error('Permission detail is not an object');
-
-      const command = typeof parsed.command === 'string' ? parsed.command : undefined;
-      const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : undefined;
-      const remaining = Object.fromEntries(
-        Object.entries(parsed).filter(([key]) => key !== 'command' && key !== 'cwd'),
-      );
+      const { command, cwd, ...remaining } = permissionDetailSchema.parse(JSON.parse(value));
 
       return {
         command,

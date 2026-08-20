@@ -1,4 +1,5 @@
 import * as acp from "@agentclientprotocol/sdk";
+import { z } from "zod";
 
 import { launchHarness, sendRpc, stopHarness, type BrokerEvent } from "./native.ts";
 import type {
@@ -12,6 +13,7 @@ import type {
   ThreadStatus,
   TurnStatus,
 } from "../types/index.ts";
+import type { JsonValue } from "../utils/json.ts";
 import {
   readCursorAvailableModels,
   readModelState,
@@ -73,6 +75,23 @@ const nativeTransport: AcpTransport = {
   send: sendRpc,
   stop: stopHarness,
 };
+
+function cursorCapabilities(profileId: string | undefined): acp.ClientCapabilities {
+  const capabilities: acp.ClientCapabilities = {
+    session: { configOptions: { boolean: {} } },
+    elicitation: { form: {} },
+  };
+  if (profileId === "cursor") capabilities._meta = { parameterizedModelPicker: true };
+  return capabilities;
+}
+
+function isTextPrompt(value: string | PromptContent[]): value is string {
+  return typeof value === "string";
+}
+
+function isBooleanConfigValue(value: string | boolean): value is boolean {
+  return typeof value === "boolean";
+}
 
 export type PromptImage = acp.ImageContent & { type: "image" };
 export type PromptContent = acp.ContentBlock;
@@ -156,7 +175,7 @@ export class AcpConnection {
         .onRequest(acp.methods.client.elicitation.create, ({ params, requestId }) =>
           this.#requestElicitation(requestId, params),
         )
-        .onRequest("cursor/ask_question", parseCursorAskQuestion, ({ params, requestId }) =>
+        .onRequest("cursor/ask_question", cursorAskQuestionSchema, ({ params, requestId }) =>
           this.#requestCursorQuestion(requestId, params),
         )
         .onRequest<unknown, { outcome: { outcome: "rejected"; reason: string } }>(
@@ -172,11 +191,7 @@ export class AcpConnection {
       method = "initialize";
       const initialized = await this.#context.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
-        clientCapabilities: {
-          session: { configOptions: { boolean: {} } },
-          elicitation: { form: {} },
-          ...(request.profileId === "cursor" ? { _meta: { parameterizedModelPicker: true } } : {}),
-        },
+        clientCapabilities: cursorCapabilities(request.profileId),
         clientInfo: {
           name: "loopcode",
           title: "LoopCode",
@@ -246,7 +261,10 @@ export class AcpConnection {
 
   async listCursorModels() {
     // TODO: Unsafe undocumented Cursor extension; replace it when stable ACP discovery is sufficient.
-    const response = await this.#requireContext().request("cursor/list_available_models", {});
+    const response = await this.#requireContext().request<JsonValue>(
+      "cursor/list_available_models",
+      {},
+    );
     return readCursorAvailableModels(response);
   }
 
@@ -261,10 +279,9 @@ export class AcpConnection {
     try {
       await context.request(acp.methods.agent.session.prompt, {
         sessionId,
-        prompt:
-          typeof prompt === "string"
-            ? [...(prompt ? [{ type: "text" as const, text: prompt }] : []), ...images]
-            : prompt,
+        prompt: isTextPrompt(prompt)
+          ? [...(prompt ? [{ type: "text" as const, text: prompt }] : []), ...images]
+          : prompt,
       });
       if (this.#activeToolIds.size > 0) {
         const error = new Error(
@@ -305,10 +322,9 @@ export class AcpConnection {
 
   async setConfigOption(configId: string, value: string | boolean) {
     const sessionId = this.#requireSessionId();
-    const params: acp.SetSessionConfigOptionRequest =
-      typeof value === "boolean"
-        ? { sessionId, configId, value, type: "boolean" }
-        : { sessionId, configId, value };
+    const params: acp.SetSessionConfigOptionRequest = isBooleanConfigValue(value)
+      ? { sessionId, configId, value, type: "boolean" }
+      : { sessionId, configId, value };
     const response = await this.#requireContext().request(
       acp.methods.agent.session.setConfigOption,
       params,
@@ -513,7 +529,7 @@ export class AcpConnection {
 
   #requestElicitation(requestId: RpcId, params: acp.CreateElicitationRequest) {
     const sessionId =
-      "sessionId" in params && typeof params.sessionId === "string" ? params.sessionId : undefined;
+      "sessionId" in params ? z.string().safeParse(params.sessionId).data : undefined;
     if (sessionId && this.#titleSessions.has(sessionId)) {
       return Promise.resolve<acp.CreateElicitationResponse>({ action: "cancel" });
     }
@@ -636,18 +652,21 @@ export class AcpConnection {
 }
 
 function errorDetails(
-  error: unknown,
+  cause: unknown,
   scope: AcpErrorDetails["scope"],
   method?: string,
 ): AcpErrorDetails {
   const details: AcpErrorDetails = {
     scope,
     method,
-    message: error instanceof Error ? error.message : String(error),
+    message: cause instanceof Error ? cause.message : String(cause),
   };
-  if (!isRecord(error)) return details;
-  if (typeof error.code === "number") details.code = error.code;
-  if ("data" in error) details.data = error.data;
+  const parsed = z
+    .object({ code: z.number().optional(), data: z.json().optional() })
+    .safeParse(cause);
+  if (!parsed.success) return details;
+  details.code = parsed.data.code;
+  details.data = parsed.data.data;
   return details;
 }
 
@@ -655,7 +674,8 @@ function permissionFromAcp(
   requestId: RpcId,
   params: acp.RequestPermissionRequest,
 ): PermissionRequest {
-  const rawInput = params.toolCall.rawInput;
+  const parsedRawInput = z.json().safeParse(params.toolCall.rawInput);
+  const rawInput = parsedRawInput.success ? parsedRawInput.data : null;
   const question = questionFromInput(rawInput);
   const detail = question?.text ?? requestDetail(rawInput);
   const options = params.options.map((option) => ({
@@ -764,26 +784,27 @@ function multiSelectOptions(items: acp.MultiSelectItems): QuestionRequest["optio
 
 function optionFromEnum(option: acp.EnumOption): QuestionRequest["options"][number] {
   const optionMeta = option._meta?.["_claude/askUserQuestionOption"];
-  const preview =
-    isRecord(optionMeta) && typeof optionMeta.preview === "string" ? optionMeta.preview : undefined;
-  return {
+  const preview = z.object({ preview: z.string() }).safeParse(optionMeta).data?.preview;
+  const result: QuestionRequest["options"][number] = {
     optionId: option.const,
     name: option.title,
     description: option.description ?? undefined,
-    ...(preview ? { preview } : {}),
   };
+  if (preview) result.preview = preview;
+  return result;
 }
 
 function customAnswerTarget(schema: acp.ElicitationPropertySchema) {
-  const meta = isRecord(schema._meta) ? schema._meta : {};
-  const shared = meta["_askUserQuestionCustomAnswer"];
-  if (isRecord(shared) && shared.isCustomAnswer === true && typeof shared.questionId === "string") {
-    return shared.questionId;
-  }
-  const codex = meta.codex;
-  if (isRecord(codex) && codex.isOtherAnswer === true && typeof codex.questionId === "string") {
-    return codex.questionId;
-  }
+  const parsed = z
+    .object({
+      _askUserQuestionCustomAnswer: z
+        .object({ isCustomAnswer: z.literal(true), questionId: z.string() })
+        .optional(),
+      codex: z.object({ isOtherAnswer: z.literal(true), questionId: z.string() }).optional(),
+    })
+    .safeParse(schema._meta);
+  if (!parsed.success) return;
+  return parsed.data._askUserQuestionCustomAnswer?.questionId ?? parsed.data.codex?.questionId;
 }
 
 function elicitationContent(questions: QuestionSpec[], answers: QuestionAnswer[]) {
@@ -808,55 +829,50 @@ export function preferredAllowOptionId(request: PermissionRequest) {
   );
 }
 
-function requestDetail(rawInput: unknown) {
-  if (typeof rawInput === "string") return rawInput;
+function requestDetail(rawInput: JsonValue) {
+  const text = z.string().safeParse(rawInput);
+  if (text.success) return text.data;
   if (rawInput) return JSON.stringify(rawInput, null, 2);
   return "Review this request from the active coding agent.";
 }
 
-function questionFromInput(rawInput: unknown) {
-  if (!isRecord(rawInput)) return;
-  const rawQuestion = Array.isArray(rawInput.questions) ? rawInput.questions[0] : rawInput;
-  if (!isRecord(rawQuestion) || typeof rawQuestion.question !== "string") return;
+const permissionQuestionSchema = z.object({
+  header: z.string().optional(),
+  question: z.string(),
+  options: z.array(z.object({ label: z.string(), description: z.string().optional() })).optional(),
+});
 
-  const options = new Map<string, string>();
-  if (Array.isArray(rawQuestion.options)) {
-    for (const option of rawQuestion.options) {
-      if (!isRecord(option) || typeof option.label !== "string") continue;
-      if (typeof option.description === "string") options.set(option.label, option.description);
-    }
-  }
-
+function questionFromInput(rawInput: JsonValue) {
+  const container = z.object({ questions: z.array(z.json()).min(1) }).safeParse(rawInput);
+  const parsed = permissionQuestionSchema.safeParse(
+    container.success ? container.data.questions[0] : rawInput,
+  );
+  if (!parsed.success) return;
+  const options = new Map(
+    (parsed.data.options ?? []).flatMap((option) =>
+      option.description ? [[option.label, option.description] as const] : [],
+    ),
+  );
   return {
-    title: typeof rawQuestion.header === "string" ? rawQuestion.header : "Agent question",
-    text: rawQuestion.question,
+    title: parsed.data.header ?? "Agent question",
+    text: parsed.data.question,
     options,
   };
 }
 
-function parseCursorAskQuestion(value: unknown): CursorAskQuestionRequest {
-  if (!isRecord(value) || !Array.isArray(value.questions)) {
-    throw new TypeError("Cursor returned an invalid question");
-  }
-  const questions = value.questions.filter(
-    (question): question is CursorAskQuestionRequest["questions"][number] =>
-      isRecord(question) &&
-      typeof question.id === "string" &&
-      typeof question.prompt === "string" &&
-      Array.isArray(question.options) &&
-      question.options.every(
-        (option) =>
-          isRecord(option) && typeof option.id === "string" && typeof option.label === "string",
-      ) &&
-      (question.allowMultiple === undefined || typeof question.allowMultiple === "boolean"),
-  );
-  if (questions.length === 0) throw new TypeError("Cursor returned an invalid question");
-  return { title: typeof value.title === "string" ? value.title : undefined, questions };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const cursorAskQuestionSchema = z.object({
+  title: z.string().optional(),
+  questions: z
+    .array(
+      z.object({
+        id: z.string(),
+        prompt: z.string(),
+        options: z.array(z.object({ id: z.string(), label: z.string() })),
+        allowMultiple: z.boolean().optional(),
+      }),
+    )
+    .min(1),
+});
 
 export { readModelState } from "../utils/model-state.ts";
 export type { AcpModelState } from "../utils/model-state.ts";

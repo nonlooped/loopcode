@@ -97,7 +97,9 @@
   }
 
   function handleTreeKeydown(event: KeyboardEvent) {
-    const current = (event.target as HTMLElement).closest<HTMLButtonElement>('[role="treeitem"]');
+    const current = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLButtonElement>('[role="treeitem"]')
+      : null;
     if (!current || !tree) return;
     const items = Array.from(tree.querySelectorAll<HTMLButtonElement>('[role="treeitem"]'));
     const index = items.indexOf(current);
@@ -128,8 +130,8 @@
     }
   }
 
-  function errorMessage(error: unknown) {
-    return error instanceof Error ? error.message : String(error);
+  function errorMessage(cause: unknown) {
+    return cause instanceof Error ? cause.message : String(cause);
   }
 </script>
 

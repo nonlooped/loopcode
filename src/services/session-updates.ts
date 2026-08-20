@@ -6,7 +6,7 @@ import type {
 } from "@agentclientprotocol/sdk";
 
 import type { ProviderSessionState, ThreadState, ToolActivity } from "../types/index.ts";
-import { formattedValue } from "../utils/json.ts";
+import { formattedValue, jsonValueSchema } from "../utils/json.ts";
 import { appendMessage, nextTimestamp } from "../utils/messages.ts";
 import type { AcpModelState } from "./acp.ts";
 
@@ -67,7 +67,12 @@ export class SessionUpdateHandler {
   ) {
     const existing = thread.tools.find((tool) => tool.id === update.toolCallId);
     const content = update.content?.map(toolContentText).filter(Boolean).join("\n");
-    const detail = content || formattedValue(update.rawOutput) || formattedValue(update.rawInput);
+    const rawOutput = jsonValueSchema.safeParse(update.rawOutput).data;
+    const rawInput = jsonValueSchema.safeParse(update.rawInput).data;
+    const detail =
+      content ||
+      (rawOutput === undefined ? undefined : formattedValue(rawOutput)) ||
+      (rawInput === undefined ? undefined : formattedValue(rawInput));
     const locations = update.locations?.map((location) => location.path) ?? [];
     const next: ToolActivity = {
       id: update.toolCallId,

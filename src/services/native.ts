@@ -1,6 +1,9 @@
 import type { AnyMessage } from "@agentclientprotocol/sdk";
 import { Channel, invoke } from "@tauri-apps/api/core";
 
+import type { PersistedWorkspace } from "../types/index.ts";
+import { jsonValueSchema, type JsonValue } from "../utils/json.ts";
+
 export interface LaunchRequest {
   command: string;
   args: string[];
@@ -70,15 +73,19 @@ export function getInitialWorkingDirectory(): Promise<string> {
   return invoke("initial_working_directory");
 }
 
-export function loadWorkspace(): Promise<unknown> {
-  return invoke("load_workspace");
+export async function loadWorkspace(): Promise<JsonValue | null> {
+  return jsonValueSchema.nullable().parse(await invoke("load_workspace"));
 }
 
-export function saveWorkspace(workspace: unknown): Promise<void> {
+export function saveWorkspace(workspace: PersistedWorkspace): Promise<void> {
   return invoke("save_workspace", { workspace });
 }
 
-export function recordDiagnostic(level: string, eventName: string, fields: unknown): Promise<void> {
+export function recordDiagnostic(
+  level: string,
+  eventName: string,
+  fields: Record<string, JsonValue | undefined>,
+): Promise<void> {
   return invoke("record_diagnostic", { level, eventName, fields });
 }
 

@@ -28,11 +28,13 @@ export function contextMenuPosition(
   };
 }
 
-export function nextMenuItemIndex(
-  current: number,
-  length: number,
-  key: "ArrowDown" | "ArrowUp" | "Home" | "End",
-) {
+export type MenuNavigationKey = "ArrowDown" | "ArrowUp" | "Home" | "End";
+
+export function isMenuNavigationKey(key: string): key is MenuNavigationKey {
+  return key === "ArrowDown" || key === "ArrowUp" || key === "Home" || key === "End";
+}
+
+export function nextMenuItemIndex(current: number, length: number, key: MenuNavigationKey) {
   if (length === 0) return -1;
   if (key === "Home") return 0;
   if (key === "End") return length - 1;

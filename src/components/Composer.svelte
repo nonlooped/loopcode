@@ -41,6 +41,11 @@
   } from '../utils/prompt-content';
   import { activeProvider, threadHarness, threadStatus } from '../utils/threads';
 
+  interface EditorDraft {
+    draft: string;
+    references: ComposerReference[];
+  }
+
   interface Props {
     thread: ThreadState;
     catalogs: Record<string, ProviderModelCatalog>;
@@ -343,8 +348,8 @@
     }
   }
 
-  function readEditorDraft() {
-    if (!promptEditor) return { draft: '', references: [] as ComposerReference[] };
+  function readEditorDraft(): EditorDraft {
+    if (!promptEditor) return { draft: '', references: [] };
     const known = new Map(props.thread.draftReferences.map((reference) => [reference.id, reference]));
     const references: ComposerReference[] = [];
     let draft = '';
@@ -484,7 +489,8 @@
   }
 
   function handleImageSelection(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
+    if (!(event.currentTarget instanceof HTMLInputElement)) return;
+    const input = event.currentTarget;
     const files = input.files ? Array.from(input.files) : [];
     input.value = '';
     props.attachImages(files);

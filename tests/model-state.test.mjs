@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readModelState } from "../src/utils/model-state.ts";
+import { readCursorAvailableModels, readModelState } from "../src/utils/model-state.ts";
+
+void test("rejects malformed Cursor model catalogs", () => {
+  assert.throws(
+    () => readCursorAvailableModels({ models: [{ value: "", name: "Broken" }] }),
+    /invalid model catalog/,
+  );
+});
 
 void test("reads model and reasoning selectors from typed ACP config options", () => {
   const state = readModelState({

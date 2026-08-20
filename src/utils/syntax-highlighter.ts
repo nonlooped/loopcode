@@ -37,7 +37,7 @@ export const syntaxHighlighter = createShikiHighlighter({
   themes: [githubDark],
 });
 
-const languages: Record<string, string> = {
+const languages = {
   bash: "bash",
   cjs: "javascript",
   css: "css",
@@ -65,7 +65,10 @@ const languages: Record<string, string> = {
 };
 
 export function languageForPath(path: string): string {
-  return languages[path.split(".").pop()?.toLowerCase() ?? ""] ?? "";
+  const extension = path.split(".").pop()?.toLowerCase() ?? "";
+  if (!Object.hasOwn(languages, extension)) return "";
+  // SAFETY: Object.hasOwn established that extension is present in languages.
+  return languages[extension as keyof typeof languages];
 }
 
 export function highlightFile(content: string, path: string): string {

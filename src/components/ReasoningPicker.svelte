@@ -4,7 +4,7 @@
   import { IconBolt, IconCheck } from '@tabler/icons-svelte';
 
   import type { ProviderSessionState } from '../types';
-  import { nextMenuItemIndex } from '../utils/context-menu';
+  import { isMenuNavigationKey, nextMenuItemIndex } from '../utils/context-menu';
   import { fastModeAvailable } from '../utils/fast-mode';
 
   interface Props {
@@ -44,13 +44,13 @@
       close();
       return;
     }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !menu) return;
+    if (!isMenuNavigationKey(event.key) || !menu) return;
     event.preventDefault();
     const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.reasoning-option:not(:disabled)'));
     const next = nextMenuItemIndex(
-      items.indexOf(document.activeElement as HTMLButtonElement),
+      items.findIndex((item) => item === document.activeElement),
       items.length,
-      event.key as 'ArrowDown' | 'ArrowUp' | 'Home' | 'End',
+      event.key,
     );
     items[next]?.focus();
   }

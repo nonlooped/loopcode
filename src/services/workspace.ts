@@ -6,6 +6,7 @@ import type {
 } from "../types/index.ts";
 import { findReusableEmptyThread } from "../utils/thread-state.ts";
 import { createThread, folderName } from "../utils/threads.ts";
+import type { JsonValue } from "../utils/json.ts";
 import { restoreWorkspace, workspaceSnapshot } from "../utils/workspace.ts";
 import { WorkspacePersistence } from "./workspace-persistence.ts";
 
@@ -52,7 +53,7 @@ export class Workspace {
       : null;
   }
 
-  initialize(saved: unknown, defaultWorkingFolder: string) {
+  initialize(saved: JsonValue | null, defaultWorkingFolder: string) {
     if (saved !== null) {
       const restored = restoreWorkspace(saved, defaultWorkingFolder, this.catalogs);
       if (!restored) return false;

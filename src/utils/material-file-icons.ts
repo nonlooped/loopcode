@@ -3,7 +3,7 @@ const iconAssets = import.meta.glob<string>(
   { eager: true, import: "default", query: "?url" },
 );
 
-const ICON_BY_EXTENSION: Record<string, string> = {
+const ICON_BY_EXTENSION = {
   avi: "video",
   bmp: "image",
   bz2: "zip",
@@ -81,7 +81,7 @@ const ICON_BY_EXTENSION: Record<string, string> = {
   zip: "zip",
 };
 
-const ICON_BY_NAME: Record<string, string> = {
+const ICON_BY_NAME = {
   ".dockerignore": "docker",
   ".editorconfig": "settings",
   ".env": "key",
@@ -106,7 +106,7 @@ const ICON_BY_NAME: Record<string, string> = {
   "yarn.lock": "nodejs",
 };
 
-const FOLDER_BY_NAME: Record<string, string> = {
+const FOLDER_BY_NAME = {
   ".git": "folder-git",
   ".github": "folder-github",
   ".vscode": "folder-vscode",
@@ -130,22 +130,28 @@ const FOLDER_BY_NAME: Record<string, string> = {
   tests: "folder-test",
 };
 
+function dictionaryValue<T extends Record<PropertyKey, string>>(values: T, key: string) {
+  if (!Object.hasOwn(values, key)) return undefined;
+  // SAFETY: Object.hasOwn established that key is present in values.
+  return values[key as keyof T];
+}
+
 function iconUrl(iconName: string) {
   return iconAssets[`../../node_modules/material-icon-theme/icons/${iconName}.svg`];
 }
 
 export function materialFileIcon(name: string) {
   const normalized = name.toLowerCase();
-  const namedIcon = ICON_BY_NAME[normalized];
+  const namedIcon = dictionaryValue(ICON_BY_NAME, normalized);
   if (namedIcon) return iconUrl(namedIcon);
 
   if (normalized.endsWith(".d.ts")) return iconUrl("typescript-def");
   const extension = normalized.includes(".") ? (normalized.split(".").pop() ?? "") : "";
-  return iconUrl(ICON_BY_EXTENSION[extension] ?? "file");
+  return iconUrl(dictionaryValue(ICON_BY_EXTENSION, extension) ?? "file");
 }
 
 export function materialFolderIcon(name: string, expanded: boolean, root = false) {
   if (root) return iconUrl(expanded ? "folder-root-open" : "folder-root");
-  const baseIcon = FOLDER_BY_NAME[name.toLowerCase()] ?? "folder";
+  const baseIcon = dictionaryValue(FOLDER_BY_NAME, name.toLowerCase()) ?? "folder";
   return iconUrl(expanded ? `${baseIcon}-open` : baseIcon);
 }

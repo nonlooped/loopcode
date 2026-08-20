@@ -4,8 +4,10 @@ import type {
   SessionConfigOption,
   SetSessionConfigOptionResponse,
 } from "@agentclientprotocol/sdk";
+import { z } from "zod";
 
 import type { FastModeValueType, ModelOption } from "../types/index.ts";
+import type { JsonValue } from "./json.ts";
 
 export interface AcpModelState {
   modelConfigId?: string;
@@ -98,30 +100,54 @@ export interface AcpAvailableModel extends AcpModelState {
   model: ModelOption;
 }
 
-export function readCursorAvailableModels(value: unknown): AcpAvailableModel[] {
-  if (!isRecord(value) || !Array.isArray(value.models)) {
-    throw new Error("Cursor returned an invalid model catalog");
-  }
-  return value.models.map((entry) => {
-    if (
-      !isRecord(entry) ||
-      typeof entry.value !== "string" ||
-      !entry.value.trim() ||
-      typeof entry.name !== "string" ||
-      !entry.name.trim()
-    ) {
-      throw new Error("Cursor returned an invalid model catalog entry");
-    }
-    // Unsafe: this undocumented response has no maintained schema; replace with stable ACP discovery.
-    const state = readModelState({
-      configOptions: Array.isArray(entry.configOptions)
-        ? (entry.configOptions as SessionConfigOption[])
-        : [],
-    });
+const configChoiceSchema = z.object({
+  value: z.string(),
+  name: z.string(),
+  description: z.string().nullable().optional(),
+});
+const sessionConfigOptionBase = {
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+};
+const sessionConfigOptionSchema = z.discriminatedUnion("type", [
+  z.object({
+    ...sessionConfigOptionBase,
+    type: z.literal("select"),
+    currentValue: z.string(),
+    options: z.union([
+      z.array(configChoiceSchema),
+      z.array(
+        z.object({
+          group: z.string(),
+          name: z.string(),
+          options: z.array(configChoiceSchema),
+        }),
+      ),
+    ]),
+  }),
+  z.object({
+    ...sessionConfigOptionBase,
+    type: z.literal("boolean"),
+    currentValue: z.boolean(),
+  }),
+]);
+const cursorModelCatalogSchema = z.object({
+  models: z.array(
+    z.object({
+      value: z.string().trim().min(1),
+      name: z.string().trim().min(1),
+      configOptions: z.array(sessionConfigOptionSchema).optional(),
+    }),
+  ),
+});
+
+export function readCursorAvailableModels(payload: JsonValue): AcpAvailableModel[] {
+  const parsed = cursorModelCatalogSchema.safeParse(payload);
+  if (!parsed.success) throw new Error("Cursor returned an invalid model catalog");
+  return parsed.data.models.map((entry) => {
+    const state = readModelState({ configOptions: entry.configOptions ?? [] });
     return { model: { id: entry.value, name: entry.name }, ...state };
   });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -12,14 +12,15 @@ export function addMessage(
   content?: PromptPart[],
 ) {
   const createdAt = nextTimestamp(thread);
-  thread.messages.push({
+  const message: TimelineMessage = {
     id: crypto.randomUUID(),
     role,
     text,
-    ...(content ? { content: content.map(copyPromptPart) } : {}),
-    ...(images.length > 0 ? { images: images.map((image) => ({ ...image })) } : {}),
     createdAt,
-  });
+  };
+  if (content) message.content = content.map(copyPromptPart);
+  if (images.length > 0) message.images = images.map((image) => ({ ...image }));
+  thread.messages.push(message);
   thread.updatedAt = createdAt;
 }
 

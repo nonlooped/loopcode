@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
 
   import type { ContextMenuState } from '../utils/context-menu';
-  import { contextMenuPosition, nextMenuItemIndex } from '../utils/context-menu';
+  import { contextMenuPosition, isMenuNavigationKey, nextMenuItemIndex } from '../utils/context-menu';
 
   interface Props {
     menu: ContextMenuState;
@@ -37,7 +37,7 @@
   }
 
   function closeOutside(event: Event) {
-    if (!element?.contains(event.target as Node)) close();
+    if (!(event.target instanceof Node) || !element?.contains(event.target)) close();
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -46,13 +46,13 @@
       close();
       return;
     }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    if (!isMenuNavigationKey(event.key)) return;
     event.preventDefault();
     const buttons = Array.from(element?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []);
     const index = nextMenuItemIndex(
-      buttons.indexOf(document.activeElement as HTMLButtonElement),
+      buttons.findIndex((button) => button === document.activeElement),
       buttons.length,
-      event.key as 'ArrowDown' | 'ArrowUp' | 'Home' | 'End',
+      event.key,
     );
     buttons[index]?.focus();
   }

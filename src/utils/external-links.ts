@@ -8,7 +8,7 @@ interface LinkClick {
   preventDefault(): void;
 }
 
-type OpenUrl = (url: string) => Promise<unknown>;
+type OpenUrl = (url: string) => Promise<void>;
 
 export async function openExternalLinkFromClick(event: LinkClick, openUrl: OpenUrl): Promise<void> {
   if (event.button !== 0 || !isLinkTarget(event.target)) return;
@@ -21,7 +21,7 @@ export async function openExternalLinkFromClick(event: LinkClick, openUrl: OpenU
 }
 
 function isLinkTarget(target: EventTarget | null): target is EventTarget & LinkTarget {
-  return typeof (target as Partial<LinkTarget> | null)?.closest === "function";
+  return target !== null && "closest" in target && typeof target.closest === "function";
 }
 
 function isWebUrl(href: string): boolean {

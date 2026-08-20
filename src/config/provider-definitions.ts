@@ -2,9 +2,7 @@ import type { HarnessProfile } from "../types/index.ts";
 
 export type ProviderDefinition = Omit<HarnessProfile, "icon">;
 
-const isWindows =
-  (import.meta as unknown as { env?: Record<string, string> }).env?.TAURI_ENV_PLATFORM ===
-  "windows";
+const isWindows = import.meta.env?.TAURI_ENV_PLATFORM === "windows";
 
 export const providerDefinitions: ProviderDefinition[] = [
   {

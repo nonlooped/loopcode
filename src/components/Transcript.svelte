@@ -82,7 +82,9 @@
   }
 
   function openMessageMenu(event: MouseEvent, message: TimelineMessage) {
-    const renderedText = (event.currentTarget as HTMLElement).innerText.trim();
+    const renderedText = event.currentTarget instanceof HTMLElement
+      ? event.currentTarget.innerText.trim()
+      : message.text;
     contextMenu = menuFromEvent(event, [
       { label: 'Copy message', action: () => copyText(renderedText || message.text) },
       { label: 'Copy as Markdown', action: () => copyText(message.text) },
@@ -90,7 +92,8 @@
   }
 
   function openToolMenu(event: MouseEvent, tool: ToolActivity) {
-    const details = event.currentTarget as HTMLDetailsElement;
+    if (!(event.currentTarget instanceof HTMLDetailsElement)) return;
+    const details = event.currentTarget;
     contextMenu = menuFromEvent(event, [
       { label: details.open ? 'Collapse' : 'Expand', action: () => { details.open = !details.open; } },
       { label: 'Copy details', action: () => copyText(tool.detail ?? ''), disabled: !tool.detail },

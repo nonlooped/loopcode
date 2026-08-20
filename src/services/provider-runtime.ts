@@ -18,6 +18,7 @@ import type {
   ThreadState,
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
+import { jsonValueSchema } from "../utils/json.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
 import { discoverModelOptions, modelOptionsFromStates } from "../utils/model-options.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
@@ -277,8 +278,13 @@ export class ProviderRuntime {
       stderr: () => {},
       error: (error) => {
         if (!isCurrent()) return;
+        const diagnosticData = jsonValueSchema.safeParse(error.data).data;
         void recordDiagnostic("error", "acp.client.error", {
-          ...error,
+          scope: error.scope,
+          method: error.method,
+          code: error.code,
+          message: error.message,
+          data: diagnosticData,
           profileId: profile.id,
           threadId: thread.id,
           harnessId: provider.harnessId,
@@ -617,10 +623,10 @@ export class ProviderRuntime {
     if (thread.profileId === profileId) thread.updatedAt = Date.now();
   }
 
-  #reportError(thread: ThreadState, profileId: string, error: unknown) {
+  #reportError(thread: ThreadState, profileId: string, cause: unknown) {
     const details: AcpErrorDetails = {
       scope: "connection",
-      message: error instanceof Error ? error.message : String(error),
+      message: cause instanceof Error ? cause.message : String(cause),
     };
     this.#setError(thread, profileId, details);
     if (thread.profileId === profileId) addMessage(thread, "error", details.message);

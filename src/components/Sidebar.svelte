@@ -20,7 +20,7 @@
   import { profileById } from '../config/providers';
   import type { ProjectState, ThreadState } from '../types';
   import { copyText } from '../utils/clipboard';
-  import { menuFromEvent, nextMenuItemIndex, type ContextMenuState } from '../utils/context-menu';
+  import { isMenuNavigationKey, menuFromEvent, nextMenuItemIndex, type ContextMenuState } from '../utils/context-menu';
   import { folderName, relativeTime, threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -78,13 +78,13 @@
       closeWorkspaceMenu(true);
       return;
     }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !workspaceMenu) return;
+    if (!isMenuNavigationKey(event.key) || !workspaceMenu) return;
     event.preventDefault();
     const items = Array.from(workspaceMenu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
     const next = nextMenuItemIndex(
-      items.indexOf(document.activeElement as HTMLButtonElement),
+      items.findIndex((item) => item === document.activeElement),
       items.length,
-      event.key as 'ArrowDown' | 'ArrowUp' | 'Home' | 'End',
+      event.key,
     );
     items[next]?.focus();
   }

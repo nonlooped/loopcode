@@ -6,17 +6,20 @@ import openCodeIcon from "@lobehub/icons-static-svg/icons/opencode.svg?url";
 import { providerDefinitions } from "./provider-definitions.ts";
 import type { HarnessProfile } from "../types/index.ts";
 
-const icons = {
-  codex: openAiIcon,
-  claude: claudeIcon,
-  opencode: openCodeIcon,
-  cursor: cursorIcon,
-};
+const icons = new Map(
+  Object.entries({
+    codex: openAiIcon,
+    claude: claudeIcon,
+    opencode: openCodeIcon,
+    cursor: cursorIcon,
+  }),
+);
 
-export const profiles: HarnessProfile[] = providerDefinitions.map((profile) => ({
-  ...profile,
-  icon: icons[profile.id as keyof typeof icons],
-}));
+export const profiles: HarnessProfile[] = providerDefinitions.map((profile) => {
+  const icon = icons.get(profile.id);
+  if (!icon) throw new Error(`Missing icon for provider ${profile.id}`);
+  return { ...profile, icon };
+});
 
 export function profileById(profileId: string) {
   return profiles.find((profile) => profile.id === profileId) ?? profiles[0];

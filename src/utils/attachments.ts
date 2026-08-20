@@ -38,7 +38,7 @@ function readComposerImage(file: File) {
     const name = file.name || "Pasted image";
     reader.onerror = () => reject(new Error(`Could not read ${name}.`));
     reader.onload = () => {
-      if (typeof reader.result !== "string") {
+      if (reader.result === null || reader.result instanceof ArrayBuffer) {
         reject(new Error(`Could not read ${name}.`));
         return;
       }
