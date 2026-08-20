@@ -209,6 +209,12 @@
   --project-explorer-width: 0px;
 }
 
+@media (min-width: 881px) {
+  .app-shell.project-explorer-collapsed .title-terminal-toggle {
+    margin-right: 31px;
+  }
+}
+
 .app-shell.sidebar-collapsed .titlebar {
   grid-template-columns: 154px minmax(0, 1fr);
 }

@@ -17,6 +17,7 @@
   interface Props {
     thread: ThreadState;
     active: boolean;
+    ready: boolean;
     reducedMotion: boolean;
     close: () => void;
     exited: () => void;
@@ -28,7 +29,7 @@
     | { kind: 'exited'; code: number }
     | { kind: 'error'; message: string };
 
-  const { thread, active, reducedMotion, close, exited }: Props = $props();
+  const { thread, active, ready, reducedMotion, close, exited }: Props = $props();
   let host = $state<HTMLDivElement>();
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
@@ -75,7 +76,7 @@
         .catch(() => {});
     });
     const resizeObserver = new ResizeObserver(() => {
-      if (active) fitTerminal(false);
+      if (ready) fitTerminal(false);
     });
     resizeObserver.observe(host);
     fitTerminal(true);
@@ -96,7 +97,7 @@
   });
 
   $effect(() => {
-    if (!active) return;
+    if (!ready) return;
     void tick().then(() => fitTerminal(true));
   });
 
@@ -153,7 +154,7 @@
   }
 
   function fitTerminal(focus: boolean) {
-    if (!active || !terminal || !fitAddon || !host?.offsetParent) return;
+    if (!ready || !terminal || !fitAddon || !host?.offsetParent) return;
     fitAddon.fit();
     if (focus) terminal.focus();
   }

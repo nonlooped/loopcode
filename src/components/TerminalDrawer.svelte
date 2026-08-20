@@ -25,6 +25,17 @@
     startResize,
     resizeBy,
   }: Props = $props();
+  let layoutSettled = $state(false);
+
+  $effect(() => {
+    layoutSettled = open && reducedMotion;
+  });
+
+  function handleTransitionEnd(event: TransitionEvent) {
+    if (open && event.target === event.currentTarget && event.propertyName === 'height') {
+      layoutSettled = true;
+    }
+  }
 
   function handleResizeKeydown(event: KeyboardEvent) {
     const delta = event.key === 'ArrowUp' ? 10 : event.key === 'ArrowDown' ? -10 : 0;
@@ -34,7 +45,13 @@
   }
 </script>
 
-<section class:open class="terminal-drawer" aria-label="Terminal drawer" aria-hidden={!open}>
+<section
+  class:open
+  class="terminal-drawer"
+  aria-label="Terminal drawer"
+  aria-hidden={!open}
+  ontransitionend={handleTransitionEnd}
+>
   <!-- The ARIA separator is keyboard-resizable, though Svelte treats it as non-interactive. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -54,6 +71,7 @@
     <TerminalPane
       {thread}
       active={open && thread.id === selectedThreadId}
+      ready={layoutSettled && open && thread.id === selectedThreadId}
       {reducedMotion}
       {close}
       exited={() => terminalExited(thread.id)}
