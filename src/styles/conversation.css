@@ -108,29 +108,24 @@
   background: rgba(0, 0, 0, 0.12);
 }
 
-.permission-mode-control label {
+.permission-mode-option {
   padding: 6px 9px;
+  border: 0;
   border-radius: 6px;
+  background: transparent;
   color: var(--muted);
   font-size: 11px;
   font-weight: 550;
   cursor: pointer;
 }
 
-.permission-mode-control label:hover,
-.permission-mode-control label.active {
+.permission-mode-option:hover,
+.permission-mode-option[data-state="checked"] {
   background: var(--panel-hover);
   color: var(--text);
 }
 
-.permission-mode-control input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-
-.permission-mode-control label:has(input:focus-visible) {
+.permission-mode-option:focus-visible {
   outline: 2px solid rgba(230, 231, 234, 0.58);
   outline-offset: 1px;
 }
@@ -203,28 +198,62 @@
   text-align: right;
 }
 
-.transparency-control input {
+.transparency-slider {
+  position: relative;
+  display: flex;
   width: 100%;
-  accent-color: var(--accent);
+  height: 20px;
+  align-items: center;
+  touch-action: none;
+  user-select: none;
 }
 
-.transparency-control input:focus-visible {
+.transparency-slider-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.transparency-slider-range {
+  position: absolute;
+  height: 100%;
+  background: var(--accent);
+}
+
+.transparency-slider-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 50%;
+  background: rgba(30, 31, 34, 0.96);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  cursor: grab;
+}
+
+.transparency-slider-thumb[data-active] {
+  cursor: grabbing;
+}
+
+.transparency-slider-thumb:focus-visible {
   outline: 2px solid rgba(230, 231, 234, 0.58);
   outline-offset: 2px;
 }
 
 .toggle-control {
   position: relative;
+  display: block;
   width: 36px;
   height: 20px;
   flex: 0 0 auto;
-}
-
-.toggle-control input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .toggle-track {
@@ -251,17 +280,21 @@
     background-color 140ms ease;
 }
 
-.toggle-control input:checked + .toggle-track {
+.toggle-control[data-state="checked"] .toggle-track {
   border-color: rgba(255, 255, 255, 0.26);
   background: var(--accent);
 }
 
-.toggle-control input:checked + .toggle-track .toggle-thumb {
+.toggle-control[data-state="checked"] .toggle-thumb {
   background: rgba(30, 31, 34, 0.96);
   transform: translateX(16px);
 }
 
-.toggle-control input:focus-visible + .toggle-track {
+.toggle-control:focus-visible {
+  outline: 0;
+}
+
+.toggle-control:focus-visible .toggle-track {
   outline: 2px solid rgba(230, 231, 234, 0.58);
   outline-offset: 2px;
 }

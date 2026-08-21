@@ -10,6 +10,7 @@
   import PermissionModal from './components/PermissionModal.svelte';
   import ProjectExplorer from './components/ProjectExplorer.svelte';
   import QuestionComposer from './components/QuestionComposer.svelte';
+  import RenameThreadModal from './components/RenameThreadModal.svelte';
   import SettingsPage from './components/SettingsPage.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import TerminalDrawer from './components/TerminalDrawer.svelte';
@@ -82,6 +83,7 @@
   const threads = $derived(workspaceState.threads);
   const selectedThreadId = $derived(workspaceState.selectedThreadId);
   let threadPendingRemoval = $state<ThreadState>();
+  let threadPendingRename = $state<ThreadState>();
   let interactions = $state<Record<string, {
     threadId: string;
     profileId: string;
@@ -104,7 +106,6 @@
   const initialPermissionMode = loadPermissionMode();
   let permissionMode = $state<PermissionMode>(initialPermissionMode);
   let showSettled = $state(false);
-  let workspaceDropdownOpen = $state(false);
   let windowMaximized = $state(false);
   let composerImagesByThread = $state<Record<string, ComposerImage[]>>({});
   let attachmentErrorsByThread = $state<Record<string, string>>({});
@@ -283,7 +284,6 @@
   }
 
   function addThreadToProject(projectId: string) {
-    workspaceDropdownOpen = false;
     if (workspace.addThread(
       defaultWorkingFolder,
       (threadId) => composerImages(threadId).length > 0,
@@ -292,7 +292,6 @@
   }
 
   async function openAddProject() {
-    workspaceDropdownOpen = false;
     try {
       const picked = await pickFolder();
       if (!picked) return;
@@ -305,14 +304,16 @@
 
   function selectProject(projectId: string | null) {
     workspace.selectProject(projectId);
-    workspaceDropdownOpen = false;
   }
 
   function renameThread(threadId: string) {
-    const thread = threads.find((item) => item.id === threadId);
-    if (!thread) return;
-    const title = window.prompt('Rename thread', thread.title);
-    if (title) workspace.renameThread(threadId, title);
+    threadPendingRename = threads.find((thread) => thread.id === threadId);
+  }
+
+  function saveThreadRename(title: string) {
+    const thread = threadPendingRename;
+    threadPendingRename = undefined;
+    if (thread) workspace.renameThread(thread.id, title);
   }
 
   function openThreadFolder(thread: ThreadState) {
@@ -329,7 +330,6 @@
 
   function removeProject(projectId: string) {
     workspace.removeProject(projectId);
-    workspaceDropdownOpen = false;
   }
 
   async function runPathAction(action: Promise<void>) {
@@ -515,7 +515,6 @@
     settingsOpen = true;
     sidebarCollapsed = false;
     sidebarOpen = false;
-    workspaceDropdownOpen = false;
   }
 
   function closeSettings() {
@@ -736,12 +735,10 @@
       {projects}
       {selectedProjectId}
       {activeProject}
-      {workspaceDropdownOpen}
       {inboxThreads}
       {settledThreads}
       {selectedThreadId}
       {showSettled}
-      setWorkspaceDropdownOpen={(open) => { workspaceDropdownOpen = open; }}
       {selectProject}
       addProject={() => { void openAddProject(); }}
       {addThread}
@@ -874,13 +871,19 @@
 
 <svelte:window onkeydown={(event) => {
   handleAppKeydown(event);
-  if (event.key === 'Escape' && workspaceDropdownOpen) workspaceDropdownOpen = false;
 }} />
+
+{#if threadPendingRename}
+  <RenameThreadModal
+    title={threadPendingRename.title}
+    cancel={() => { threadPendingRename = undefined; }}
+    save={saveThreadRename}
+  />
+{/if}
 
 {#if threadPendingRemoval}
   <DeleteThreadModal
     title={threadPendingRemoval.title}
-    {reducedMotion}
     cancel={() => { threadPendingRemoval = undefined; }}
     confirm={() => { void removeThread(threadPendingRemoval!.id); }}
   />
@@ -889,7 +892,6 @@
 {#if selectedInteraction?.request.type === 'permission'}
   <PermissionModal
     request={selectedInteraction.request}
-    {reducedMotion}
     answer={(optionId) => answerPermission(optionId)}
     decline={() => answerPermission()}
   />

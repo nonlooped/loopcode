@@ -45,10 +45,6 @@
 }
 
 .reasoning-menu {
-  position: absolute;
-  z-index: 15;
-  right: 0;
-  bottom: calc(100% + 10px);
   width: 240px;
   max-width: calc(100vw - 42px);
   padding: 4px;
@@ -61,6 +57,7 @@
   color: var(--text);
   text-align: left;
   white-space: normal;
+  animation: reasoning-menu-in 130ms ease-out;
 }
 
 .reasoning-menu-options {
@@ -92,12 +89,12 @@
   padding: 6px 8px;
   align-items: center;
   gap: 10px;
-  border: 0;
   border-radius: 8px;
-  background: transparent;
   color: color-mix(in srgb, var(--text) 90%, transparent);
+  cursor: pointer;
   font-size: 13px;
   text-align: left;
+  outline: none;
   transition:
     background-color 150ms ease,
     color 150ms ease;
@@ -105,7 +102,7 @@
 
 .reasoning-option:hover,
 .reasoning-option:focus-visible,
-.reasoning-option.selected {
+.reasoning-option[data-highlighted] {
   background: rgba(255, 255, 255, 0.075);
   color: var(--text);
 }
@@ -121,4 +118,21 @@
 .reasoning-option svg {
   flex: 0 0 auto;
   color: var(--text-soft);
+}
+
+@keyframes reasoning-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reasoning-menu {
+    animation: none;
+  }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
   import { IconContrast, IconDownload, IconListDetails, IconShieldLock } from '@tabler/icons-svelte';
+  import { RadioGroup, Slider, Switch } from 'bits-ui';
 
   import { exportDiagnostics } from '../services/native';
   import type { PermissionMode } from '../types';
@@ -58,44 +59,32 @@
           <strong>Agent permissions</strong>
           <small>Restricted asks before commands. Full Access automatically approves every permission request.</small>
         </span>
-        <fieldset class="permission-mode-control" aria-label="Agent permissions">
-          <label class:active={permissionMode === 'restricted'}>
-            <input
-              type="radio"
-              name="permission-mode"
-              value="restricted"
-              checked={permissionMode === 'restricted'}
-              onchange={() => setPermissionMode('restricted')}
-            />
-            Restricted
-          </label>
-          <label class:active={permissionMode === 'full'}>
-            <input
-              type="radio"
-              name="permission-mode"
-              value="full"
-              checked={permissionMode === 'full'}
-              onchange={() => setPermissionMode('full')}
-            />
-            Full Access
-          </label>
-        </fieldset>
+        <RadioGroup.Root
+          class="permission-mode-control"
+          aria-label="Agent permissions"
+          orientation="horizontal"
+          value={permissionMode}
+          onValueChange={(value) => setPermissionMode(value === 'full' ? 'full' : 'restricted')}
+        >
+          <RadioGroup.Item class="permission-mode-option" value="restricted">Restricted</RadioGroup.Item>
+          <RadioGroup.Item class="permission-mode-option" value="full">Full Access</RadioGroup.Item>
+        </RadioGroup.Root>
       </div>
-      <label class="settings-row settings-row-separated">
+      <div class="settings-row settings-row-separated">
         <span class="settings-row-icon" aria-hidden="true"><IconListDetails size={17} stroke={1.55} /></span>
         <span class="settings-row-copy">
           <strong>Compact thread rows</strong>
           <small>Show more threads in the sidebar by reducing row spacing.</small>
         </span>
-        <span class="toggle-control">
-          <input
-            type="checkbox"
-            checked={compactSessionRows}
-            onchange={(event) => setCompactSessionRows(event.currentTarget.checked)}
-          />
-          <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
-        </span>
-      </label>
+        <Switch.Root
+          class="toggle-control"
+          aria-label="Compact thread rows"
+          checked={compactSessionRows}
+          onCheckedChange={setCompactSessionRows}
+        >
+          <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
+        </Switch.Root>
+      </div>
       {#if isLinux}
         <div class="settings-row settings-row-separated transparency-setting">
           <span class="settings-row-icon" aria-hidden="true"><IconContrast size={17} stroke={1.55} /></span>
@@ -103,18 +92,26 @@
             <strong>Background transparency</strong>
             <small>Shows the desktop behind LoopCode. Your desktop environment controls whether it is available.</small>
           </span>
-          <label class="transparency-control" for="linux-shell-transparency">
+          <div class="transparency-control">
             <output>{linuxShellTransparency}%</output>
-            <input
-              id="linux-shell-transparency"
-              type="range"
+            <Slider.Root
+              class="transparency-slider"
+              aria-label="Background transparency"
+              type="single"
               min={linuxShellTransparencyRange.min}
               max={linuxShellTransparencyRange.max}
-              step="1"
+              step={1}
               value={linuxShellTransparency}
-              oninput={(event) => setLinuxShellTransparency(Number(event.currentTarget.value))}
-            />
-          </label>
+              onValueChange={setLinuxShellTransparency}
+            >
+              {#snippet children({ thumbItems })}
+                <span class="transparency-slider-track"><Slider.Range class="transparency-slider-range" /></span>
+                {#each thumbItems as { index } (index)}
+                  <Slider.Thumb class="transparency-slider-thumb" {index} />
+                {/each}
+              {/snippet}
+            </Slider.Root>
+          </div>
         </div>
       {/if}
       <div class="settings-row settings-row-separated">

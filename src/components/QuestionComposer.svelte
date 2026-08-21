@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { fly } from 'svelte/transition';
+  import { ToggleGroup } from 'bits-ui';
   import type { QuestionAnswer, QuestionRequest } from '../types';
 
   interface Props {
@@ -29,18 +30,6 @@
       target?.focus();
     });
   });
-
-  function choose(optionId: string) {
-    if (!needsSubmit) {
-      answer({ selectedOptionIds: [optionId] });
-      return;
-    }
-    selectedOptionIds = request.allowMultiple
-      ? selectedOptionIds.includes(optionId)
-        ? selectedOptionIds.filter((id) => id !== optionId)
-        : [...selectedOptionIds, optionId]
-      : [optionId];
-  }
 
   function submit() {
     if (request.required && !hasAnswer) return;
@@ -71,22 +60,53 @@
 
     <p class="question-composer-detail">{request.detail}</p>
 
-    <div class="question-composer-options" role="group" aria-label="Answer options">
+    {#snippet optionItems()}
       {#each request.options as option}
         {@const selected = selectedOptionIds.includes(option.optionId)}
-        <button
-          type="button"
-          class:selected
-          class="question-composer-option"
-          aria-pressed={needsSubmit ? selected : undefined}
-          onclick={() => choose(option.optionId)}
-        >
+        <ToggleGroup.Item class="question-composer-option" value={option.optionId}>
           <strong>{option.name}</strong>
           {#if option.description}<span>{option.description}</span>{/if}
           {#if selected && option.preview}<pre>{option.preview}</pre>{/if}
-        </button>
+        </ToggleGroup.Item>
       {/each}
-    </div>
+    {/snippet}
+
+    {#if needsSubmit}
+      {#if request.allowMultiple}
+        <ToggleGroup.Root
+          class="question-composer-options"
+          aria-label="Answer options"
+          type="multiple"
+          value={selectedOptionIds}
+          onValueChange={(value) => { selectedOptionIds = value; }}
+        >
+          {@render optionItems()}
+        </ToggleGroup.Root>
+      {:else}
+        <ToggleGroup.Root
+          class="question-composer-options"
+          aria-label="Answer options"
+          type="single"
+          value={selectedOptionIds[0] ?? ''}
+          onValueChange={(value) => { selectedOptionIds = value ? [value] : []; }}
+        >
+          {@render optionItems()}
+        </ToggleGroup.Root>
+      {/if}
+    {:else}
+      <ToggleGroup.Root
+        class="question-composer-options"
+        aria-label="Answer options"
+        type="single"
+        value={selectedOptionIds[0] ?? ''}
+        onValueChange={(value) => {
+          selectedOptionIds = value ? [value] : [];
+          if (value) answer({ selectedOptionIds: [value] });
+        }}
+      >
+        {@render optionItems()}
+      </ToggleGroup.Root>
+    {/if}
 
     {#if request.allowCustomAnswer}
       <label class="question-composer-custom">

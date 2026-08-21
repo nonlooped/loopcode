@@ -1,5 +1,4 @@
 .context-menu {
-  position: fixed;
   z-index: 91;
   display: grid;
   width: max-content;
@@ -18,7 +17,7 @@
   transform-origin: top left;
 }
 
-.context-menu button {
+.context-menu-item {
   display: flex;
   width: 100%;
   min-height: 29px;
@@ -26,33 +25,31 @@
   align-items: center;
   justify-content: space-between;
   gap: 22px;
-  border: 0;
   border-radius: 6px;
-  background: transparent;
   color: var(--text-soft);
   font-size: 11.5px;
   text-align: left;
   white-space: nowrap;
 }
 
-.context-menu button:hover,
-.context-menu button:focus-visible {
+.context-menu-item:hover,
+.context-menu-item[data-highlighted] {
   outline: 0;
   background: var(--panel-active);
   color: var(--text);
 }
 
-.context-menu button.danger {
+.context-menu-item.danger {
   color: color-mix(in srgb, var(--danger) 88%, var(--text-soft));
 }
 
-.context-menu button.danger:hover,
-.context-menu button.danger:focus-visible {
+.context-menu-item.danger:hover,
+.context-menu-item.danger[data-highlighted] {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
 }
 
-.context-menu button:disabled {
+.context-menu-item[data-disabled] {
   opacity: 0.42;
 }
 
@@ -69,27 +66,32 @@
 }
 
 .image-preview {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 91;
   display: grid;
-  width: 100%;
-  height: 100%;
-  max-width: none;
-  max-height: none;
   padding: 44px;
-  place-items: center;
   border: 0;
   background: transparent;
+  outline: 0;
+  place-items: center;
 }
 
-.image-preview::backdrop {
-  background: rgba(5, 6, 8, 0.72);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+.image-preview .visually-hidden-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .image-preview img {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
+  max-width: calc(100vw - 88px);
+  max-height: calc(100vh - 88px);
   border-radius: 9px;
   object-fit: contain;
 }
