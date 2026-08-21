@@ -1,5 +1,3 @@
-
-
 # LoopCode
 
 **Your coding agents, one desktop workspace.**
@@ -19,10 +17,7 @@ Agent CLIs work well for one task. They get messy when you juggle projects, prov
 - **Work without bouncing around.** Browse files, preview code, attach images, and open the integrated terminal beside the conversation.
 - **Keep it local.** LoopCode starts agent processes on your machine and stores workspace history there.
 
-
-
 ## Supported agents
-
 
 | Agent    | Setup                                                              |
 | -------- | ------------------------------------------------------------------ |
@@ -30,7 +25,6 @@ Agent CLIs work well for one task. They get messy when you juggle projects, prov
 | Claude   | The pinned ACP adapter downloads on first launch.                  |
 | Cursor   | Install the `agent` CLI, put it on `PATH`, then run `agent login`. |
 | OpenCode | Install `opencode` and put it on `PATH`.                           |
-
 
 Models, reasoning levels, and fast modes come from each agent, so every thread gets the controls its provider supports.
 
@@ -63,4 +57,3 @@ cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for code conventions, commits, and releases.
-

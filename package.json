@@ -1,18 +1,19 @@
 {
   "name": "loopcode",
   "version": "0.1.0",
+  "private": true,
   "description": "A local desktop workspace for Codex, Claude, Cursor, and OpenCode.",
   "keywords": [
     "acp",
     "agent-client-protocol",
     "ai-coding",
-    "coding-agents",
-    "codex",
     "claude",
+    "codex",
+    "coding-agents",
     "cursor",
     "opencode",
-    "tauri",
-    "svelte"
+    "svelte",
+    "tauri"
   ],
   "homepage": "https://github.com/nonlooped/loopcode",
   "bugs": "https://github.com/nonlooped/loopcode/issues",
@@ -20,7 +21,6 @@
     "type": "git",
     "url": "git+https://github.com/nonlooped/loopcode.git"
   },
-  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vp dev",
