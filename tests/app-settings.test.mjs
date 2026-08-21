@@ -12,6 +12,16 @@ import {
   saveTerminalHeight,
 } from "../src/utils/app-settings.ts";
 
+void test("settings writes tolerate unavailable web storage", () => {
+  const storage = {
+    setItem: () => {
+      throw new Error("storage unavailable");
+    },
+  };
+
+  assert.doesNotThrow(() => savePermissionMode("full", storage));
+});
+
 void test("permission mode defaults to restricted and persists valid choices", () => {
   const values = new Map();
   const storage = {

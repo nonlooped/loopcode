@@ -327,27 +327,6 @@ pub async fn read_project_file(
 }
 
 #[tauri::command]
-pub async fn open_project_file(
-    app: tauri::AppHandle,
-    project_root: String,
-    path: String,
-) -> Result<(), String> {
-    let path = tauri::async_runtime::spawn_blocking(move || {
-        let path = resolve_project_path(&project_root, &path)?;
-        if !path.is_file() {
-            return Err("The requested project path is not a file.".to_owned());
-        }
-        Ok(path)
-    })
-    .await
-    .map_err(|error| format!("Could not join project file task: {error}"))??;
-
-    app.opener()
-        .open_path(path.to_string_lossy().into_owned(), None::<String>)
-        .map_err(|error| format!("Could not open file: {error}"))
-}
-
-#[tauri::command]
 pub async fn open_project_path(
     app: tauri::AppHandle,
     project_root: String,

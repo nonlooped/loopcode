@@ -33,11 +33,7 @@ export function savePermissionMode(
   mode: PermissionMode,
   storage: Pick<Storage, "setItem"> = localStorage,
 ) {
-  try {
-    storage.setItem(PERMISSION_MODE_KEY, mode);
-  } catch {
-    // Settings persistence is best-effort when web storage is unavailable.
-  }
+  saveSetting(storage, PERMISSION_MODE_KEY, mode);
 }
 
 export function loadSidebarWidths(storage: Pick<Storage, "getItem"> = localStorage): SidebarWidths {
@@ -56,14 +52,11 @@ export function saveSidebarWidth(
   width: number,
   storage: Pick<Storage, "setItem"> = localStorage,
 ) {
-  try {
-    storage.setItem(
-      side === "left" ? LEFT_SIDEBAR_WIDTH_KEY : RIGHT_SIDEBAR_WIDTH_KEY,
-      String(width),
-    );
-  } catch {
-    // Layout persistence is best-effort when web storage is unavailable.
-  }
+  saveSetting(
+    storage,
+    side === "left" ? LEFT_SIDEBAR_WIDTH_KEY : RIGHT_SIDEBAR_WIDTH_KEY,
+    String(width),
+  );
 }
 
 export function loadTerminalHeight(storage: Pick<Storage, "getItem"> = localStorage) {
@@ -81,11 +74,7 @@ export function saveTerminalHeight(
   height: number,
   storage: Pick<Storage, "setItem"> = localStorage,
 ) {
-  try {
-    storage.setItem(TERMINAL_HEIGHT_KEY, String(height));
-  } catch {
-    // Layout persistence is best-effort when web storage is unavailable.
-  }
+  saveSetting(storage, TERMINAL_HEIGHT_KEY, String(height));
 }
 
 export function loadLinuxShellTransparency(storage: Pick<Storage, "getItem"> = localStorage) {
@@ -116,12 +105,16 @@ export function saveLinuxShellTransparency(
     LINUX_SHELL_TRANSPARENCY_RANGE.max,
     Math.max(LINUX_SHELL_TRANSPARENCY_RANGE.min, Math.round(transparency)),
   );
+  saveSetting(storage, LINUX_SHELL_TRANSPARENCY_KEY, String(clamped));
+  return clamped;
+}
+
+function saveSetting(storage: Pick<Storage, "setItem">, key: string, value: string) {
   try {
-    storage.setItem(LINUX_SHELL_TRANSPARENCY_KEY, String(clamped));
+    storage.setItem(key, value);
   } catch {
     // Settings persistence is best-effort when web storage is unavailable.
   }
-  return clamped;
 }
 
 function storedWidth(value: string | null, range: { min: number; max: number }) {

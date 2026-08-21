@@ -186,10 +186,6 @@ export function readProjectFile(projectRoot: string, path: string): Promise<Arra
   return invoke<ArrayBuffer>("read_project_file", { projectRoot, path });
 }
 
-export function openProjectFile(projectRoot: string, path: string): Promise<void> {
-  return invoke("open_project_file", { projectRoot, path });
-}
-
 export function openProjectPath(projectRoot: string, path: string): Promise<void> {
   return invoke("open_project_path", { projectRoot, path });
 }

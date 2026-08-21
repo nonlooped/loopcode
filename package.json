@@ -45,7 +45,6 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@oxlint/plugins": "1.79.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^24.0.0",
