@@ -46,7 +46,7 @@ fn configure_native_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
         DwmSetWindowAttribute,
     };
 
-    let hwnd = window.hwnd()?;
+    let hwnd = windows::Win32::Foundation::HWND(window.hwnd()?.0);
     let corner_preference = DWMWCP_ROUND;
     let border_color = DWMWA_COLOR_NONE;
 
