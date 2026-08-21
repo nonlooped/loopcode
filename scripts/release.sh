@@ -21,7 +21,7 @@ t = t.replace(/^version = "[^"]*"/m, `version = "${ver}"`);
 fs.writeFileSync("src-tauri/Cargo.toml", t);
 ' "$ver"
 
-cargo metadata --format-version 1 > /dev/null # sync Cargo.lock without building
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 > /dev/null # sync Cargo.lock without building
 npx --yes git-cliff --tag "v$ver" -o CHANGELOG.md
 
 git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
