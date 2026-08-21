@@ -11,6 +11,7 @@
   }
 
   const { request, answer, decline }: Props = $props();
+  let dialogElement = $state<HTMLElement>();
 
   const primaryOptionId = $derived(
     request.options.find((option) => option.kind === 'allow_once')?.optionId ??
@@ -51,6 +52,13 @@
     return undefined;
   }
 
+  function focusPreferredOption(event: Event) {
+    const option = dialogElement?.querySelector<HTMLButtonElement>('.permission-actions button.primary');
+    if (!option) return;
+    event.preventDefault();
+    option.focus();
+  }
+
   $effect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return () => previous?.focus();
@@ -60,7 +68,12 @@
 <AlertDialog.Root open onOpenChange={(open) => { if (!open) decline(); }}>
   <AlertDialog.Portal>
     <AlertDialog.Overlay class="modal-overlay" />
-    <AlertDialog.Content class="permission-modal" aria-describedby="permission-description">
+    <AlertDialog.Content
+      bind:ref={dialogElement}
+      class="permission-modal"
+      aria-describedby="permission-description"
+      onOpenAutoFocus={focusPreferredOption}
+    >
       <AlertDialog.Title>{title}</AlertDialog.Title>
       {#if detail.command}
         <p>A coding agent is asking to run the command below.</p>

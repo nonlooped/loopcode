@@ -18,6 +18,7 @@
   const props: Props = $props();
   let pickerProviderId = $state(profiles[0].id);
   let modelSearch = $state('');
+  let modelListOpen = $state(false);
   const pickerProfile = $derived(profileById(pickerProviderId));
   const pickerProvider = $derived(props.thread.providers[pickerProfile.id]);
   const pickerCatalog = $derived(props.catalogs[pickerProfile.id]);
@@ -33,6 +34,7 @@
     if (open) {
       pickerProviderId = props.thread.profileId;
       modelSearch = '';
+      modelListOpen = true;
     }
     props.setOpen(open);
   }
@@ -99,8 +101,8 @@
             type="single"
             value={pickerProvider.selectedModelId ?? ''}
             onValueChange={chooseModel}
-            open={props.open}
-            onOpenChange={setOpen}
+            open={modelListOpen}
+            onOpenChange={(open) => { modelListOpen = open; }}
             inputValue={modelSearch}
             disabled={pickerCatalog.status !== 'ready' || pickerCatalog.models.length === 0}
             allowDeselect={false}
