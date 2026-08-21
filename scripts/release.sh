@@ -12,9 +12,11 @@ node -e '
 const fs = require("fs");
 const ver = process.argv[1];
 for (const f of ["package.json", "src-tauri/tauri.conf.json"]) {
-  const j = JSON.parse(fs.readFileSync(f, "utf8"));
-  j.version = ver;
-  fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+  const s = fs.readFileSync(f, "utf8");
+  // Replace only the version field; a full JSON round-trip would reformat the file.
+  const next = s.replace(/("version"\s*:\s*")[^"]*("/, `$1${ver}$2`);
+  if (next === s) { console.error(`no version field in ${f}`); process.exit(1); }
+  fs.writeFileSync(f, next);
 }
 let t = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
 t = t.replace(/^version = "[^"]*"/m, `version = "${ver}"`);
