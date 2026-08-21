@@ -1,8 +1,12 @@
 [package]
 name = "loopcode"
 version = "0.1.0"
-description = "A lightweight native orchestrator for coding-agent harnesses"
+description = "A local desktop workspace for Codex, Claude, Cursor, and OpenCode"
 authors = ["LoopCode contributors"]
+homepage = "https://github.com/nonlooped/loopcode"
+repository = "https://github.com/nonlooped/loopcode"
+keywords = ["acp", "coding-agents", "desktop", "developer-tools", "tauri"]
+categories = ["development-tools"]
 edition = "2024"
 
 [lib]

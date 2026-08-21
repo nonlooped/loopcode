@@ -1,38 +1,42 @@
-<p align="center">
-  <img src="assets/loopcode-icon.svg" width="112" alt="LoopCode icon">
-</p>
 
-<h1 align="center">LoopCode</h1>
 
-<p align="center">
-  One desktop app for Codex, Claude, Cursor, and OpenCode.
-</p>
+# LoopCode
 
-LoopCode gives coding agents a proper workspace. Every thread stays attached to its project, tool calls appear alongside the conversation, and sensitive actions wait for your approval.
+**Your coding agents, one desktop workspace.**
 
-No pile of terminal tabs. No guessing which agent changed what.
+Run Codex, Claude, Cursor, and OpenCode with project-bound threads, visible tool activity, and permission controls.
 
-## One place for agent work
+[Releases](https://github.com/nonlooped/loopcode/releases) · [Build from source](#build-from-source) · [Contribute](CONTRIBUTING.md)
 
-- Run Codex, Claude, Cursor, or OpenCode in any project.
-- Choose the model, reasoning level, and supported fast modes per thread.
-- Follow messages, commands, file changes, and permission requests in one timeline.
-- Browse the project and open files without leaving the conversation.
-- Mention files and folders with `@`, attach images, and keep drafts between restarts.
-- Use Restricted mode to approve actions yourself, or Full Access when you trust the agent.
+## Why LoopCode?
 
-LoopCode runs providers locally through the [Agent Client Protocol](https://agentclientprotocol.com/). Your projects and thread history stay on your machine.
+Agent CLIs work well for one task. They get messy when you juggle projects, providers, terminal tabs, and old conversations. LoopCode keeps the whole job in one window.
 
-## Get started
+- **Pick the right agent.** Use Codex, Claude, Cursor, or OpenCode per thread.
+- **Keep project context.** Threads, drafts, file references, and history survive restarts.
+- **See what changed.** Messages, commands, file edits, questions, and approvals share one timeline.
+- **Stay in control.** Restricted mode asks before sensitive actions. Full Access removes the prompts when you trust the agent.
+- **Work without bouncing around.** Browse files, preview code, attach images, and open the integrated terminal beside the conversation.
+- **Keep it local.** LoopCode starts agent processes on your machine and stores workspace history there.
 
-LoopCode currently builds from source. Version tags publish unsigned Windows and Linux packages to [GitHub Releases](https://github.com/nonlooped/loopcode/releases).
 
-You will need:
 
-- Windows 10 or 11, or Linux with WebKit2GTK 4.1
-- Node.js 24+, npm 12+, and Rust
-- The [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your operating system
-- At least one supported agent configured and authenticated
+## Supported agents
+
+
+| Agent    | Setup                                                              |
+| -------- | ------------------------------------------------------------------ |
+| Codex    | The pinned ACP adapter downloads on first launch.                  |
+| Claude   | The pinned ACP adapter downloads on first launch.                  |
+| Cursor   | Install the `agent` CLI, put it on `PATH`, then run `agent login`. |
+| OpenCode | Install `opencode` and put it on `PATH`.                           |
+
+
+Models, reasoning levels, and fast modes come from each agent, so every thread gets the controls its provider supports.
+
+## Build from source
+
+LoopCode supports Windows 10 or 11 and Linux. Release packages are currently unsigned.
 
 ```sh
 git clone https://github.com/nonlooped/loopcode.git
@@ -41,44 +45,22 @@ npm install
 npm run tauri -- dev
 ```
 
-Codex and Claude use pinned npm adapters that download on first launch. OpenCode expects `opencode` on `PATH`. Cursor expects `agent` on `PATH`; run `agent login` before opening it in LoopCode.
+You will need Node.js 24+, npm 12+, Rust, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your operating system.
 
-## How it works
+## Built on ACP
 
-1. Add a project folder.
-2. Start a thread and choose an agent and model.
-3. Describe what you want built or fixed.
-4. Watch the work, answer questions, and approve sensitive actions.
-5. Return later without losing the thread, draft, or project context.
+LoopCode uses the [Agent Client Protocol](https://agentclientprotocol.com/) to talk to each provider while preserving provider-specific models, tools, and authentication. It currently targets stable ACP v1.
 
-Each active thread starts its own agent process. Closing LoopCode saves the visible workspace and stops those processes cleanly.
-
-## Why ACP?
-
-ACP gives editors and coding agents a shared language. LoopCode can support different agents without pretending they all behave the same. Each provider still controls its own models, reasoning options, tools, and authentication.
-
-LoopCode currently targets stable ACP v1.
-
-## Development
-
-Frontend checks:
+Development checks
 
 ```sh
 npm run check
 npm test
 npm run build
-```
-
-Rust checks:
-
-```sh
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-## Releases
+See [CONTRIBUTING.md](CONTRIBUTING.md) for code conventions, commits, and releases.
 
-Run `scripts/release.sh X.Y.Z`. It bumps the version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` (+ lockfile), regenerates `CHANGELOG.md` from conventional commits via git-cliff, then commits and tags `vX.Y.Z`. Push with `git push --follow-tags`.
-
-CI runs the checks above, builds Windows and Linux packages, then publishes them together in a GitHub Release.
