@@ -24,7 +24,9 @@
         "shadow": true,
         "backgroundColor": "#00000000",
         "windowEffects": {
-          "effects": ["acrylic"]
+          "effects": [
+            "acrylic"
+          ]
         }
       }
     ],

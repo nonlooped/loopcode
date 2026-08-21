@@ -48,3 +48,4 @@
 - *(linux)* Use opaque window shell
 - Kill harness descendants on stop via process groups
 - *(ui)* Preserve picker and dialog focus
+- *(release)* Point cargo metadata at the src-tauri manifest
