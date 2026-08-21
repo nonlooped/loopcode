@@ -79,4 +79,6 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 ## Releases
 
-Push a `v<version>` tag matching `src-tauri/tauri.conf.json`. CI runs the checks above, builds Windows and Linux packages, then publishes them together in a GitHub Release.
+Run `scripts/release.sh X.Y.Z`. It bumps the version in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml` (+ lockfile), regenerates `CHANGELOG.md` from conventional commits via git-cliff, then commits and tags `vX.Y.Z`. Push with `git push --follow-tags`.
+
+CI runs the checks above, builds Windows and Linux packages, then publishes them together in a GitHub Release.
