@@ -442,7 +442,7 @@
 
 .question-composer-option:hover,
 .question-composer-option:focus-visible,
-.question-composer-option.selected {
+.question-composer-option[data-state="on"] {
   border-color: var(--line-strong);
   background: var(--panel-hover);
 }

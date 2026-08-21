@@ -1,4 +1,24 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(5, 6, 8, 0.38);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.image-preview-overlay {
+  background: rgba(5, 6, 8, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
 .permission-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 91;
   width: min(540px, calc(100vw - 40px));
   padding: 18px;
   overflow: hidden;
@@ -13,26 +33,7 @@
   -webkit-backdrop-filter: blur(20px) saturate(115%);
 }
 
-.permission-modal::backdrop {
-  background: rgba(5, 6, 8, 0.38);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .permission-modal[open]::backdrop,
-  .image-preview[open]::backdrop {
-    animation: modal-backdrop-in 150ms ease;
-  }
-}
-
-@keyframes modal-backdrop-in {
-  from {
-    opacity: 0;
-  }
-}
-
-.permission-header h2 {
+.permission-modal > h2 {
   margin: 0;
   color: var(--text);
   font-size: 15px;
@@ -41,7 +42,7 @@
   line-height: 1.4;
 }
 
-.permission-header p {
+.permission-modal > p {
   margin: 5px 0 0;
   color: var(--muted);
   font-size: 11.5px;
@@ -191,4 +192,27 @@
 .confirmation-actions button.danger {
   border-color: rgba(255, 92, 92, 0.3);
   color: var(--danger);
+}
+
+.rename-thread-field {
+  display: grid;
+  gap: 5px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.rename-thread-field input {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--recessed-surface);
+  color: var(--text);
+}
+
+.rename-thread-field input:focus-visible {
+  border-color: var(--line-strong);
+  outline: 2px solid rgba(230, 231, 234, 0.58);
+  outline-offset: 2px;
 }

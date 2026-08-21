@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { tick } from 'svelte';
   import { flip } from 'svelte/animate';
-  import { fade, fly } from 'svelte/transition';
+  import { fade } from 'svelte/transition';
+  import { Collapsible, DropdownMenu } from 'bits-ui';
   import {
     IconArchive,
     IconArrowLeft,
@@ -16,11 +16,10 @@
     IconTrash,
   } from '@tabler/icons-svelte';
 
-  import ContextMenu from './ContextMenu.svelte';
+  import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import { profileById } from '../config/providers';
   import type { ProjectState, ThreadState } from '../types';
   import { copyText } from '../utils/clipboard';
-  import { isMenuNavigationKey, menuFromEvent, nextMenuItemIndex, type ContextMenuState } from '../utils/context-menu';
   import { folderName, relativeTime, threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -31,12 +30,10 @@
     projects: ProjectState[];
     selectedProjectId: string | null;
     activeProject: ProjectState | null;
-    workspaceDropdownOpen: boolean;
     inboxThreads: ThreadState[];
     settledThreads: ThreadState[];
     selectedThreadId: string;
     showSettled: boolean;
-    setWorkspaceDropdownOpen: (open: boolean) => void;
     selectProject: (projectId: string | null) => void;
     addProject: () => void;
     addThread: () => void;
@@ -56,56 +53,24 @@
   }
 
   const props: Props = $props();
-  let contextMenu = $state<ContextMenuState>();
-  let workspaceTrigger = $state<HTMLButtonElement>();
-  let workspaceMenu = $state<HTMLElement>();
 
-  $effect(() => {
-    if (!props.workspaceDropdownOpen) return;
-    void tick().then(() => {
-      workspaceMenu?.querySelector<HTMLButtonElement>('.workspace-option.active, button:not(:disabled)')?.focus();
-    });
-  });
-
-  function closeWorkspaceMenu(returnFocus = false) {
-    props.setWorkspaceDropdownOpen(false);
-    if (returnFocus) void tick().then(() => workspaceTrigger?.focus());
-  }
-
-  function handleWorkspaceMenuKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeWorkspaceMenu(true);
-      return;
-    }
-    if (!isMenuNavigationKey(event.key) || !workspaceMenu) return;
-    event.preventDefault();
-    const items = Array.from(workspaceMenu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-    const next = nextMenuItemIndex(
-      items.findIndex((item) => item === document.activeElement),
-      items.length,
-      event.key,
-    );
-    items[next]?.focus();
-  }
-
-  function openThreadMenu(event: MouseEvent, thread: ThreadState) {
-    contextMenu = menuFromEvent(event, [
+  function threadMenuItems(thread: ThreadState): ContextMenuItem[] {
+    return [
       { label: 'Rename', action: () => props.renameThread(thread.id) },
       { label: thread.settled ? 'Unarchive' : 'Archive', action: () => props.toggleSettled(thread.id) },
       { label: 'Open project folder', action: () => props.openThreadFolder(thread), disabled: !thread.cwd },
       { label: 'Delete thread', action: () => props.removeThread(thread.id), danger: true, separatorBefore: true },
-    ]);
+    ];
   }
 
-  function openProjectMenu(event: MouseEvent, project: ProjectState) {
-    contextMenu = menuFromEvent(event, [
+  function projectMenuItems(project: ProjectState): ContextMenuItem[] {
+    return [
       { label: 'New thread in project', action: () => props.addThreadToProject(project.id) },
       { label: 'Open folder', action: () => props.openProjectFolder(project) },
       { label: 'Reveal folder', action: () => props.revealProjectFolder(project) },
       { label: 'Copy path', action: () => copyText(project.path) },
       { label: 'Remove from LoopCode', action: () => props.removeProject(project.id), danger: true, separatorBefore: true },
-    ]);
+    ];
   }
 </script>
 
@@ -134,78 +99,65 @@
     </div>
   {:else}
     <div class="sidebar-heading">
-      <button
-        bind:this={workspaceTrigger}
-        class="workspace-identity"
-        aria-haspopup="menu"
-        aria-controls="workspace-menu"
-        aria-expanded={props.workspaceDropdownOpen}
-        onclick={() => props.setWorkspaceDropdownOpen(!props.workspaceDropdownOpen)}
-        title="Choose folder"
-      >
-        <IconFolder size={15} stroke={1.6} />
-        <strong>{props.activeProject ? props.activeProject.name : 'All projects'}</strong>
-        <IconChevronDown class="workspace-chevron" size={12} stroke={1.55} />
-      </button>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger class="workspace-identity" title="Choose folder">
+          <IconFolder size={15} stroke={1.6} />
+          <strong>{props.activeProject ? props.activeProject.name : 'All projects'}</strong>
+          <IconChevronDown class="workspace-chevron" size={12} stroke={1.55} />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            class="workspace-dropdown"
+            side="bottom"
+            align="start"
+            sideOffset={4}
+            collisionPadding={8}
+            aria-label="Choose folder"
+          >
+            <DropdownMenu.RadioGroup
+              value={props.selectedProjectId ?? '__all-projects__'}
+              onValueChange={(value) => props.selectProject(value === '__all-projects__' ? null : value)}
+            >
+              <DropdownMenu.RadioItem class="workspace-option" value="__all-projects__">
+                {#snippet children({ checked })}
+                  <IconFolder size={13} stroke={1.6} />
+                  <span class="workspace-option-main">
+                    <strong>All projects</strong>
+                    <small title={props.defaultWorkingFolder}>{props.defaultWorkingFolder || 'local'} · default</small>
+                  </span>
+                  {#if checked}<IconCheck size={13} stroke={2} />{/if}
+                {/snippet}
+              </DropdownMenu.RadioItem>
+              {#each props.projects as project (project.id)}
+                <ContextMenu items={projectMenuItems(project)}>
+                  {#snippet children({ props: triggerProps })}
+                    <DropdownMenu.RadioItem {...triggerProps} class="workspace-option" value={project.id}>
+                      {#snippet children({ checked })}
+                        <IconFolder size={13} stroke={1.6} />
+                        <span class="workspace-option-main">
+                          <strong>{project.name}</strong>
+                          <small title={project.path}>{project.path}</small>
+                        </span>
+                        {#if checked}<IconCheck size={13} stroke={2} />{/if}
+                      {/snippet}
+                    </DropdownMenu.RadioItem>
+                  {/snippet}
+                </ContextMenu>
+              {/each}
+            </DropdownMenu.RadioGroup>
+            <DropdownMenu.Separator class="workspace-dropdown-separator" />
+            <DropdownMenu.Item class="workspace-add-folder" onSelect={props.addProject}>
+              <IconFolderPlus size={13} stroke={1.7} /> Add folder…
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
       <div class="heading-actions">
         <button class="icon-button" aria-label="New thread" title="New thread" onclick={props.addThread}>
           <IconPlus size={14} stroke={1.7} />
         </button>
       </div>
     </div>
-    {#if props.workspaceDropdownOpen}
-      <button
-        class="dropdown-backdrop"
-        tabindex="-1"
-        aria-label="Close folder menu"
-        onclick={() => closeWorkspaceMenu()}
-      ></button>
-      <div
-        bind:this={workspaceMenu}
-        id="workspace-menu"
-        class="workspace-dropdown"
-        role="menu"
-        tabindex="-1"
-        onkeydown={handleWorkspaceMenuKeydown}
-        transition:fly={{ y: props.compactMotion ? 0 : -4, duration: props.compactMotion ? 0 : 130 }}
-      >
-        <button
-          class="workspace-option"
-          class:active={props.selectedProjectId === null}
-          role="menuitem"
-          onclick={() => props.selectProject(null)}
-        >
-          <IconFolder size={13} stroke={1.6} />
-          <span class="workspace-option-main">
-            <strong>All projects</strong>
-            <small title={props.defaultWorkingFolder}>{props.defaultWorkingFolder || 'local'} · default</small>
-          </span>
-          {#if props.selectedProjectId === null}<IconCheck size={13} stroke={2} />{/if}
-        </button>
-        {#each props.projects as project (project.id)}
-          <button
-            class="workspace-option"
-            class:active={props.selectedProjectId === project.id}
-            role="menuitem"
-            onclick={() => props.selectProject(project.id)}
-            oncontextmenu={(event) => openProjectMenu(event, project)}
-          >
-            <IconFolder size={13} stroke={1.6} />
-            <span class="workspace-option-main">
-              <strong>{project.name}</strong>
-              <small title={project.path}>{project.path}</small>
-            </span>
-            {#if props.selectedProjectId === project.id}<IconCheck size={13} stroke={2} />{/if}
-          </button>
-        {/each}
-        <div class="workspace-dropdown-foot">
-          <button class="workspace-add-folder" onclick={props.addProject}>
-            <IconFolderPlus size={13} stroke={1.7} /> Add folder…
-          </button>
-        </div>
-      </div>
-    {/if}
-
     <div class="sidebar-scroll">
       <section class="sidebar-section inbox-section">
         <nav class="thread-list" aria-label="Inbox threads">
@@ -216,14 +168,16 @@
               {@const threadProfile = profileById(thread.profileId)}
               {@const status = threadStatus(thread)}
               <div class="thread-motion" animate:flip={{ duration: props.compactMotion ? 0 : 260 }}>
-                <div
-                  class:active={thread.id === props.selectedThreadId}
-                  class="thread-item"
-                  role="group"
-                  aria-label={thread.title}
-                  oncontextmenu={(event) => openThreadMenu(event, thread)}
-                  transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
-                >
+                <ContextMenu items={threadMenuItems(thread)}>
+                  {#snippet children({ props: triggerProps })}
+                    <div
+                      {...triggerProps}
+                      class:active={thread.id === props.selectedThreadId}
+                      class="thread-item"
+                      role="group"
+                      aria-label={thread.title}
+                      transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
+                    >
                   <button
                     type="button"
                     class="thread-select"
@@ -264,40 +218,42 @@
                     </span>
                   </span>
                   </button>
-                  <span class="thread-actions">
-                    <button
-                      type="button"
-                      class="action-settle"
-                      aria-label={`Archive ${thread.title}`}
-                      title="Archive"
-                      onclick={(event) => { event.stopPropagation(); props.toggleSettled(thread.id); }}
-                    ><IconArchive size={13} stroke={1.7} /></button>
-                    <button
-                      type="button"
-                      class="remove-thread"
-                      aria-label={`Delete ${thread.title}`}
-                      title="Delete thread"
-                      onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
-                    ><IconTrash size={13} stroke={1.7} /></button>
-                  </span>
-                </div>
+                    <span class="thread-actions">
+                      <button
+                        type="button"
+                        class="action-settle"
+                        aria-label={`Archive ${thread.title}`}
+                        title="Archive"
+                        onclick={(event) => { event.stopPropagation(); props.toggleSettled(thread.id); }}
+                      ><IconArchive size={13} stroke={1.7} /></button>
+                      <button
+                        type="button"
+                        class="remove-thread"
+                        aria-label={`Delete ${thread.title}`}
+                        title="Delete thread"
+                        onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
+                      ><IconTrash size={13} stroke={1.7} /></button>
+                    </span>
+                    </div>
+                  {/snippet}
+                </ContextMenu>
               </div>
             {/each}
           {/if}
         </nav>
       </section>
 
-      <section class="sidebar-section settled-section">
-        <button
-          class="section-header"
-          onclick={() => props.setShowSettled(!props.showSettled)}
-          aria-expanded={props.showSettled}
-        >
+      <Collapsible.Root
+        class="sidebar-section settled-section"
+        open={props.showSettled}
+        onOpenChange={props.setShowSettled}
+      >
+        <Collapsible.Trigger class="section-header">
           <span class="section-title">Archived{#if !props.showSettled} ({props.settledThreads.length}){/if}</span>
           <span class="section-rule"></span>
-          {#if props.showSettled}<IconChevronDown size={11} stroke={1.7} />{:else}<IconChevronRight size={11} stroke={1.7} />{/if}
-        </button>
-        {#if props.showSettled}
+          <IconChevronRight class="section-chevron" size={11} stroke={1.7} />
+        </Collapsible.Trigger>
+        <Collapsible.Content>
           <nav class="thread-list settled" aria-label="Archived threads">
             {#if props.settledThreads.length === 0}
               <div class="empty-hint">No archived threads</div>
@@ -305,15 +261,17 @@
               {#each props.settledThreads as thread (thread.id)}
                 {@const threadProfile = profileById(thread.profileId)}
                 <div class="thread-motion" animate:flip={{ duration: props.compactMotion ? 0 : 260 }}>
-                  <div
-                    class:active={thread.id === props.selectedThreadId}
-                    class="thread-item slim settled"
-                    role="group"
-                    aria-label={thread.title}
-                    oncontextmenu={(event) => openThreadMenu(event, thread)}
-                    title={thread.title}
-                    transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
-                  >
+                  <ContextMenu items={threadMenuItems(thread)}>
+                    {#snippet children({ props: triggerProps })}
+                      <div
+                        {...triggerProps}
+                        class:active={thread.id === props.selectedThreadId}
+                        class="thread-item slim settled"
+                        role="group"
+                        aria-label={thread.title}
+                        title={thread.title}
+                        transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
+                      >
                     <button
                       type="button"
                       class="thread-select"
@@ -347,12 +305,14 @@
                       ><IconTrash size={12} stroke={1.7} /></button>
                     </span>
                   </div>
-                </div>
+                {/snippet}
+              </ContextMenu>
+              </div>
               {/each}
             {/if}
           </nav>
-        {/if}
-      </section>
+        </Collapsible.Content>
+      </Collapsible.Root>
     </div>
 
     <button class="sidebar-foot" onclick={props.openSettings}>
@@ -361,12 +321,3 @@
     </button>
   {/if}
 </aside>
-
-{#if contextMenu}
-  <ContextMenu menu={contextMenu} close={() => { contextMenu = undefined; }} />
-{/if}
-
-<svelte:window
-  onblur={() => { if (props.workspaceDropdownOpen) closeWorkspaceMenu(); }}
-  onkeydown={(event) => { if (event.key === 'Escape' && props.workspaceDropdownOpen) closeWorkspaceMenu(true); }}
-/>

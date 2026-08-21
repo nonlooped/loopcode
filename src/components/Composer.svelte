@@ -3,7 +3,6 @@
   import { fly } from 'svelte/transition';
   import {
     IconArrowUp,
-    IconChevronDown,
     IconFolder,
     IconGitBranch,
     IconPaperclip,
@@ -17,7 +16,6 @@
   import ImagePreview from './ImagePreview.svelte';
   import ModelPicker from './ModelPicker.svelte';
   import ReasoningPicker from './ReasoningPicker.svelte';
-  import { profileById } from '../config/providers';
   import {
     listComposerCompletions,
     type ComposerCompletionEntry,
@@ -31,7 +29,6 @@
   } from '../types';
   import { copyImage, saveImage } from '../utils/clipboard';
   import { composerLayoutKeyframes, usesExpandedComposerLayout, type LayoutBox } from '../utils/composer-layout';
-  import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
   import { fastModeAvailable } from '../utils/fast-mode';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
   import {
@@ -76,8 +73,6 @@
   let composerFooter = $state<HTMLElement>();
   let promptEditor = $state<HTMLElement>();
   let imageInput = $state<HTMLInputElement>();
-  let modelTrigger = $state<HTMLButtonElement>();
-  let contextMenu = $state<ContextMenuState>();
   let imagePreview = $state<{ src: string; name: string }>();
   let completionEntries = $state<ComposerCompletionEntry[]>([]);
   let completionStatus = $state<'loading' | 'ready' | 'error'>('loading');
@@ -143,13 +138,6 @@
         updateMissingPills();
       }
     }
-  }
-
-  function closePickers(returnFocus = false) {
-    const restoreModelFocus = returnFocus && modelPickerOpen;
-    modelPickerOpen = false;
-    reasoningPickerOpen = false;
-    if (restoreModelFocus) void tick().then(() => modelTrigger?.focus());
   }
 
   function activeModelName() {
@@ -479,13 +467,13 @@
     }
   }
 
-  function openImageMenu(event: MouseEvent, image: ComposerImage) {
-    contextMenu = menuFromEvent(event, [
+  function imageMenuItems(image: ComposerImage) {
+    return [
       { label: 'Open preview', action: () => { imagePreview = { src: image.previewUrl, name: image.name }; } },
       { label: 'Copy image', action: () => copyImage(image.previewUrl) },
       { label: 'Save image', action: () => saveImage(image.previewUrl, image.name) },
       { label: 'Remove attachment', action: () => props.removeImage(image.id), danger: true, separatorBefore: true },
-    ]);
+    ];
   }
 
   function handleImageSelection(event: Event) {
@@ -516,10 +504,6 @@
   }
 </script>
 
-{#if modelPickerOpen || reasoningPickerOpen}
-  <button class="model-picker-dismiss" tabindex="-1" aria-label="Close picker" onclick={() => closePickers()}></button>
-{/if}
-
 <section
   class:picker-open={modelPickerOpen || reasoningPickerOpen}
   class="composer-wrap"
@@ -529,17 +513,21 @@
     {#if props.images.length > 0 || props.attachmentError}
       <div class="attachment-strip" aria-label="Attached images">
         {#each props.images as image (image.id)}
-          <div class="image-attachment" role="group" title={image.name} oncontextmenu={(event) => openImageMenu(event, image)}>
-            <button
-              type="button"
-              class="image-attachment-preview"
-              aria-label={`Preview ${image.name}`}
-              onclick={() => { imagePreview = { src: image.previewUrl, name: image.name }; }}
-            ><img src={image.previewUrl} alt="" /></button>
-            <button class="image-attachment-remove" type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
-              <IconX size={10} stroke={2} />
-            </button>
-          </div>
+          <ContextMenu items={imageMenuItems(image)}>
+            {#snippet children({ props: imageProps })}
+              <div {...imageProps} class="image-attachment" role="group" title={image.name}>
+                <button
+                  type="button"
+                  class="image-attachment-preview"
+                  aria-label={`Preview ${image.name}`}
+                  onclick={() => { imagePreview = { src: image.previewUrl, name: image.name }; }}
+                ><img src={image.previewUrl} alt="" /></button>
+                <button class="image-attachment-remove" type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
+                  <IconX size={10} stroke={2} />
+                </button>
+              </div>
+            {/snippet}
+          </ContextMenu>
         {/each}
         {#if props.attachmentError}<span class="attachment-error">{props.attachmentError}</span>{/if}
       </div>
@@ -618,35 +606,21 @@
     {/if}
     <div bind:this={composerFooter} class="composer-footer">
       <div class="composer-context">
-        <div class="model-picker-wrap">
-          <button
-            bind:this={modelTrigger}
-            class="model-picker-trigger"
-            aria-expanded={modelPickerOpen}
-            aria-haspopup="dialog"
-            title="Choose provider and model"
-            onclick={() => { reasoningPickerOpen = false; modelPickerOpen = !modelPickerOpen; }}
-          >
-            <img src={profileById(props.thread.profileId).icon} alt="" />
-            <span>{activeModelName()}</span>
-            <IconChevronDown size={11} stroke={1.7} />
-          </button>
-          {#if modelPickerOpen}
+          <div class="model-picker-wrap">
             <ModelPicker
               thread={props.thread}
               catalogs={props.catalogs}
+              label={activeModelName()}
+              open={modelPickerOpen}
+              setOpen={(open) => { reasoningPickerOpen = false; modelPickerOpen = open; }}
               choose={chooseModel}
               retryDiscovery={props.retryDiscovery}
-              reducedMotion={props.reducedMotion}
-              close={() => closePickers(true)}
             />
-          {/if}
-        </div>
+          </div>
         {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider)}
           <ReasoningPicker
             {provider}
             open={reasoningPickerOpen}
-            reducedMotion={props.reducedMotion}
             setOpen={(open) => { modelPickerOpen = false; reasoningPickerOpen = open; }}
             select={props.selectReasoning}
             selectFastMode={props.selectFastMode}
@@ -675,27 +649,12 @@
   </div>
 </section>
 
-{#if contextMenu}
-  <ContextMenu menu={contextMenu} close={() => { contextMenu = undefined; }} />
-{/if}
-
 {#if imagePreview}
   <ImagePreview
     src={imagePreview.src}
     name={imagePreview.name}
-    reducedMotion={props.reducedMotion}
     close={() => { imagePreview = undefined; }}
   />
 {/if}
 
-<svelte:window
-  onblur={() => {
-    closeCompletion();
-    if (modelPickerOpen || reasoningPickerOpen) closePickers();
-  }}
-  onkeydown={(event) => {
-    if (event.key !== 'Escape') return;
-    if (completionPrefix) closeCompletion();
-    else if (modelPickerOpen || reasoningPickerOpen) closePickers(true);
-  }}
-/>
+<svelte:window onblur={closeCompletion} />

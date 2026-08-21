@@ -10,7 +10,6 @@
     type ProjectFileEntry,
   } from '../services/native';
   import { copyText } from '../utils/clipboard';
-  import { menuFromEvent, type ContextMenuState } from '../utils/context-menu';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
 
   interface Props {
@@ -35,7 +34,6 @@
   let loadError = $state('');
   let loadedRevision = $state(-1);
   let loadToken = 0;
-  let contextMenu = $state<ContextMenuState>();
 
   const icon = $derived(
     entry.isDirectory
@@ -66,22 +64,6 @@
     }
   }
 
-  function openMenu(event: MouseEvent) {
-    contextMenu = menuFromEvent(event, entry.isDirectory
-      ? [
-          { label: expanded ? 'Collapse' : 'Expand', action: activate },
-          { label: 'Open folder', action: () => runPathAction(openProjectPath(projectRoot, entry.path)) },
-          { label: 'Reveal folder', action: () => runPathAction(revealProjectPath(projectRoot, entry.path)) },
-          { label: 'Copy absolute path', action: () => copyText(entry.path) },
-          { label: 'Refresh', separatorBefore: true, action: () => { expanded = true; void loadChildren(); } },
-        ]
-      : [
-          { label: 'Open', action: activate },
-          { label: 'Reveal in file manager', action: () => runPathAction(revealProjectPath(projectRoot, entry.path)) },
-          { label: 'Copy absolute path', action: () => copyText(entry.path) },
-        ]);
-  }
-
   function runPathAction(action: Promise<void>) {
     void action.catch((error) => reportError(errorMessage(error)));
   }
@@ -101,31 +83,49 @@
 </script>
 
 <li role="none">
-  <button
-    type="button"
-    role="treeitem"
-    aria-expanded={entry.isDirectory ? expanded : undefined}
-    aria-selected={!entry.isDirectory && activeFilePath === entry.path}
-    data-path={entry.path}
-    tabindex={focusedPath === entry.path ? 0 : -1}
-    class:folder={entry.isDirectory}
-    class:active={!entry.isDirectory && activeFilePath === entry.path}
-    class="project-file-row"
-    style={`--file-depth: ${depth}`}
-    title={entry.path}
-    onclick={activate}
-    onfocus={() => setFocusedPath(entry.path)}
-    oncontextmenu={openMenu}
+  <ContextMenu
+    items={entry.isDirectory
+      ? [
+          { label: expanded ? 'Collapse' : 'Expand', action: activate },
+          { label: 'Open folder', action: () => runPathAction(openProjectPath(projectRoot, entry.path)) },
+          { label: 'Reveal folder', action: () => runPathAction(revealProjectPath(projectRoot, entry.path)) },
+          { label: 'Copy absolute path', action: () => copyText(entry.path) },
+          { label: 'Refresh', separatorBefore: true, action: () => { expanded = true; void loadChildren(); } },
+        ]
+      : [
+          { label: 'Open', action: activate },
+          { label: 'Reveal in file manager', action: () => runPathAction(revealProjectPath(projectRoot, entry.path)) },
+          { label: 'Copy absolute path', action: () => copyText(entry.path) },
+        ]}
   >
-    <span class="project-file-chevron" aria-hidden="true">
-      {#if entry.isDirectory}
-        {#if expanded}<IconChevronDown size={13} stroke={1.65} />{:else}<IconChevronRight size={13} stroke={1.65} />{/if}
-      {/if}
-    </span>
-    {#if icon}<img class="project-file-icon" src={icon} alt="" />{/if}
-    <span class="project-file-name">{entry.name}</span>
-    {#if entry.isSymlink}<IconLink class="project-file-link" size={11} stroke={1.6} />{/if}
-  </button>
+    {#snippet children({ props })}
+      <button
+        {...props}
+        type="button"
+        role="treeitem"
+        aria-expanded={entry.isDirectory ? expanded : undefined}
+        aria-selected={!entry.isDirectory && activeFilePath === entry.path}
+        data-path={entry.path}
+        tabindex={focusedPath === entry.path ? 0 : -1}
+        class:folder={entry.isDirectory}
+        class:active={!entry.isDirectory && activeFilePath === entry.path}
+        class="project-file-row"
+        style={`--file-depth: ${depth}`}
+        title={entry.path}
+        onclick={activate}
+        onfocus={() => setFocusedPath(entry.path)}
+      >
+        <span class="project-file-chevron" aria-hidden="true">
+          {#if entry.isDirectory}
+            {#if expanded}<IconChevronDown size={13} stroke={1.65} />{:else}<IconChevronRight size={13} stroke={1.65} />{/if}
+          {/if}
+        </span>
+        {#if icon}<img class="project-file-icon" src={icon} alt="" />{/if}
+        <span class="project-file-name">{entry.name}</span>
+        {#if entry.isSymlink}<IconLink class="project-file-link" size={11} stroke={1.6} />{/if}
+      </button>
+    {/snippet}
+  </ContextMenu>
 
   {#if entry.isDirectory && expanded}
     <ul class="project-file-group" role="group">
@@ -156,6 +156,3 @@
   {/if}
 </li>
 
-{#if contextMenu}
-  <ContextMenu menu={contextMenu} close={() => { contextMenu = undefined; }} />
-{/if}

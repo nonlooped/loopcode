@@ -36,6 +36,14 @@
   color: var(--text-soft);
 }
 
+.section-chevron {
+  transition: transform 140ms ease;
+}
+
+.settled-section[data-state="open"] .section-chevron {
+  transform: rotate(90deg);
+}
+
 .section-title {
   display: flex;
   align-items: center;

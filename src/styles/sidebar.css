@@ -111,25 +111,9 @@
   flex: 0 0 auto;
 }
 
-.sidebar-heading {
-  position: relative;
-}
-
-.dropdown-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  border: 0;
-  background: transparent;
-}
-
 .workspace-dropdown {
-  position: absolute;
-  top: calc(var(--titlebar-height) + 39px);
-  left: 8px;
-  right: 8px;
-  z-index: 6;
   display: grid;
+  width: min(320px, calc(100vw - 16px));
   gap: 2px;
   padding: 6px;
   border: 1px solid var(--line);
@@ -163,7 +147,7 @@
   color: var(--text-soft);
 }
 
-.workspace-option.active {
+.workspace-option[data-state="checked"] {
   background: var(--panel-active);
   border-color: rgba(255, 255, 255, 0.06);
   color: var(--text-soft);
@@ -193,10 +177,10 @@
   color: var(--faint);
 }
 
-.workspace-dropdown-foot {
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--line);
+.workspace-dropdown-separator {
+  height: 1px;
+  margin: 4px 0 2px;
+  background: var(--line);
 }
 
 .workspace-add-folder {

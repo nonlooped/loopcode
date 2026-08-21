@@ -217,8 +217,7 @@
   .reasoning-menu,
   .composer-autocomplete,
   .context-menu,
-  .permission-modal::backdrop,
-  .image-preview::backdrop,
+  .modal-overlay,
   .scroll-to-bottom {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
@@ -243,8 +242,7 @@
     background: rgb(30, 31, 35);
   }
 
-  .permission-modal::backdrop,
-  .image-preview::backdrop {
+  .modal-overlay {
     background: rgb(8, 9, 11);
   }
 }
