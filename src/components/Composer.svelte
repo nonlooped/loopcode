@@ -167,14 +167,14 @@
 
   function activeModelName() {
     const catalog = props.catalogs[props.thread.profileId];
-    const model = catalog.models.find((item) => item.id === provider.selectedModelId);
+    const model = catalog?.models.find((item) => item.id === provider.selectedModelId);
     if (model) {
       const separator = model.name.indexOf('/');
       return separator > 0 && separator < model.name.length - 1
         ? model.name.slice(separator + 1).trim()
         : model.name;
     }
-    return catalog.status === 'loading' ? 'Loading models…' : 'Choose model';
+    return catalog?.status === 'loading' ? 'Loading models…' : 'Choose model';
   }
 
   function canEdit() {
