@@ -33,6 +33,22 @@ void test("opens a clicked markdown HTTP link outside the webview", async () => 
   assert.deepEqual(opened, ["https://example.com/docs"]);
 });
 
+void test("opens a link when the click target is a text node", async () => {
+  const click = clickOn("https://example.com/docs", {
+    target: { nodeType: 3 },
+    composedPath: () => [
+      { nodeType: 3 },
+      { closest: () => ({ href: "https://example.com/docs" }) },
+    ],
+  });
+  const opened = [];
+
+  await openExternalLinkFromClick(click.event, async (url) => opened.push(url));
+
+  assert.equal(click.wasPrevented(), true);
+  assert.deepEqual(opened, ["https://example.com/docs"]);
+});
+
 void test("leaves non-web links to their default behavior", async () => {
   const opened = [];
   const open = async (url) => opened.push(url);

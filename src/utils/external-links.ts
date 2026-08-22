@@ -5,15 +5,18 @@ interface LinkTarget {
 interface LinkClick {
   button: number;
   target: EventTarget | null;
+  composedPath?(): EventTarget[];
   preventDefault(): void;
 }
 
 type OpenUrl = (url: string) => Promise<void>;
 
 export async function openExternalLinkFromClick(event: LinkClick, openUrl: OpenUrl): Promise<void> {
-  if (event.button !== 0 || !isLinkTarget(event.target)) return;
+  if (event.button !== 0) return;
+  const target = event.composedPath?.().find(isLinkTarget) ?? event.target;
+  if (!isLinkTarget(target)) return;
 
-  const href = event.target.closest("a[href]")?.href;
+  const href = target.closest("a[href]")?.href;
   if (!href || !isWebUrl(href)) return;
 
   event.preventDefault();
