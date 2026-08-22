@@ -7,16 +7,196 @@ const TERMINAL_HEIGHT_KEY = "loopcode.terminal-height";
 const LINUX_SHELL_TRANSPARENCY_KEY = "loopcode.linux-shell-transparency-level";
 const LEGACY_LINUX_SHELL_TRANSPARENCY_KEY = "loopcode.linux-shell-transparency";
 
+export type SettingsCategory =
+  | "general"
+  | "appearance"
+  | "conversation"
+  | "agents"
+  | "terminal"
+  | "data";
+export type SendShortcut = "enter" | "modifier-enter";
+
+export interface AppPreferences {
+  compactSessionRows: boolean;
+  showSettled: boolean;
+  startupBehavior: "last-thread" | "new-thread";
+  newThreadProject: "selected" | "default-folder";
+  reuseEmptyThreads: boolean;
+  explorerStartup: "open" | "collapsed";
+  motionMode: "system" | "reduced";
+  interfaceZoom: number;
+  transcriptDensity: "comfortable" | "compact";
+  contentWidth: number;
+  wrapCode: boolean;
+  autoFollowOutput: boolean;
+  showMessageTimestamps: boolean;
+  composerSpellcheck: boolean;
+  composerAutocomplete: boolean;
+  defaultProviderId: string;
+  providerModelDefaults: Record<string, string>;
+  terminalFontSize: number;
+  terminalScrollback: number;
+  sendShortcut: SendShortcut;
+}
+
+export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  compactSessionRows: false,
+  showSettled: false,
+  startupBehavior: "last-thread",
+  newThreadProject: "selected",
+  reuseEmptyThreads: true,
+  explorerStartup: "open",
+  motionMode: "system",
+  interfaceZoom: 100,
+  transcriptDensity: "comfortable",
+  contentWidth: 720,
+  wrapCode: true,
+  autoFollowOutput: true,
+  showMessageTimestamps: false,
+  composerSpellcheck: true,
+  composerAutocomplete: true,
+  defaultProviderId: "codex",
+  providerModelDefaults: {},
+  terminalFontSize: 12,
+  terminalScrollback: 5_000,
+  sendShortcut: "enter",
+};
+
+const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
+  compactSessionRows: "loopcode.compact-session-rows",
+  showSettled: "loopcode.show-settled",
+  startupBehavior: "loopcode.startup-behavior",
+  newThreadProject: "loopcode.new-thread-project",
+  reuseEmptyThreads: "loopcode.reuse-empty-threads",
+  explorerStartup: "loopcode.explorer-startup",
+  motionMode: "loopcode.motion-mode",
+  interfaceZoom: "loopcode.interface-zoom",
+  transcriptDensity: "loopcode.transcript-density",
+  contentWidth: "loopcode.content-width",
+  wrapCode: "loopcode.wrap-code",
+  autoFollowOutput: "loopcode.auto-follow-output",
+  showMessageTimestamps: "loopcode.show-message-timestamps",
+  composerSpellcheck: "loopcode.composer-spellcheck",
+  composerAutocomplete: "loopcode.composer-autocomplete",
+  defaultProviderId: "loopcode.default-provider",
+  providerModelDefaults: "loopcode.provider-model-defaults",
+  terminalFontSize: "loopcode.terminal-font-size",
+  terminalScrollback: "loopcode.terminal-scrollback",
+  sendShortcut: "loopcode.send-shortcut",
+};
+
 export const LEFT_SIDEBAR_WIDTH_RANGE = { min: 190, max: 480 } as const;
 export const RIGHT_SIDEBAR_WIDTH_RANGE = { min: 210, max: 520 } as const;
 export const TERMINAL_HEIGHT_RANGE = { min: 140, max: 520 } as const;
 export const DEFAULT_TERMINAL_HEIGHT = 260;
+export const INTERFACE_ZOOM_RANGE = { min: 60, max: 200 } as const;
+export const CONTENT_WIDTH_RANGE = { min: 600, max: 900 } as const;
+export const TERMINAL_FONT_SIZE_RANGE = { min: 10, max: 16 } as const;
 export const LINUX_SHELL_TRANSPARENCY_RANGE = { min: 0, max: 100 } as const;
 export const MAX_LINUX_SHELL_TRANSPARENCY = 20;
 
 export interface SidebarWidths {
   left: number | null;
   right: number | null;
+}
+
+export function loadAppPreferences(
+  storage: Pick<Storage, "getItem"> = localStorage,
+): AppPreferences {
+  try {
+    return {
+      compactSessionRows:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.compactSessionRows)) ??
+        DEFAULT_APP_PREFERENCES.compactSessionRows,
+      showSettled:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.showSettled)) ??
+        DEFAULT_APP_PREFERENCES.showSettled,
+      startupBehavior:
+        storage.getItem(PREFERENCE_KEYS.startupBehavior) === "new-thread"
+          ? "new-thread"
+          : "last-thread",
+      newThreadProject:
+        storage.getItem(PREFERENCE_KEYS.newThreadProject) === "default-folder"
+          ? "default-folder"
+          : "selected",
+      reuseEmptyThreads:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.reuseEmptyThreads)) ??
+        DEFAULT_APP_PREFERENCES.reuseEmptyThreads,
+      explorerStartup:
+        storage.getItem(PREFERENCE_KEYS.explorerStartup) === "collapsed" ? "collapsed" : "open",
+      motionMode: storage.getItem(PREFERENCE_KEYS.motionMode) === "reduced" ? "reduced" : "system",
+      interfaceZoom:
+        storedNumber(storage.getItem(PREFERENCE_KEYS.interfaceZoom), INTERFACE_ZOOM_RANGE) ??
+        DEFAULT_APP_PREFERENCES.interfaceZoom,
+      transcriptDensity:
+        storage.getItem(PREFERENCE_KEYS.transcriptDensity) === "compact"
+          ? "compact"
+          : "comfortable",
+      contentWidth:
+        storedNumber(storage.getItem(PREFERENCE_KEYS.contentWidth), CONTENT_WIDTH_RANGE) ??
+        DEFAULT_APP_PREFERENCES.contentWidth,
+      wrapCode:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.wrapCode)) ??
+        DEFAULT_APP_PREFERENCES.wrapCode,
+      autoFollowOutput:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.autoFollowOutput)) ??
+        DEFAULT_APP_PREFERENCES.autoFollowOutput,
+      showMessageTimestamps:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.showMessageTimestamps)) ??
+        DEFAULT_APP_PREFERENCES.showMessageTimestamps,
+      composerSpellcheck:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.composerSpellcheck)) ??
+        DEFAULT_APP_PREFERENCES.composerSpellcheck,
+      composerAutocomplete:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.composerAutocomplete)) ??
+        DEFAULT_APP_PREFERENCES.composerAutocomplete,
+      defaultProviderId:
+        storage.getItem(PREFERENCE_KEYS.defaultProviderId)?.trim() ||
+        DEFAULT_APP_PREFERENCES.defaultProviderId,
+      providerModelDefaults: storedStringRecord(
+        storage.getItem(PREFERENCE_KEYS.providerModelDefaults),
+      ),
+      terminalFontSize:
+        storedNumber(storage.getItem(PREFERENCE_KEYS.terminalFontSize), TERMINAL_FONT_SIZE_RANGE) ??
+        DEFAULT_APP_PREFERENCES.terminalFontSize,
+      terminalScrollback: storedScrollback(storage.getItem(PREFERENCE_KEYS.terminalScrollback)),
+      sendShortcut:
+        storage.getItem(PREFERENCE_KEYS.sendShortcut) === "modifier-enter"
+          ? "modifier-enter"
+          : "enter",
+    };
+  } catch {
+    return { ...DEFAULT_APP_PREFERENCES, providerModelDefaults: {} };
+  }
+}
+
+export function saveAppPreference<K extends keyof AppPreferences>(
+  key: K,
+  value: AppPreferences[K],
+  storage: Pick<Storage, "setItem"> = localStorage,
+) {
+  saveSetting(
+    storage,
+    PREFERENCE_KEYS[key],
+    typeof value === "object" ? JSON.stringify(value) : String(value),
+  );
+}
+
+export function resetAppSettings(storage: Pick<Storage, "removeItem"> = localStorage) {
+  try {
+    for (const key of [
+      ...Object.values(PREFERENCE_KEYS),
+      PERMISSION_MODE_KEY,
+      LEFT_SIDEBAR_WIDTH_KEY,
+      RIGHT_SIDEBAR_WIDTH_KEY,
+      TERMINAL_HEIGHT_KEY,
+      LINUX_SHELL_TRANSPARENCY_KEY,
+      LEGACY_LINUX_SHELL_TRANSPARENCY_KEY,
+    ])
+      storage.removeItem(key);
+  } catch {
+    // Settings persistence is best-effort when web storage is unavailable.
+  }
 }
 
 export function loadPermissionMode(
@@ -39,8 +219,8 @@ export function savePermissionMode(
 export function loadSidebarWidths(storage: Pick<Storage, "getItem"> = localStorage): SidebarWidths {
   try {
     return {
-      left: storedWidth(storage.getItem(LEFT_SIDEBAR_WIDTH_KEY), LEFT_SIDEBAR_WIDTH_RANGE),
-      right: storedWidth(storage.getItem(RIGHT_SIDEBAR_WIDTH_KEY), RIGHT_SIDEBAR_WIDTH_RANGE),
+      left: storedNumber(storage.getItem(LEFT_SIDEBAR_WIDTH_KEY), LEFT_SIDEBAR_WIDTH_RANGE),
+      right: storedNumber(storage.getItem(RIGHT_SIDEBAR_WIDTH_KEY), RIGHT_SIDEBAR_WIDTH_RANGE),
     };
   } catch {
     return { left: null, right: null };
@@ -62,7 +242,7 @@ export function saveSidebarWidth(
 export function loadTerminalHeight(storage: Pick<Storage, "getItem"> = localStorage) {
   try {
     return (
-      storedWidth(storage.getItem(TERMINAL_HEIGHT_KEY), TERMINAL_HEIGHT_RANGE) ??
+      storedNumber(storage.getItem(TERMINAL_HEIGHT_KEY), TERMINAL_HEIGHT_RANGE) ??
       DEFAULT_TERMINAL_HEIGHT
     );
   } catch {
@@ -79,13 +259,13 @@ export function saveTerminalHeight(
 
 export function loadLinuxShellTransparency(storage: Pick<Storage, "getItem"> = localStorage) {
   try {
-    const savedLevel = storedWidth(
+    const savedLevel = storedNumber(
       storage.getItem(LINUX_SHELL_TRANSPARENCY_KEY),
       LINUX_SHELL_TRANSPARENCY_RANGE,
     );
     if (savedLevel !== null) return savedLevel;
 
-    const legacyTransparency = storedWidth(storage.getItem(LEGACY_LINUX_SHELL_TRANSPARENCY_KEY), {
+    const legacyTransparency = storedNumber(storage.getItem(LEGACY_LINUX_SHELL_TRANSPARENCY_KEY), {
       min: 0,
       max: MAX_LINUX_SHELL_TRANSPARENCY,
     });
@@ -117,9 +297,43 @@ function saveSetting(storage: Pick<Storage, "setItem">, key: string, value: stri
   }
 }
 
-function storedWidth(value: string | null, range: { min: number; max: number }) {
+function storedStringRecord(value: string | null) {
+  if (!value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] =>
+          entry[0].length > 0 &&
+          entry[0] !== "__proto__" &&
+          entry[0] !== "constructor" &&
+          entry[0] !== "prototype" &&
+          typeof entry[1] === "string" &&
+          entry[1].length > 0,
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function storedScrollback(value: string | null) {
+  const scrollback = Number(value);
+  return scrollback === 1_000 || scrollback === 5_000 || scrollback === 10_000
+    ? scrollback
+    : DEFAULT_APP_PREFERENCES.terminalScrollback;
+}
+
+function storedBoolean(value: string | null) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function storedNumber(value: string | null, range: { min: number; max: number }) {
   if (value === null) return null;
-  const width = Number(value);
-  if (!Number.isFinite(width)) return null;
-  return Math.min(range.max, Math.max(range.min, width));
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.min(range.max, Math.max(range.min, number));
 }
