@@ -56,6 +56,7 @@ export class ProviderRuntime {
   #connections = new Map<string, AcpConnection>();
   #createConnection: (callbacks: AcpCallbacks) => AcpConnection;
   #tokens = new Map<string, string>();
+  #stoppingProfiles = new Map<string, Promise<void>>();
   #turnTokens = new Map<string, string>();
   #titleTokens = new Map<string, string>();
   #titleConnections = new Map<string, AcpConnection>();
@@ -329,6 +330,8 @@ export class ProviderRuntime {
 
   async connect(thread: ThreadState, profileId: string) {
     this.#rememberThread(thread);
+    let stopping: Promise<void> | undefined;
+    while ((stopping = this.#stoppingProfiles.get(profileId))) await stopping;
     if (
       !thread.cwd ||
       this.#disabledProfiles.has(profileId) ||
@@ -781,7 +784,22 @@ export class ProviderRuntime {
       }
       this.#hooks.clearPermission(thread.id, profileId);
     }
-    void Promise.allSettled(connections.map((connection) => connection.stop()));
+    this.#trackStops(profileId, connections);
+  }
+
+  #trackStops(profileId: string, connections: AcpConnection[]) {
+    if (connections.length === 0) return;
+    const previous = this.#stoppingProfiles.get(profileId);
+    const stopping = Promise.allSettled([
+      ...(previous ? [previous] : []),
+      ...connections.map((connection) => connection.stop()),
+    ]).then(() => {});
+    this.#stoppingProfiles.set(profileId, stopping);
+    void stopping.then(() => {
+      if (this.#stoppingProfiles.get(profileId) === stopping) {
+        this.#stoppingProfiles.delete(profileId);
+      }
+    });
   }
 
   #markProviderUnavailable(
@@ -804,7 +822,7 @@ export class ProviderRuntime {
       this.#connections.delete(key);
       if (connection) connections.push(connection);
     }
-    void Promise.allSettled(connections.map((connection) => connection.stop()));
+    this.#trackStops(profile.id, connections);
     this.applyCatalog(profile.id, this.#threads);
   }
 

@@ -272,6 +272,55 @@ void test("Pi discovery skips per-model option probing", async () => {
   });
 });
 
+void test("reconnect waits for a replaced provider process to stop", async () => {
+  let finishStop;
+  let connectionCount = 0;
+  const stopping = new Promise((resolve) => {
+    finishStop = resolve;
+  });
+  const runtime = new ProviderRuntime(catalogs, hooks, (callbacks) => {
+    connectionCount += 1;
+    const connectionNumber = connectionCount;
+    return {
+      async connect() {
+        callbacks.ready({
+          harnessId: `harness-${connectionNumber}`,
+          sessionId: `session-${connectionNumber}`,
+          modelConfigId: "model",
+          models: catalogs.codex.models,
+          selectedModelId: "model-1",
+          reasoningOptions: [],
+        });
+      },
+      async setModel() {
+        return {
+          modelConfigId: "model",
+          models: catalogs.codex.models,
+          selectedModelId: "model-1",
+          reasoningOptions: [],
+        };
+      },
+      async stop() {
+        if (connectionNumber === 1) await stopping;
+      },
+    };
+  });
+  const state = thread("disconnected");
+  await runtime.connect(state, "codex");
+  const profiles = providerDefinitions.map((profile) =>
+    profile.id === "codex" ? { ...profile, args: [...profile.args, "--changed"] } : profile,
+  );
+
+  runtime.setProfiles(profiles, [state]);
+  const reconnect = runtime.connect(state, "codex");
+  await Promise.resolve();
+  assert.equal(connectionCount, 1);
+  finishStop();
+  await reconnect;
+
+  assert.equal(connectionCount, 2);
+});
+
 void test("a failed reconnect stop drops the defunct connection", async () => {
   let failStop = false;
   const runtime = new ProviderRuntime(catalogs, hooks, (callbacks) => ({
