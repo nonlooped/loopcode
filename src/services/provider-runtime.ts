@@ -91,6 +91,14 @@ export class ProviderRuntime {
     models: ProviderModelCatalog["models"],
     threads = this.#threads,
   ) {
+    const previous = this.#customModels.get(profileId) ?? [];
+    if (
+      models.length === previous.length &&
+      models.every(
+        (model, index) => model.id === previous[index]?.id && model.name === previous[index]?.name,
+      )
+    )
+      return;
     this.#customModels.set(profileId, models);
     const catalog = this.#catalogs[profileId];
     if (catalog?.status !== "ready") return;

@@ -43,7 +43,6 @@
   } from '../utils/app-settings';
   import {
     providerDisplayStatus,
-    providerStatusAvailable,
     providerVersionLabel,
   } from '../utils/provider-availability';
 
@@ -173,16 +172,6 @@
       catalogs[profileId],
       providerAuthStatuses[profileId],
     );
-  }
-
-  function providerAvailable(profileId: string) {
-    const status = providerDisplayStatus(
-      profileId,
-      true,
-      catalogs[profileId],
-      providerAuthStatuses[profileId],
-    );
-    return providerStatusAvailable(status);
   }
 
   function providerVersion(profileId: string) {
@@ -694,12 +683,12 @@
           <label class="settings-row settings-row-separated">
             <span class="settings-row-icon" aria-hidden="true"><IconTerminal2 size={17} stroke={1.55} /></span>
             <span class="settings-row-copy">
-              <strong>ACP binary path</strong>
-              <small>Set the executable LoopCode launches for this provider's ACP connection.</small>
+              <strong>Provider command path</strong>
+              <small>Override the provider executable while keeping its required ACP arguments.</small>
             </span>
             <input
               class="settings-text-input settings-path-input"
-              aria-label="ACP binary path"
+              aria-label="Provider command path"
               spellcheck="false"
               value={setting.command ?? selectedBaseProvider.command}
               onchange={(event) => updateSelectedProvider({ command: inputValue(event) })}
@@ -761,8 +750,7 @@
       {:else}
         <div class="settings-card">
           {#each profiles as profile, index (profile.id)}
-            {@const available = providerAvailable(profile.id)}
-            {@const enabled = available && providerPreference(profile.id).enabled !== false}
+            {@const enabled = providerPreference(profile.id).enabled !== false}
             {@const version = providerVersion(profile.id)}
             {@const status = providerStatus(profile.id)}
             <div class:settings-row-separated={index > 0} class="settings-row provider-settings-row">
@@ -785,7 +773,6 @@
                 class="toggle-control"
                 aria-label={`${enabled ? 'Disable' : 'Enable'} ${profile.label}`}
                 checked={enabled}
-                disabled={!available}
                 onCheckedChange={(value) => setProviderPreference(profile.id, { ...providerPreference(profile.id), enabled: value })}
               >
                 <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>

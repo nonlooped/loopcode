@@ -7,7 +7,6 @@ import {
 } from "../src/config/provider-definitions.ts";
 import {
   providerDisplayStatus,
-  providerStatusAvailable,
   providerVersionLabel,
   readyProviderId,
   titleGenerationSelection,
@@ -97,8 +96,4 @@ void test("provider display status distinguishes auth, connections, and missing 
   assert.equal(providerDisplayStatus("grok", true, missing), "Not installed");
   assert.equal(providerDisplayStatus("grok", false, missing), "Disabled");
   assert.equal(providerVersionLabel(missing), "");
-  assert.equal(providerStatusAvailable("Authenticated"), true);
-  assert.equal(providerStatusAvailable("Connected"), true);
-  assert.equal(providerStatusAvailable("Not installed"), false);
-  assert.equal(providerStatusAvailable("Not logged in"), false);
 });

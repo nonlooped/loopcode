@@ -172,9 +172,7 @@
   const enabledProfiles = $derived(
     profiles.filter((profile) => preferences.providerSettings[profile.id]?.enabled !== false),
   );
-  const selectableProfiles = $derived(
-    enabledProfiles.filter((profile) => providerCatalogs[profile.id]?.status === 'ready'),
-  );
+  const selectableProfiles = $derived(enabledProfiles);
   const layoutStyle = $derived([
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,

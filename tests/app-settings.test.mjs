@@ -135,14 +135,15 @@ void test("app preferences use safe defaults and validate persisted values", () 
   assert.equal(loadAppPreferences(storage).terminalScrollback, 5_000);
 });
 
-void test("provider settings project names and ACP commands without mutating defaults", () => {
-  const profiles = [{ id: "codex", label: "Codex", command: "npx", args: [] }];
+void test("provider settings preserve ACP arguments without mutating defaults", () => {
+  const profiles = [{ id: "codex", label: "Codex", command: "npx", args: ["adapter"] }];
   const configured = configuredProviderProfiles(profiles, {
-    codex: { name: "Work Codex", command: "/opt/codex-acp" },
+    codex: { name: "Work Codex", command: "/opt/npx" },
   });
 
   assert.equal(configured[0].label, "Work Codex");
-  assert.equal(configured[0].command, "/opt/codex-acp");
+  assert.equal(configured[0].command, "/opt/npx");
+  assert.deepEqual(configured[0].args, ["adapter"]);
   assert.equal(profiles[0].label, "Codex");
 });
 

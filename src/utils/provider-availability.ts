@@ -108,10 +108,6 @@ export function providerDisplayStatus(
     : "Authenticated";
 }
 
-export function providerStatusAvailable(status: ProviderDisplayStatus) {
-  return status === "Authenticated" || status === "Connected";
-}
-
 export function providerVersionLabel(
   catalog: ProviderModelCatalog | undefined,
   detectedVersion?: string,

@@ -147,6 +147,15 @@ void test("unavailable providers cannot become active and restored providers fal
   assert.equal(restored.threads[0].providers.grok.selectedModelId, undefined);
 });
 
+void test("unchanged custom models do not disconnect ready providers", () => {
+  const state = thread();
+  const runtime = new ProviderRuntime(catalogs, hooks);
+
+  runtime.setCustomModels("codex", [], [state]);
+
+  assert.equal(state.providers.codex.connectionStatus, "ready");
+});
+
 void test("custom models extend advertised models and replace duplicate labels", () => {
   assert.deepEqual(
     mergeProviderModels(
