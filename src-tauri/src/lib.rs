@@ -14,7 +14,7 @@ use project_files::{
 };
 use serde_json::Value;
 use std::{
-    process::Command,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -26,15 +26,15 @@ use terminal::{
     stop_terminal_for_thread, write_terminal,
 };
 
-fn git_command() -> Command {
-    let mut command = Command::new("git");
-
+fn git_command() -> tokio::process::Command {
+    let command = tokio::process::Command::new("git");
     #[cfg(target_os = "windows")]
-    {
+    let command = {
         use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000);
-    }
-
+        let mut command = command;
+        command.as_std_mut().creation_flags(0x0800_0000);
+        command
+    };
     command
 }
 
@@ -161,37 +161,49 @@ async fn pick_folder() -> Result<Option<String>, String> {
     .map_err(|error| format!("Could not join folder picker task: {error}"))
 }
 
+fn validate_git_cwd(cwd: &str) -> Result<PathBuf, String> {
+    let path = Path::new(cwd);
+    if !path.is_absolute() {
+        return Err("The Git working folder must be an absolute path".to_owned());
+    }
+    let path = path
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve Git working folder: {error}"))?;
+    if !path.is_dir() {
+        return Err("The Git working folder must be a directory".to_owned());
+    }
+    Ok(path)
+}
+
+async fn git_ref(cwd: &Path, args: &[&str]) -> Option<String> {
+    let mut process = git_command();
+    process
+        .current_dir(cwd)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(4), process.output())
+        .await
+        .ok()?
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (!name.is_empty()).then_some(name)
+}
+
 #[tauri::command]
 async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let branch = git_command()
-            .args(["-C", &cwd, "branch", "--show-current"])
-            .output();
-        if let Ok(output) = branch
-            && output.status.success()
-        {
-            let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            if !name.is_empty() {
-                return Some(name);
-            }
-        }
-
-        let revision = git_command()
-            .args(["-C", &cwd, "rev-parse", "--short", "HEAD"])
-            .output();
-        if let Ok(output) = revision
-            && output.status.success()
-        {
-            let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-            if !name.is_empty() {
-                return Some(name);
-            }
-        }
-
-        None
-    })
-    .await
-    .map_err(|error| format!("Could not join Git branch task: {error}"))
+    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
+        .await
+        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    if let Some(branch) = git_ref(&cwd, &["branch", "--show-current"]).await {
+        return Ok(Some(branch));
+    }
+    Ok(git_ref(&cwd, &["rev-parse", "--short", "HEAD"]).await)
 }
 
 #[tauri::command]
@@ -350,7 +362,21 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_version_line, validate_provider_command};
+    use super::{first_version_line, validate_git_cwd, validate_provider_command};
+
+    #[test]
+    fn git_working_folder_must_be_an_existing_absolute_directory() {
+        assert!(validate_git_cwd("relative/path").is_err());
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        assert_eq!(
+            validate_git_cwd(&directory.path().to_string_lossy())
+                .expect("temporary directory should validate"),
+            directory
+                .path()
+                .canonicalize()
+                .expect("path should resolve")
+        );
+    }
 
     #[test]
     fn provider_version_output_prefers_stdout_and_is_bounded() {
