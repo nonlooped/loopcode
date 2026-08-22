@@ -33,6 +33,7 @@ fs.writeFileSync("src-tauri/Cargo.toml", t);
 cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 > /dev/null # sync Cargo.lock without building
 node scripts/check-versions.mjs "v$ver"
 npx --yes git-cliff@2.13.1 --tag "v$ver" -o CHANGELOG.md
+npx vp check --fix CHANGELOG.md
 
 git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
 git commit -m "chore(release): v$ver"

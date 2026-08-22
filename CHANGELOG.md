@@ -2,43 +2,44 @@
 
 ### 🚀 Features
 
-- *(settings)* Add persisted app preferences
-- *(workspace)* Configure empty thread reuse
-- *(composer)* Support configurable send shortcuts
-- *(settings)* Add categorized settings interface
-- *(settings)* Add categorized app preferences
-- *(providers)* Add configurable ACP providers
-- *(dev)* Add browser preview
+- _(settings)_ Add persisted app preferences
+- _(workspace)_ Configure empty thread reuse
+- _(composer)_ Support configurable send shortcuts
+- _(settings)_ Add categorized settings interface
+- _(settings)_ Add categorized app preferences
+- _(providers)_ Add configurable ACP providers
+- _(dev)_ Add browser preview
 - Add configurable ACP providers
-- *(settings)* Streamline preferences and add defaults
+- _(settings)_ Streamline preferences and add defaults
 
 ### 🐛 Bug Fixes
 
-- *(ci)* Compile Windows-specific code
-- *(ci)* Format metadata files
-- *(settings)* Honor transcript and thread defaults
-- *(acp)* Ignore events after stream shutdown
-- *(providers)* Keep unavailable providers manageable
-- *(persistence)* Retry transient save failures
-- *(persistence)* Serialize atomic workspace saves
-- *(git)* Bound branch lookup
-- *(composer)* Tolerate missing model catalog
-- *(acp)* Guard connection setup
-- *(provider)* Drop defunct connection after stop failure
-- *(files)* Reload viewer when project changes
-- *(sessions)* Keep fallback stream ids stable
-- *(providers)* Reconnect after argument changes
+- _(ci)_ Compile Windows-specific code
+- _(ci)_ Format metadata files
+- _(settings)_ Honor transcript and thread defaults
+- _(acp)_ Ignore events after stream shutdown
+- _(providers)_ Keep unavailable providers manageable
+- _(persistence)_ Retry transient save failures
+- _(persistence)_ Serialize atomic workspace saves
+- _(git)_ Bound branch lookup
+- _(composer)_ Tolerate missing model catalog
+- _(acp)_ Guard connection setup
+- _(provider)_ Drop defunct connection after stop failure
+- _(files)_ Reload viewer when project changes
+- _(sessions)_ Keep fallback stream ids stable
+- _(providers)_ Reconnect after argument changes
 - Guard collapsed composer animation
 - Preserve streamed message invariants
 - Validate image clipboard support
 - Open links clicked through text nodes
-- *(native)* Bound untrusted file and RPC data
-- *(diagnostics)* Move log writes off async tasks
-- *(native)* Share frontend generation state
-- *(native)* Force terminal shutdown after timeout
-- *(files)* Cap active project watchers
-- *(providers)* Await replaced process shutdown
-- *(workspace)* Report repaired provider ids
+- _(native)_ Bound untrusted file and RPC data
+- _(diagnostics)_ Move log writes off async tasks
+- _(native)_ Share frontend generation state
+- _(native)_ Force terminal shutdown after timeout
+- _(files)_ Cap active project watchers
+- _(providers)_ Await replaced process shutdown
+- _(workspace)_ Report repaired provider ids
+
 ## [0.1.0] - 2026-08-21
 
 ### 🚀 Features
@@ -49,45 +50,45 @@
 - Support agent questions
 - Strengthen ACP runtime diagnostics
 - Add project explorer and desktop context menus
-- *(ui)* Add motion transitions with reduced motion support
-- *(thread)* Confirm thread deletion with dedicated dialog
-- *(ui)* Add file previews and empty thread welcome
-- *(ui)* Add webview zoom with indicator
-- *(provider)* Add Cursor ACP support
-- *(provider)* Add Cursor ACP support
-- *(provider)* Support rich agent questions
-- *(composer)* Add prompt references
-- *(composer)* Add prompt references
-- *(ui)* Refresh application icons
+- _(ui)_ Add motion transitions with reduced motion support
+- _(thread)_ Confirm thread deletion with dedicated dialog
+- _(ui)_ Add file previews and empty thread welcome
+- _(ui)_ Add webview zoom with indicator
+- _(provider)_ Add Cursor ACP support
+- _(provider)_ Add Cursor ACP support
+- _(provider)_ Support rich agent questions
+- _(composer)_ Add prompt references
+- _(composer)_ Add prompt references
+- _(ui)_ Refresh application icons
 - Add Linux platform support
 - Add Linux platform support
 - Add integrated terminal drawer
 - Add integrated terminal drawer
-- *(linux)* Add adjustable shell transparency
+- _(linux)_ Add adjustable shell transparency
 - Enhance terminal drawer with transition handling and layout readiness
 - Integrate atomic file writing for persistence management
 - Add tempfile dependency and refactor tests to utilize temporary directories
-- *(ui)* Adopt Bits UI primitives
-- *(ui)* Adopt Bits UI primitives
+- _(ui)_ Adopt Bits UI primitives
+- _(ui)_ Adopt Bits UI primitives
 
 ### 🐛 Bug Fixes
 
 - Retain substantive timeline responses
 - Scope streaming state to the active turn
-- *(ui)* Wrap long lines in file viewer
-- *(test)* Satisfy clippy path lint
-- *(ui)* Address design audit findings
-- *(a11y)* Restore project tree tab stop
-- *(ui)* Remove collapsed explorer strip
-- *(ui)* Show compact explorer toggle
-- *(ui)* Address design audit findings
-- *(provider)* Answer every Cursor question
-- *(composer)* Refresh file completions
+- _(ui)_ Wrap long lines in file viewer
+- _(test)_ Satisfy clippy path lint
+- _(ui)_ Address design audit findings
+- _(a11y)_ Restore project tree tab stop
+- _(ui)_ Remove collapsed explorer strip
+- _(ui)_ Show compact explorer toggle
+- _(ui)_ Address design audit findings
+- _(provider)_ Answer every Cursor question
+- _(composer)_ Refresh file completions
 - Preserve Windows command shims for npx and agent
-- *(projects)* Ignore file access events
-- *(ci)* Upgrade npm before cache access
-- *(linux)* Use opaque window shell
+- _(projects)_ Ignore file access events
+- _(ci)_ Upgrade npm before cache access
+- _(linux)_ Use opaque window shell
 - Kill harness descendants on stop via process groups
-- *(ui)* Preserve picker and dialog focus
-- *(release)* Point cargo metadata at the src-tauri manifest
-- *(release)* Preserve file formatting when bumping versions
+- _(ui)_ Preserve picker and dialog focus
+- _(release)_ Point cargo metadata at the src-tauri manifest
+- _(release)_ Preserve file formatting when bumping versions
