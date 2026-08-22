@@ -116,6 +116,9 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
   return {
     transport,
     sent,
+    emit(event) {
+      onEvent(event);
+    },
     requestPermission() {
       onEvent({
         event: "rpc",
@@ -354,6 +357,33 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
     },
   };
 }
+
+void test("ignores broker events after the ACP stream has been stopped", async () => {
+  const fake = fakeTransport();
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  await connection.stop();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.doesNotThrow(() => fake.emit({ event: "exited", data: { code: 0, success: true } }));
+  assert.doesNotThrow(() =>
+    fake.emit({
+      event: "rpc",
+      data: { message: { jsonrpc: "2.0", method: "late-notification" } },
+    }),
+  );
+});
 
 void test("uses the official SDK to initialize, create a session, and route updates", async () => {
   const fake = fakeTransport();

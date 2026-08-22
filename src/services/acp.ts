@@ -147,6 +147,11 @@ export class AcpConnection {
       const readable = new ReadableStream<acp.AnyMessage>({
         start: (controller) => {
           this.#incoming = controller;
+          this.#incomingClosed = false;
+        },
+        cancel: () => {
+          this.#incoming = undefined;
+          this.#incomingClosed = true;
         },
       });
 
@@ -447,7 +452,7 @@ export class AcpConnection {
 
   #receiveBrokerEvent(event: BrokerEvent) {
     if (event.event === "rpc") {
-      this.#incoming?.enqueue(event.data.message);
+      if (!this.#incomingClosed) this.#incoming?.enqueue(event.data.message);
       return;
     }
     if (event.event === "stderr") {
@@ -474,6 +479,7 @@ export class AcpConnection {
     if (!this.#incomingClosed) {
       this.#incomingClosed = true;
       this.#incoming?.close();
+      this.#incoming = undefined;
     }
     if (!wasStopping) this.#callbacks.exited(event.data.code);
   }
