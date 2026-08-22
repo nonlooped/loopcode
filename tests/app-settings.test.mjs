@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  loadAppPreferences,
   loadLinuxShellTransparency,
   loadPermissionMode,
   loadSidebarWidths,
   loadTerminalHeight,
+  resetAppSettings,
+  saveAppPreference,
   saveLinuxShellTransparency,
   savePermissionMode,
   saveSidebarWidth,
@@ -34,6 +37,75 @@ void test("permission mode defaults to restricted and persists valid choices", (
   assert.equal(loadPermissionMode(storage), "full");
   values.set("loopcode.permission-mode", "unexpected");
   assert.equal(loadPermissionMode(storage), "restricted");
+});
+
+void test("app preferences use safe defaults and validate persisted values", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+
+  const defaults = {
+    compactSessionRows: false,
+    showSettled: false,
+    startupBehavior: "last-thread",
+    newThreadProject: "selected",
+    reuseEmptyThreads: true,
+    explorerStartup: "open",
+    motionMode: "system",
+    interfaceZoom: 100,
+    transcriptDensity: "comfortable",
+    contentWidth: 720,
+    wrapCode: true,
+    autoFollowOutput: true,
+    showMessageTimestamps: false,
+    composerSpellcheck: true,
+    composerAutocomplete: true,
+    defaultProviderId: "codex",
+    providerModelDefaults: {},
+    terminalFontSize: 12,
+    terminalScrollback: 5_000,
+    sendShortcut: "enter",
+  };
+  assert.deepEqual(loadAppPreferences(storage), defaults);
+
+  saveAppPreference("compactSessionRows", true, storage);
+  saveAppPreference("startupBehavior", "new-thread", storage);
+  saveAppPreference("motionMode", "reduced", storage);
+  saveAppPreference("interfaceZoom", 140, storage);
+  saveAppPreference("providerModelDefaults", { codex: "gpt-5" }, storage);
+  saveAppPreference("sendShortcut", "modifier-enter", storage);
+  assert.deepEqual(loadAppPreferences(storage), {
+    ...defaults,
+    compactSessionRows: true,
+    startupBehavior: "new-thread",
+    motionMode: "reduced",
+    interfaceZoom: 140,
+    providerModelDefaults: { codex: "gpt-5" },
+    sendShortcut: "modifier-enter",
+  });
+
+  values.set("loopcode.interface-zoom", "500");
+  values.set("loopcode.content-width", "200");
+  values.set("loopcode.provider-model-defaults", "invalid");
+  values.set("loopcode.terminal-font-size", "invalid");
+  values.set("loopcode.terminal-scrollback", "20");
+  assert.equal(loadAppPreferences(storage).interfaceZoom, 200);
+  assert.equal(loadAppPreferences(storage).contentWidth, 600);
+  assert.deepEqual(loadAppPreferences(storage).providerModelDefaults, {});
+  assert.equal(loadAppPreferences(storage).terminalFontSize, 12);
+  assert.equal(loadAppPreferences(storage).terminalScrollback, 5_000);
+});
+
+void test("reset removes preferences without touching workspace history", () => {
+  const removed = [];
+  resetAppSettings({ removeItem: (key) => removed.push(key) });
+
+  assert.ok(removed.includes("loopcode.default-provider"));
+  assert.ok(removed.includes("loopcode.permission-mode"));
+  assert.ok(removed.includes("loopcode.terminal-height"));
+  assert.ok(!removed.includes("loopcode.workspace"));
 });
 
 void test("Linux shell transparency maps the old 20% ceiling to 100%", () => {

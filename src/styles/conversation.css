@@ -32,7 +32,7 @@
 }
 
 .empty-thread-heading {
-  width: min(720px, calc(100% - 56px));
+  width: min(var(--content-width, 720px), calc(100% - 56px));
   margin: 0 auto 18px;
   padding: 0 14px;
   overflow-wrap: anywhere;
@@ -87,7 +87,6 @@
   padding: 14px 20px;
   align-items: center;
   gap: 14px;
-  cursor: pointer;
 }
 
 .settings-row:hover {
@@ -96,38 +95,6 @@
 
 .settings-row-separated {
   border-top: 1px solid var(--line);
-}
-
-.permission-mode-control {
-  display: flex;
-  flex: 0 0 auto;
-  padding: 2px;
-  gap: 2px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.12);
-}
-
-.permission-mode-option {
-  padding: 6px 9px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 550;
-  cursor: pointer;
-}
-
-.permission-mode-option:hover,
-.permission-mode-option[data-state="checked"] {
-  background: var(--panel-hover);
-  color: var(--text);
-}
-
-.permission-mode-option:focus-visible {
-  outline: 2px solid rgba(230, 231, 234, 0.58);
-  outline-offset: 1px;
 }
 
 .settings-row-icon {
@@ -140,6 +107,13 @@
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--muted);
+}
+
+.settings-provider-icon {
+  width: 18px;
+  height: 18px;
+  filter: grayscale(1) invert(1);
+  opacity: 0.72;
 }
 
 .settings-row-copy {
@@ -156,8 +130,47 @@
   line-height: 1.2;
 }
 
+.settings-row-copy small {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.settings-segmented-control {
+  display: flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.settings-segmented-option {
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.settings-segmented-option:hover,
+.settings-segmented-option[data-state="checked"] {
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.settings-segmented-option:focus-visible {
+  outline: 2px solid rgba(230, 231, 234, 0.58);
+  outline-offset: 1px;
+}
+
+.settings-select,
 .settings-action {
-  min-width: 76px;
   height: 30px;
   padding: 0 11px;
   border: 1px solid var(--line);
@@ -168,37 +181,53 @@
   font-weight: 550;
 }
 
+.settings-select {
+  min-width: 96px;
+  max-width: 180px;
+}
+
+.settings-model-select {
+  width: 180px;
+}
+
+.settings-select:disabled {
+  opacity: 0.62;
+}
+
+.settings-action {
+  min-width: 76px;
+}
+
+.settings-select:hover:not(:disabled),
 .settings-action:hover:not(:disabled) {
   border-color: var(--line-strong);
   background: var(--panel-hover);
   color: var(--text);
 }
 
+.settings-action.danger {
+  color: var(--danger);
+}
+
 .settings-action:disabled {
   opacity: 0.55;
 }
 
-.settings-row-copy small {
-  color: color-mix(in srgb, var(--muted) 72%, transparent);
-  font-size: 11.5px;
-  line-height: 1.35;
-}
-
-.transparency-control {
+.settings-range-control {
   display: grid;
   width: 164px;
   flex: 0 0 auto;
   gap: 4px;
 }
 
-.transparency-control output {
+.settings-range-control output {
   color: var(--muted);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
-.transparency-slider {
+.settings-slider {
   position: relative;
   display: flex;
   width: 100%;
@@ -208,7 +237,7 @@
   user-select: none;
 }
 
-.transparency-slider-track {
+.settings-slider-track {
   position: relative;
   display: block;
   width: 100%;
@@ -219,13 +248,13 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-.transparency-slider-range {
+.settings-slider-range {
   position: absolute;
   height: 100%;
   background: var(--accent);
 }
 
-.transparency-slider-thumb {
+.settings-slider-thumb {
   display: block;
   width: 14px;
   height: 14px;
@@ -236,11 +265,11 @@
   cursor: grab;
 }
 
-.transparency-slider-thumb[data-active] {
+.settings-slider-thumb[data-active] {
   cursor: grabbing;
 }
 
-.transparency-slider-thumb:focus-visible {
+.settings-slider-thumb:focus-visible {
   outline: 2px solid rgba(230, 231, 234, 0.58);
   outline-offset: 2px;
 }

@@ -45,29 +45,45 @@
   } from './types';
   import { loadComposerImages, MAX_COMPOSER_IMAGES } from './utils/attachments';
   import {
+    DEFAULT_APP_PREFERENCES,
+    DEFAULT_TERMINAL_HEIGHT,
+    INTERFACE_ZOOM_RANGE,
     LEFT_SIDEBAR_WIDTH_RANGE,
     RIGHT_SIDEBAR_WIDTH_RANGE,
     TERMINAL_HEIGHT_RANGE,
     LINUX_SHELL_TRANSPARENCY_RANGE,
     MAX_LINUX_SHELL_TRANSPARENCY,
+    loadAppPreferences,
     loadLinuxShellTransparency,
     loadPermissionMode,
     loadSidebarWidths,
     loadTerminalHeight,
+    resetAppSettings as resetStoredAppSettings,
+    saveAppPreference,
     saveLinuxShellTransparency,
     savePermissionMode,
     saveSidebarWidth,
     saveTerminalHeight,
+    type AppPreferences,
+    type SettingsCategory,
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
-  import { promptParts, promptText } from './utils/prompt-content';
+  import { hasPromptContent, promptParts, promptText } from './utils/prompt-content';
   import { timelineEntries } from './utils/timeline';
   import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
 
   const appWindow = getCurrentWindow();
   const appWebview = getCurrentWebview();
   const isLinux = navigator.userAgent.includes('Linux');
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const loadedPreferences = loadAppPreferences();
+  loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId).id;
+  loadedPreferences.providerModelDefaults = Object.fromEntries(
+    profiles.flatMap((profile) => {
+      const modelId = loadedPreferences.providerModelDefaults[profile.id];
+      return modelId ? [[profile.id, modelId]] : [];
+    }),
+  );
   const initialCatalogs = Object.fromEntries(
     profiles.map((profile) => [
       profile.id,
@@ -92,7 +108,7 @@
   let sidebarOpen = $state(false);
   let sidebarCollapsed = $state(false);
   let projectExplorerOpen = $state(false);
-  let projectExplorerCollapsed = $state(false);
+  let projectExplorerCollapsed = $state(loadedPreferences.explorerStartup === 'collapsed');
   let terminalOpen = $state(false);
   let terminalThreadIds = $state<string[]>([]);
   let terminalHeight = $state(loadTerminalHeight());
@@ -101,11 +117,12 @@
   let rightSidebarWidth = $state<number | null>(savedSidebarWidths.right);
   let compactLayout = $state(window.matchMedia('(max-width: 880px)').matches);
   let settingsOpen = $state(false);
-  let compactSessionRows = $state(false);
+  let settingsCategory = $state<SettingsCategory>('general');
+  let preferences = $state<AppPreferences>(loadedPreferences);
+  let systemReducedMotion = $state(motionPreference.matches);
   let linuxShellTransparency = $state(isLinux ? loadLinuxShellTransparency() : 0);
   const initialPermissionMode = loadPermissionMode();
   let permissionMode = $state<PermissionMode>(initialPermissionMode);
-  let showSettled = $state(false);
   let windowMaximized = $state(false);
   let composerImagesByThread = $state<Record<string, ComposerImage[]>>({});
   let attachmentErrorsByThread = $state<Record<string, string>>({});
@@ -117,7 +134,6 @@
   let fileViewerThreadId = $state('');
   let threadViewElement = $state<HTMLElement>();
   let zoomPercent = $state<number>();
-  let currentZoom = 100;
   let zoomNoticeTimer: number | undefined;
   let completionRefreshTimer: number | undefined;
   let closing = false;
@@ -125,10 +141,14 @@
   let stopSidebarResize: (() => void) | undefined;
   let stopTerminalResize: (() => void) | undefined;
 
+  const reducedMotion = $derived(
+    systemReducedMotion || preferences.motionMode === 'reduced',
+  );
   const layoutStyle = $derived([
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
     `--terminal-height: ${terminalHeight}px`,
+    `--content-width: ${preferences.contentWidth}px`,
     isLinux
       ? `--linux-shell-opacity: ${1 - (linuxShellTransparency / 100) * MAX_LINUX_SHELL_TRANSPARENCY / 100}`
       : '',
@@ -162,6 +182,12 @@
   const settledThreads = $derived(
     threads.filter((thread) => thread.settled).sort((left, right) => right.updatedAt - left.updatedAt),
   );
+  const threadsWithDrafts = $derived(
+    threads.filter((thread) =>
+      hasPromptContent(thread.draft, thread.draftReferences)
+      || composerImages(thread.id).length > 0
+    ).length,
+  );
   const activeProject = $derived(workspace.activeProject);
   const explorerRoot = $derived(selectedThread?.cwd ?? '');
   const explorerProjectName = $derived(
@@ -178,6 +204,15 @@
       return thread ? [thread] : [];
     }),
   );
+
+  $effect(() => {
+    void appWebview.setZoom(preferences.interfaceZoom / 100);
+  });
+
+  $effect(() => {
+    document.body.classList.toggle('reduced-motion', reducedMotion);
+    return () => document.body.classList.remove('reduced-motion');
+  });
 
   $effect(() => {
     const threadId = selectedThread?.id;
@@ -222,6 +257,10 @@
     let disposed = false;
     let unlistenResize: (() => void) | undefined;
     let unlistenClose: (() => void) | undefined;
+    const syncMotionPreference = (event: MediaQueryListEvent) => {
+      systemReducedMotion = event.matches;
+    };
+    motionPreference.addEventListener('change', syncMotionPreference);
 
     const syncMaximizedState = async () => {
       const maximized = await appWindow.isMaximized();
@@ -250,6 +289,7 @@
       stopTerminalResize?.();
       window.clearTimeout(zoomNoticeTimer);
       window.clearTimeout(completionRefreshTimer);
+      motionPreference.removeEventListener('change', syncMotionPreference);
       unlistenResize?.();
       unlistenClose?.();
     };
@@ -266,9 +306,12 @@
     if (!direction) return;
 
     event.preventDefault();
-    currentZoom = Math.min(1000, Math.max(20, currentZoom + direction * 20));
-    void appWebview.setZoom(currentZoom / 100);
-    zoomPercent = currentZoom;
+    const nextZoom = Math.min(
+      INTERFACE_ZOOM_RANGE.max,
+      Math.max(INTERFACE_ZOOM_RANGE.min, preferences.interfaceZoom + direction * 10),
+    );
+    setPreference('interfaceZoom', nextZoom);
+    zoomPercent = nextZoom;
     window.clearTimeout(zoomNoticeTimer);
     zoomNoticeTimer = window.setTimeout(() => { zoomPercent = undefined; }, 1200);
   }
@@ -278,17 +321,38 @@
     projectExplorerOpen = false;
   }
 
+  function applyNewThreadDefaults(thread: ThreadState) {
+    providers.activate(thread, preferences.defaultProviderId, false);
+    for (const [profileId, modelId] of Object.entries(preferences.providerModelDefaults)) {
+      const provider = thread.providers[profileId];
+      if (provider && (provider.models.length === 0 || provider.models.some((model) => model.id === modelId))) {
+        provider.selectedModelId = modelId;
+      }
+    }
+  }
+
   function addThread() {
-    workspace.addThread(defaultWorkingFolder, (threadId) => composerImages(threadId).length > 0);
+    const thread = workspace.addThread(
+      defaultWorkingFolder,
+      (threadId) => composerImages(threadId).length > 0,
+      preferences.newThreadProject === 'selected' ? selectedProjectId : null,
+      preferences.reuseEmptyThreads,
+    );
+    if (thread) applyNewThreadDefaults(thread);
     closeThreadSurfaces();
   }
 
   function addThreadToProject(projectId: string) {
-    if (workspace.addThread(
+    const thread = workspace.addThread(
       defaultWorkingFolder,
       (threadId) => composerImages(threadId).length > 0,
       projectId,
-    )) closeThreadSurfaces();
+      preferences.reuseEmptyThreads,
+    );
+    if (thread) {
+      applyNewThreadDefaults(thread);
+      closeThreadSurfaces();
+    }
   }
 
   async function openAddProject() {
@@ -364,7 +428,23 @@
     for (const [key, interaction] of Object.entries(interactions)) {
       if (interaction.threadId === threadId) delete interactions[key];
     }
-    workspace.removeThread(threadId, defaultWorkingFolder);
+    const replacement = workspace.removeThread(threadId, defaultWorkingFolder);
+    if (replacement) applyNewThreadDefaults(replacement);
+  }
+
+  async function clearArchivedThreads() {
+    for (const threadId of settledThreads.map((thread) => thread.id)) {
+      await removeThread(threadId);
+    }
+  }
+
+  function clearComposerDrafts() {
+    for (const thread of threads) {
+      thread.draft = '';
+      thread.draftReferences = [];
+    }
+    composerImagesByThread = {};
+    attachmentErrorsByThread = {};
   }
 
   function selectThread(threadId: string) {
@@ -522,6 +602,13 @@
     sidebarOpen = false;
   }
 
+  function setSettingsCategory(category: SettingsCategory) {
+    settingsCategory = category;
+    if (!compactLayout) return;
+    sidebarOpen = false;
+    void tick().then(() => document.getElementById('settings-title')?.focus());
+  }
+
   async function initializeWorkspace() {
     try {
       await registerFrontend();
@@ -529,6 +616,17 @@
       const savedWorkspace = await loadWorkspace();
       if (!workspace.initialize(savedWorkspace, defaultWorkingFolder)) {
         throw new Error('The saved thread file has an unsupported or invalid format.');
+      }
+      if (preferences.startupBehavior === 'new-thread') {
+        const startupThread = workspace.addThread(
+          defaultWorkingFolder,
+          () => false,
+          preferences.newThreadProject === 'selected' ? selectedProjectId : null,
+          preferences.reuseEmptyThreads,
+        );
+        if (startupThread) applyNewThreadDefaults(startupThread);
+      } else if (savedWorkspace === null && selectedThread) {
+        applyNewThreadDefaults(selectedThread);
       }
       await providers.discoverAll(defaultWorkingFolder, threads);
     } catch (error) {
@@ -627,8 +725,37 @@
     if (selectedThread) void providers.connect(selectedThread, selectedThread.profileId);
   }
 
+  function setPreference<K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) {
+    preferences[key] = value;
+    saveAppPreference(key, value);
+  }
+
   function setLinuxShellTransparency(transparency: number) {
     linuxShellTransparency = saveLinuxShellTransparency(transparency);
+  }
+
+  function setTerminalHeight(height: number) {
+    terminalHeight = Math.min(
+      TERMINAL_HEIGHT_RANGE.max,
+      Math.max(TERMINAL_HEIGHT_RANGE.min, Math.round(height)),
+    );
+    saveTerminalHeight(terminalHeight);
+  }
+
+  function resetSettings() {
+    resetStoredAppSettings();
+    preferences = {
+      ...DEFAULT_APP_PREFERENCES,
+      defaultProviderId: profileById(DEFAULT_APP_PREFERENCES.defaultProviderId).id,
+      providerModelDefaults: {},
+    };
+    projectExplorerCollapsed = false;
+    terminalHeight = DEFAULT_TERMINAL_HEIGHT;
+    leftSidebarWidth = null;
+    rightSidebarWidth = null;
+    linuxShellTransparency = 0;
+    permissionMode = 'restricted';
+    providers.setPermissionMode('restricted');
   }
 
   function setPermissionMode(mode: PermissionMode) {
@@ -705,7 +832,10 @@
   class:linux-shell={isLinux}
   class:sidebar-collapsed={sidebarCollapsed}
   class:project-explorer-collapsed={!explorerRoot || (!compactLayout && projectExplorerCollapsed)}
-  class:compact-session-rows={compactSessionRows}
+  class:compact-session-rows={preferences.compactSessionRows}
+  class:compact-transcript={preferences.transcriptDensity === 'compact'}
+  class:wrap-message-code={preferences.wrapCode}
+  class:show-message-timestamps={preferences.showMessageTimestamps}
   class="app-shell"
   style={layoutStyle}
 >
@@ -730,6 +860,7 @@
   <Sidebar
       open={sidebarOpen}
       {settingsOpen}
+      {settingsCategory}
       compactMotion={reducedMotion}
       {defaultWorkingFolder}
       {projects}
@@ -738,7 +869,7 @@
       {inboxThreads}
       {settledThreads}
       {selectedThreadId}
-      {showSettled}
+      showSettled={preferences.showSettled}
       {selectProject}
       addProject={() => { void openAddProject(); }}
       {addThread}
@@ -751,9 +882,10 @@
       {openProjectFolder}
       {revealProjectFolder}
       {removeProject}
-      setShowSettled={(show) => { showSettled = show; }}
+      setShowSettled={(show) => setPreference('showSettled', show)}
       {openSettings}
       {closeSettings}
+      {setSettingsCategory}
     startResize={(event) => startSidebarResize(event, 'left')}
   />
   <div class="workspace-grid">
@@ -761,15 +893,25 @@
       <div class="conversation-primary">
         {#if settingsOpen}
           <SettingsPage
-            {compactSessionRows}
+            category={settingsCategory}
+            {preferences}
+            {profiles}
+            catalogs={providerCatalogs}
             {isLinux}
             {linuxShellTransparency}
             {permissionMode}
+            {terminalHeight}
             {reducedMotion}
-            setCompactSessionRows={(value) => { compactSessionRows = value; }}
+            {setPreference}
             setLinuxShellTransparency={setLinuxShellTransparency}
             linuxShellTransparencyRange={LINUX_SHELL_TRANSPARENCY_RANGE}
             {setPermissionMode}
+            {setTerminalHeight}
+            archivedThreadCount={settledThreads.length}
+            draftThreadCount={threadsWithDrafts}
+            clearArchivedThreads={() => { void clearArchivedThreads(); }}
+            {clearComposerDrafts}
+            {resetSettings}
           />
         {:else if selectedThread}
           {#if activeFilePath}
@@ -797,7 +939,12 @@
                 </h1>
               {:else}
                 {#key selectedThread.id}
-                  <Transcript thread={selectedThread} entries={selectedTimelineEntries} {reducedMotion} />
+                  <Transcript
+                    thread={selectedThread}
+                    entries={selectedTimelineEntries}
+                    {reducedMotion}
+                    autoFollowOutput={preferences.autoFollowOutput}
+                  />
                 {/key}
               {/if}
               {#if selectedInteraction?.request.type === 'question'}
@@ -819,6 +966,9 @@
                   completionRevision={composerCompletionRevision}
                   {currentBranch}
                   {reducedMotion}
+                  sendShortcut={preferences.sendShortcut}
+                  spellcheck={preferences.composerSpellcheck}
+                  autocomplete={preferences.composerAutocomplete}
                   attachImages={(files) => { void attachImages(files, selectedThread.id); }}
                   removeImage={(imageId) => removeComposerImage(selectedThread.id, imageId)}
                   send={() => { void sendPrompt(); }}
@@ -843,6 +993,8 @@
           {selectedThreadId}
           open={terminalVisible}
           height={terminalHeight}
+          fontSize={preferences.terminalFontSize}
+          scrollback={preferences.terminalScrollback}
           {reducedMotion}
           close={closeTerminal}
           {terminalExited}

@@ -11,27 +11,30 @@
   import type { TimelineDisplayEntry } from '../types/timeline';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
-  import { isStreamingMessage, workGroupMeta } from '../utils/timeline';
+  import { isStreamingMessage, shouldFollowTranscript, workGroupMeta } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
     thread: ThreadState;
     entries: TimelineDisplayEntry[];
     reducedMotion: boolean;
+    autoFollowOutput: boolean;
   }
 
-  const { thread, entries, reducedMotion }: Props = $props();
+  const { thread, entries, reducedMotion, autoFollowOutput }: Props = $props();
   let transcriptElement = $state<HTMLElement>();
   let canScrollUp = $state(false);
   let canScrollDown = $state(false);
   let pinnedToBottom = true;
   let renderedThreadId: string | undefined;
+  let renderedUserMessageId: string | undefined;
   let animateEntries = $state(false);
   let imagePreview = $state<{ src: string; name: string }>();
   let toolOpen = $state<Record<string, boolean>>({});
   // ponytail: DOM nodes kept out of deep reactivity; read at action time, not render time
   let messageBodies = $state.raw<Record<string, HTMLElement | undefined>>({});
   const entryMotion = $derived(animateEntries && !reducedMotion);
+  const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
   onMount(() => {
     const frame = requestAnimationFrame(() => { animateEntries = true; });
@@ -42,10 +45,17 @@
     const updatedAt = thread.updatedAt;
     const threadId = thread.id;
     const transcript = transcriptElement;
+    const userMessageId = thread.messages.filter((message) => message.role === 'user').at(-1)?.id;
     if (updatedAt >= 0 && transcript) {
       const threadChanged = renderedThreadId !== threadId;
-      const shouldFollow = threadChanged || pinnedToBottom;
+      const shouldFollow = shouldFollowTranscript(
+        threadChanged,
+        renderedUserMessageId !== userMessageId,
+        autoFollowOutput,
+        pinnedToBottom,
+      );
       renderedThreadId = threadId;
+      renderedUserMessageId = userMessageId;
       void tick().then(() => {
         if (!transcriptElement) return;
         if (shouldFollow) scrollToBottom('auto');
@@ -219,7 +229,12 @@
                 class="message"
                 in:fly={{ y: entryMotion ? (message.role === 'user' ? 10 : 4) : 0, duration: entryMotion ? 180 : 0 }}
               >
-            <header>{message.role === 'user' ? 'You' : threadHarness(thread)}</header>
+            <header>
+              <span>{message.role === 'user' ? 'You' : threadHarness(thread)}</span>
+              <time datetime={new Date(message.createdAt).toISOString()} title={new Date(message.createdAt).toLocaleString()}>
+                {timeFormatter.format(message.createdAt)}
+              </time>
+            </header>
             <div class="message-body">
               {#if message.role === 'user' && message.content}
                 <div class="message-prompt-content">

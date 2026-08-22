@@ -8,23 +8,30 @@
     IconCheck,
     IconChevronDown,
     IconChevronRight,
+    IconContrast,
+    IconDatabase,
     IconFolder,
     IconFolderPlus,
     IconInbox,
+    IconMessageCircle,
     IconPlus,
+    IconRobot,
     IconSettings,
+    IconTerminal2,
     IconTrash,
   } from '@tabler/icons-svelte';
 
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import { profileById } from '../config/providers';
   import type { ProjectState, ThreadState } from '../types';
+  import type { SettingsCategory } from '../utils/app-settings';
   import { copyText } from '../utils/clipboard';
   import { folderName, relativeTime, threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
     open: boolean;
     settingsOpen: boolean;
+    settingsCategory: SettingsCategory;
     compactMotion: boolean;
     defaultWorkingFolder: string;
     projects: ProjectState[];
@@ -49,10 +56,19 @@
     setShowSettled: (show: boolean) => void;
     openSettings: () => void;
     closeSettings: () => void;
+    setSettingsCategory: (category: SettingsCategory) => void;
     startResize: (event: PointerEvent) => void;
   }
 
   const props: Props = $props();
+  const settingsCategories = [
+    { category: 'general', label: 'General', icon: IconSettings },
+    { category: 'appearance', label: 'Appearance', icon: IconContrast },
+    { category: 'conversation', label: 'Conversation', icon: IconMessageCircle },
+    { category: 'agents', label: 'Agents and permissions', icon: IconRobot },
+    { category: 'terminal', label: 'Terminal and editor', icon: IconTerminal2 },
+    { category: 'data', label: 'Data and diagnostics', icon: IconDatabase },
+  ] satisfies { category: SettingsCategory; label: string; icon: typeof IconSettings }[];
 
   function threadMenuItems(thread: ThreadState): ContextMenuItem[] {
     return [
@@ -85,10 +101,19 @@
   {#if props.settingsOpen}
     <div class="settings-nav">
       <div class="settings-nav-label">Settings</div>
-      <button class="settings-nav-item active" aria-current="page">
-        <IconSettings size={16} stroke={1.55} />
-        <span>General</span>
-      </button>
+      <nav aria-label="Settings categories">
+        {#each settingsCategories as { category, label, icon: Icon } (category)}
+          <button
+            class:active={props.settingsCategory === category}
+            class="settings-nav-item"
+            aria-current={props.settingsCategory === category ? 'page' : undefined}
+            onclick={() => props.setSettingsCategory(category)}
+          >
+            <Icon size={16} stroke={1.55} />
+            <span>{label}</span>
+          </button>
+        {/each}
+      </nav>
     </div>
     <div class="settings-nav-spacer"></div>
     <div class="settings-nav-footer">

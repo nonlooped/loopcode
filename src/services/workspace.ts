@@ -74,13 +74,16 @@ export class Workspace {
     defaultWorkingFolder: string,
     hasAttachments: (threadId: string) => boolean,
     projectId = this.state.selectedProjectId,
+    reuseEmptyThread = true,
   ) {
     const project = projectId ? this.state.projects.find((item) => item.id === projectId) : null;
     if (projectId && !project) return undefined;
 
     this.state.selectedProjectId = project?.id ?? null;
     const target = { cwd: project?.path ?? defaultWorkingFolder, projectId: project?.id ?? null };
-    const reusable = findReusableEmptyThread(this.state.threads, target, hasAttachments);
+    const reusable = reuseEmptyThread
+      ? findReusableEmptyThread(this.state.threads, target, hasAttachments)
+      : undefined;
     const thread = reusable ?? createThread(target.cwd, target.projectId, this.catalogs);
     if (!reusable) this.state.threads.unshift(thread);
     this.state.selectedThreadId = thread.id;
@@ -95,15 +98,20 @@ export class Workspace {
 
   removeThread(threadId: string, defaultWorkingFolder: string) {
     this.state.threads = this.state.threads.filter((thread) => thread.id !== threadId);
+    let replacement: ThreadState | undefined;
     if (this.state.threads.length === 0) {
       const project = this.activeProject;
-      this.state.threads = [
-        createThread(project?.path ?? defaultWorkingFolder, project?.id ?? null, this.catalogs),
-      ];
+      replacement = createThread(
+        project?.path ?? defaultWorkingFolder,
+        project?.id ?? null,
+        this.catalogs,
+      );
+      this.state.threads = [replacement];
     }
     if (!this.state.threads.some((thread) => thread.id === this.state.selectedThreadId)) {
       this.state.selectedThreadId = this.state.threads[0].id;
     }
+    return replacement;
   }
 
   renameThread(threadId: string, title: string) {

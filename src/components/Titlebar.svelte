@@ -63,7 +63,7 @@
           <span class="title-context-motion" transition:fade={{ duration: reducedMotion ? 0 : 130 }}>
             {#if settingsOpen}
               <IconSettings class="title-settings-icon" size={14} stroke={1.55} />
-              <span class="title-copy" data-tauri-drag-region><strong>General</strong></span>
+              <span class="title-copy" data-tauri-drag-region><strong>Settings</strong></span>
             {:else if selectedThread}
               {@const selectedProfile = profileById(selectedThread.profileId)}
               <span class="title-thread-context" data-tauri-drag-region>

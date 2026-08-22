@@ -182,14 +182,34 @@
     grid-template-columns: 1fr;
   }
 
-  .transparency-setting {
-    display: grid;
-    grid-template-columns: 36px minmax(0, 1fr);
+  .settings-column {
+    padding: 24px 12px 48px;
   }
 
-  .transparency-control {
+  .settings-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .settings-row
+    > :is(
+      .toggle-control,
+      .settings-segmented-control,
+      .settings-select,
+      .settings-action,
+      .settings-range-control
+    ) {
     grid-column: 2;
+    justify-self: start;
+  }
+
+  .settings-row > :is(.settings-segmented-control, .settings-range-control) {
     width: 100%;
+  }
+
+  .settings-segmented-option {
+    flex: 1;
   }
 }
 
@@ -245,6 +265,14 @@
   .modal-overlay {
     background: rgb(8, 9, 11);
   }
+}
+
+body.reduced-motion *,
+body.reduced-motion *::before,
+body.reduced-motion *::after {
+  animation: none !important;
+  scroll-behavior: auto !important;
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

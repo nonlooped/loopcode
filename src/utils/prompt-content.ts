@@ -1,4 +1,5 @@
 import type { ComposerReference, PromptPart } from "../types/index.ts";
+import type { SendShortcut } from "./app-settings.ts";
 
 export const REFERENCE_PLACEHOLDER = "\uFFFC";
 
@@ -28,6 +29,16 @@ export function promptText(parts: PromptPart[]) {
 
 export function hasPromptContent(draft: string, references: ComposerReference[] = []) {
   return references.length > 0 || draft.replaceAll(REFERENCE_PLACEHOLDER, "").trim().length > 0;
+}
+
+export function composerEnterAction(
+  shortcut: SendShortcut,
+  event: Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey">,
+) {
+  if (event.key !== "Enter") return undefined;
+  if (event.shiftKey) return "newline";
+  if (shortcut === "modifier-enter" && !event.ctrlKey && !event.metaKey) return "newline";
+  return "send";
 }
 
 export function fuzzyScore(value: string, query: string) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  composerEnterAction,
   fuzzyScore,
   promptParts,
   promptText,
@@ -25,6 +26,14 @@ void test("prompt references keep their inline position", () => {
     { type: "text", text: " first" },
   ]);
   assert.equal(promptText(parts), "Read @src/Composer.svelte first");
+});
+
+void test("composer send shortcuts preserve a newline path", () => {
+  const key = { key: "Enter", shiftKey: false, ctrlKey: false, metaKey: false };
+  assert.equal(composerEnterAction("enter", key), "send");
+  assert.equal(composerEnterAction("enter", { ...key, shiftKey: true }), "newline");
+  assert.equal(composerEnterAction("modifier-enter", key), "newline");
+  assert.equal(composerEnterAction("modifier-enter", { ...key, ctrlKey: true }), "send");
 });
 
 void test("fuzzy matching accepts ordered path characters", () => {

@@ -18,6 +18,8 @@
     thread: ThreadState;
     active: boolean;
     ready: boolean;
+    fontSize: number;
+    scrollback: number;
     reducedMotion: boolean;
     close: () => void;
     exited: () => void;
@@ -29,7 +31,7 @@
     | { kind: 'exited'; code: number }
     | { kind: 'error'; message: string };
 
-  const { thread, active, ready, reducedMotion, close, exited }: Props = $props();
+  const { thread, active, ready, fontSize, scrollback, reducedMotion, close, exited }: Props = $props();
   let host = $state<HTMLDivElement>();
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
@@ -46,11 +48,11 @@
       allowTransparency: true,
       cursorBlink: !reducedMotion,
       fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace',
-      fontSize: 12,
+      fontSize,
       lineHeight: 1.25,
       minimumContrastRatio: 4.5,
       screenReaderMode: true,
-      scrollback: 5000,
+      scrollback,
       theme: terminalTheme(),
     });
     fitAddon = new FitAddon();
@@ -97,6 +99,7 @@
   });
 
   $effect(() => {
+    if (terminal) Object.assign(terminal.options, { fontSize, scrollback, cursorBlink: !reducedMotion });
     if (!ready) return;
     void tick().then(() => fitTerminal(true));
   });
