@@ -63,6 +63,10 @@
   font-size: 11px;
 }
 
+.compact-transcript .work-group {
+  margin-bottom: 11px;
+}
+
 .work-group-trigger {
   display: flex;
   width: fit-content;

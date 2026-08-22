@@ -27,11 +27,13 @@
     ProviderModelCatalog,
     ThreadState,
   } from '../types';
+  import type { SendShortcut } from '../utils/app-settings';
   import { copyImage, saveImage } from '../utils/clipboard';
   import { composerLayoutKeyframes, usesExpandedComposerLayout, type LayoutBox } from '../utils/composer-layout';
   import { fastModeAvailable } from '../utils/fast-mode';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
   import {
+    composerEnterAction,
     fuzzyScore,
     hasPromptContent,
     REFERENCE_PLACEHOLDER,
@@ -52,6 +54,9 @@
     completionRevision: number;
     currentBranch: string | null | undefined;
     reducedMotion: boolean;
+    sendShortcut: SendShortcut;
+    spellcheck: boolean;
+    autocomplete: boolean;
     attachImages: (files: File[]) => void;
     removeImage: (imageId: string) => void;
     send: () => void;
@@ -119,6 +124,13 @@
 
   $effect(() => {
     void props.completionRevision;
+    if (!props.autocomplete) {
+      completionLoadToken += 1;
+      completionEntries = [];
+      completionStatus = 'ready';
+      closeCompletion();
+      return;
+    }
     void loadCompletionEntries(props.thread.cwd);
   });
 
@@ -226,7 +238,7 @@
   }
 
   function animateComposerLayout(layout: NonNullable<ReturnType<typeof captureComposerLayout>>) {
-    if (!composerElement || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!composerElement || props.reducedMotion) return;
     const timing: KeyframeAnimationOptions = {
       duration: 240,
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
@@ -250,6 +262,10 @@
   }
 
   function detectCompletion() {
+    if (!props.autocomplete) {
+      closeCompletion();
+      return;
+    }
     const selection = window.getSelection();
     const node = selection?.anchorNode;
     if (!promptEditor || !node || node.nodeType !== Node.TEXT_NODE || !promptEditor.contains(node)) {
@@ -460,9 +476,10 @@
         return;
       }
     }
-    if (event.key === 'Enter') {
+    const enterAction = composerEnterAction(props.sendShortcut, event);
+    if (enterAction) {
       event.preventDefault();
-      if (event.shiftKey) insertText('\n');
+      if (enterAction === 'newline') insertText('\n');
       else if (!hasMissingReferences()) props.send();
     }
   }
@@ -542,15 +559,16 @@
       class="prompt-editor"
       role="combobox"
       aria-label="Prompt"
-      aria-autocomplete="list"
-      aria-haspopup="listbox"
-      aria-expanded={Boolean(completionPrefix)}
+      aria-autocomplete={props.autocomplete ? 'list' : 'none'}
+      aria-haspopup={props.autocomplete ? 'listbox' : undefined}
+      aria-expanded={props.autocomplete ? Boolean(completionPrefix) : undefined}
       aria-controls={completionPrefix ? 'composer-autocomplete' : undefined}
       aria-activedescendant={completionPrefix && completionResults[completionIndex] ? `composer-completion-${completionIndex}` : undefined}
       aria-disabled={!canEdit()}
       aria-multiline="true"
       tabindex={canEdit() ? 0 : -1}
       contenteditable={canEdit()}
+      spellcheck={props.spellcheck}
       data-placeholder={status === 'running'
         ? 'Agent is working...'
         : status === 'connecting'

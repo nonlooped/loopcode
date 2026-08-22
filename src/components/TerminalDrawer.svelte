@@ -7,6 +7,8 @@
     selectedThreadId: string;
     open: boolean;
     height: number;
+    fontSize: number;
+    scrollback: number;
     reducedMotion: boolean;
     close: () => void;
     terminalExited: (threadId: string) => void;
@@ -19,6 +21,8 @@
     selectedThreadId,
     open,
     height,
+    fontSize,
+    scrollback,
     reducedMotion,
     close,
     terminalExited,
@@ -72,6 +76,8 @@
       {thread}
       active={open && thread.id === selectedThreadId}
       ready={layoutSettled && open && thread.id === selectedThreadId}
+      {fontSize}
+      {scrollback}
       {reducedMotion}
       {close}
       exited={() => terminalExited(thread.id)}

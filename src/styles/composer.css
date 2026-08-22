@@ -26,7 +26,7 @@
 .composer {
   position: relative;
   display: grid;
-  width: min(720px, 100%);
+  width: min(var(--content-width, 720px), 100%);
   min-height: 49px;
   margin: 0 auto;
   padding: 7px;
@@ -387,7 +387,7 @@
 }
 
 .question-composer {
-  width: min(720px, 100%);
+  width: min(var(--content-width, 720px), 100%);
   margin: 0 auto;
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.095);
