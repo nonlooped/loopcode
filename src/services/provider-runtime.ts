@@ -29,7 +29,13 @@ import {
 } from "../utils/provider-availability.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
 import { buildThreadTitlePrompt, normalizeThreadTitle } from "../utils/thread-title.ts";
-import { AcpConnection, readModelState, type AcpModelState, type PromptContent } from "./acp.ts";
+import {
+  AcpConnection,
+  readModelState,
+  type AcpCallbacks,
+  type AcpModelState,
+  type PromptContent,
+} from "./acp.ts";
 import { recordDiagnostic } from "./native.ts";
 import { SessionUpdateHandler } from "./session-updates.ts";
 
@@ -48,6 +54,7 @@ export class ProviderRuntime {
   #customModels = new Map<string, ProviderModelCatalog["models"]>();
   #permissionMode: PermissionMode = "restricted";
   #connections = new Map<string, AcpConnection>();
+  #createConnection: (callbacks: AcpCallbacks) => AcpConnection;
   #tokens = new Map<string, string>();
   #turnTokens = new Map<string, string>();
   #titleTokens = new Map<string, string>();
@@ -55,9 +62,14 @@ export class ProviderRuntime {
   #titlePreference?: TitleGenerationPreference;
   #updates = new SessionUpdateHandler(applyProviderConfigState);
 
-  constructor(catalogs: Record<string, ProviderModelCatalog>, hooks: RuntimeHooks) {
+  constructor(
+    catalogs: Record<string, ProviderModelCatalog>,
+    hooks: RuntimeHooks,
+    createConnection = (callbacks: AcpCallbacks) => new AcpConnection(callbacks),
+  ) {
     this.#catalogs = catalogs;
     this.#hooks = hooks;
+    this.#createConnection = createConnection;
     for (const [profileId, catalog] of Object.entries(catalogs)) {
       this.#baseModels.set(profileId, catalog.models);
     }
@@ -347,15 +359,16 @@ export class ProviderRuntime {
       if (this.#tokens.get(key) !== token) return;
       this.#reportError(thread, profile.id, error);
       return;
+    } finally {
+      if (this.#connections.get(key) === previousConnection) this.#connections.delete(key);
     }
-    if (this.#connections.get(key) === previousConnection) this.#connections.delete(key);
     if (this.#tokens.get(key) !== token) return;
 
     const isCurrent = () => this.#tokens.get(key) === token;
     let startupComplete = false;
     let connectionReportedError = false;
     let sessionSelectedModelId: string | undefined;
-    const connection = new AcpConnection({
+    const connection = this.#createConnection({
       connectionStatus: (status) => {
         if (!isCurrent() || (status === "ready" && !startupComplete)) return;
         this.#setConnectionStatus(thread, profile.id, status);

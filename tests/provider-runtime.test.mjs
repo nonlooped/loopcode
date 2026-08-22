@@ -260,6 +260,41 @@ void test("Pi discovery skips per-model option probing", async () => {
   });
 });
 
+void test("a failed reconnect stop drops the defunct connection", async () => {
+  let failStop = false;
+  const runtime = new ProviderRuntime(catalogs, hooks, (callbacks) => ({
+    async connect() {
+      callbacks.ready({
+        harnessId: "harness-1",
+        sessionId: "session-1",
+        modelConfigId: "model",
+        models: catalogs.codex.models,
+        selectedModelId: "model-1",
+        reasoningOptions: [],
+      });
+    },
+    async setModel() {
+      return {
+        modelConfigId: "model",
+        models: catalogs.codex.models,
+        selectedModelId: "model-1",
+        reasoningOptions: [],
+      };
+    },
+    async stop() {
+      if (failStop) throw new Error("stop failed");
+    },
+  }));
+  const state = thread("disconnected");
+
+  await runtime.connect(state, "codex");
+  failStop = true;
+  await runtime.connect(state, "codex");
+
+  assert.equal(runtime.connection(state.id, "codex"), undefined);
+  assert.equal(state.providers.codex.error, "stop failed");
+});
+
 void test("a provider switch prevents a stale reconnect from prompting", async () => {
   let finishConnect;
   let prompts = 0;
