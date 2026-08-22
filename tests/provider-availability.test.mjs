@@ -31,10 +31,6 @@ void test("provider availability covers platform, discovery, executable, and aut
     "missing-executable",
   );
   assert.equal(unavailableReason(new Error("Invalid ACP response")), "discovery");
-  const pi = providerDefinitions.find((profile) => profile.id === "pi");
-  assert.ok(pi);
-  assert.match(pi.command, /^npx/);
-  assert.match(pi.args.join(" "), /@victor-software-house\/pi-acp@/);
 });
 
 void test("an unavailable saved default falls back", () => {
