@@ -46,6 +46,18 @@ npm run tauri -- dev
 
 You will need Node.js 24+, npm 12+, Rust, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your operating system.
 
+### Browser preview
+
+Run the real frontend with Tauri's web mocks for browser-driven UI checks:
+
+```sh
+npm run web
+agent-browser open http://127.0.0.1:1420
+agent-browser snapshot -i
+```
+
+The preview persists workspace state in local storage and exposes deterministic provider models. Native filesystem, terminal, and agent-process behavior remains available only in the desktop app.
+
 ## Built on ACP
 
 LoopCode uses the [Agent Client Protocol](https://agentclientprotocol.com/) to talk to each provider while preserving provider-specific models, tools, and authentication. It currently targets stable ACP v1.
