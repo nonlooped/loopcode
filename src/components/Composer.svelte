@@ -15,7 +15,7 @@
   import ContextMenu from './ContextMenu.svelte';
   import ImagePreview from './ImagePreview.svelte';
   import ModelPicker from './ModelPicker.svelte';
-  import { profileById as officialProfileById } from '../config/providers';
+  import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
   import ReasoningPicker from './ReasoningPicker.svelte';
   import {
     listComposerCompletions,
@@ -95,7 +95,8 @@
   const provider = $derived(activeProvider(props.thread));
   const profile = $derived(
     props.profiles.find((candidate) => candidate.id === props.thread.profileId)
-      ?? officialProfileById(props.thread.profileId),
+      ?? officialProfileById(props.thread.profileId)
+      ?? officialProfiles[0],
   );
   const status = $derived(threadStatus(props.thread));
   const imageSupportError = $derived(

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { providerDefinitionById } from "../config/provider-definitions.ts";
+import { providerDefinitionById, providerDefinitions } from "../config/provider-definitions.ts";
 import type {
   ComposerReference,
   MessageImage,
@@ -20,6 +20,7 @@ export interface RestoredWorkspace {
   selectedThreadId: string;
   projects: ProjectState[];
   selectedProjectId: string | null;
+  providerRepairs: { threadId: string; persistedProfileId: string; profileId: string }[];
 }
 
 export function workspaceSnapshot(
@@ -64,9 +65,10 @@ export function restoreWorkspace(
   if (!version) return undefined;
 
   const restoredThreads: ThreadState[] = [];
+  const providerRepairs: RestoredWorkspace["providerRepairs"] = [];
   const seenIds = new Set<string>();
   for (const item of value.threads) {
-    const thread = restoreThread(item, defaultWorkingFolder, catalogs);
+    const thread = restoreThread(item, defaultWorkingFolder, catalogs, providerRepairs);
     if (!thread || seenIds.has(thread.id)) continue;
     seenIds.add(thread.id);
     restoredThreads.push(thread);
@@ -105,6 +107,7 @@ export function restoreWorkspace(
       : restoredThreads[0].id,
     projects: restoredProjects,
     selectedProjectId: restoredSelectedProjectId,
+    providerRepairs,
   };
 }
 
@@ -122,13 +125,21 @@ function restoreThread(
   value: JsonValue,
   defaultWorkingFolder: string,
   catalogs: Record<string, ProviderModelCatalog>,
+  providerRepairs: RestoredWorkspace["providerRepairs"],
 ): ThreadState | undefined {
   if (!isObject(value)) return undefined;
   const id = stringValue(value.id);
   const title = stringValue(value.title);
   if (!id || !title) return undefined;
 
-  const profile = providerDefinitionById(stringValue(value.profileId) ?? "");
+  const persistedProfileId = stringValue(value.profileId) ?? "";
+  const profile =
+    providerDefinitionById(persistedProfileId) ??
+    providerDefinitions.find((candidate) => catalogs[candidate.id]?.status === "ready") ??
+    providerDefinitions[0];
+  if (profile.id !== persistedProfileId) {
+    providerRepairs.push({ threadId: id, persistedProfileId, profileId: profile.id });
+  }
   const messages = Array.isArray(value.messages)
     ? value.messages.map(restoreMessage).filter((message) => message !== undefined)
     : [];

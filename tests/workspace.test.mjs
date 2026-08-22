@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createWorkspaceState, Workspace } from "../src/services/workspace.ts";
+import { restoreWorkspace } from "../src/utils/workspace.ts";
 
 const catalogs = {
   codex: {
@@ -60,6 +61,33 @@ void test("restores a workspace and resets transient provider runtime state", ()
   assert.equal(state.threads[0].providers.codex.turnStatus, "idle");
   assert.equal(state.threads[0].providers.codex.selectedModelId, "model");
   assert.deepEqual(events, ["ready"]);
+});
+
+void test("repairs unknown persisted provider ids explicitly", () => {
+  const restored = restoreWorkspace(
+    {
+      version: 1,
+      selectedThreadId: "thread-1",
+      threads: [
+        {
+          id: "thread-1",
+          title: "Thread",
+          profileId: "removed-provider",
+          cwd: "C:\\workspace",
+          messages: [],
+          tools: [],
+          updatedAt: 1,
+        },
+      ],
+    },
+    "C:\\default",
+    catalogs,
+  );
+
+  assert.equal(restored.threads[0].profileId, "codex");
+  assert.deepEqual(restored.providerRepairs, [
+    { threadId: "thread-1", persistedProfileId: "removed-provider", profileId: "codex" },
+  ]);
 });
 
 void test("rejects invalid workspaces and drops orphaned project references", () => {

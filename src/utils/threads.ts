@@ -71,7 +71,8 @@ export function threadHarness(
 ) {
   return (
     profiles.find((profile) => profile.id === thread.profileId)?.label ??
-    providerDefinitionById(thread.profileId).label
+    providerDefinitionById(thread.profileId)?.label ??
+    "Unknown provider"
   );
 }
 

@@ -126,5 +126,5 @@ export function providerSupportsPlatform(
 }
 
 export function providerDefinitionById(profileId: string) {
-  return providerDefinitions.find((profile) => profile.id === profileId) ?? providerDefinitions[0];
+  return providerDefinitions.find((profile) => profile.id === profileId);
 }

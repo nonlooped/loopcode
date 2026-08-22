@@ -89,7 +89,7 @@
   const isLinux = navigator.userAgent.includes('Linux');
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const loadedPreferences = loadAppPreferences();
-  loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId).id;
+  loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId)?.id ?? officialProfiles[0].id;
   loadedPreferences.providerModelDefaults = Object.fromEntries(
     officialProfiles.flatMap((profile) => {
       const modelId = loadedPreferences.providerModelDefaults[profile.id];
@@ -102,7 +102,7 @@
       return setting ? [[profile.id, setting]] : [];
     }),
   );
-  loadedPreferences.titleProviderId = profileById(loadedPreferences.titleProviderId).id;
+  loadedPreferences.titleProviderId = profileById(loadedPreferences.titleProviderId)?.id ?? officialProfiles[0].id;
   const initialProfiles = configuredProviderProfiles(officialProfiles, loadedPreferences.providerSettings);
   const initialCatalogs = Object.fromEntries(
     initialProfiles.map((profile) => [
@@ -887,10 +887,10 @@
     resetStoredAppSettings();
     preferences = {
       ...DEFAULT_APP_PREFERENCES,
-      defaultProviderId: profileById(DEFAULT_APP_PREFERENCES.defaultProviderId).id,
+      defaultProviderId: profileById(DEFAULT_APP_PREFERENCES.defaultProviderId)?.id ?? officialProfiles[0].id,
       providerModelDefaults: {},
       providerSettings: {},
-      titleProviderId: profileById(DEFAULT_APP_PREFERENCES.titleProviderId).id,
+      titleProviderId: profileById(DEFAULT_APP_PREFERENCES.titleProviderId)?.id ?? officialProfiles[0].id,
       titleModelId: '',
     };
     projectExplorerCollapsed = false;

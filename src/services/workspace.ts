@@ -8,6 +8,7 @@ import { findReusableEmptyThread } from "../utils/thread-state.ts";
 import { createThread, folderName } from "../utils/threads.ts";
 import type { JsonValue } from "../utils/json.ts";
 import { restoreWorkspace, workspaceSnapshot } from "../utils/workspace.ts";
+import { recordDiagnostic } from "./native.ts";
 import { WorkspacePersistence } from "./workspace-persistence.ts";
 
 export interface WorkspaceState {
@@ -61,6 +62,9 @@ export class Workspace {
       this.state.selectedThreadId = restored.selectedThreadId;
       this.state.projects = restored.projects;
       this.state.selectedProjectId = restored.selectedProjectId;
+      for (const repair of restored.providerRepairs) {
+        void recordDiagnostic("warn", "workspace.provider_repaired", repair).catch(() => {});
+      }
     } else {
       for (const thread of this.state.threads) {
         if (!thread.cwd) thread.cwd = defaultWorkingFolder;

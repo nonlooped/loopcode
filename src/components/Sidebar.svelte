@@ -23,7 +23,7 @@
   } from '@tabler/icons-svelte';
 
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
-  import { profileById as officialProfileById } from '../config/providers';
+  import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
   import type { HarnessProfile, ProjectState, ThreadState } from '../types';
   import type { SettingsCategory } from '../utils/app-settings';
   import { copyText } from '../utils/clipboard';
@@ -74,7 +74,7 @@
   ] satisfies { category: SettingsCategory; label: string; icon: typeof IconSettings }[];
 
   function profileById(profileId: string) {
-    return props.profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId);
+    return props.profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId) ?? officialProfiles[0];
   }
 
   function threadMenuItems(thread: ThreadState): ContextMenuItem[] {

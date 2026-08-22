@@ -2,7 +2,7 @@
   import { Combobox, Popover, Tabs } from 'bits-ui';
   import { IconCheck, IconChevronDown, IconSearch } from '@tabler/icons-svelte';
 
-  import { profileById as officialProfileById } from '../config/providers';
+  import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
   import type { HarnessProfile, ModelOption, ProviderModelCatalog, ThreadState } from '../types';
 
   interface Props {
@@ -23,7 +23,8 @@
   const pickerProfile = $derived(
     props.profiles.find((profile) => profile.id === pickerProviderId)
       ?? props.profiles[0]
-      ?? officialProfileById(props.thread.profileId),
+      ?? officialProfileById(props.thread.profileId)
+      ?? officialProfiles[0],
   );
   const pickerProvider = $derived(props.thread.providers[pickerProfile.id]);
   const pickerCatalog = $derived(props.catalogs[pickerProfile.id]);

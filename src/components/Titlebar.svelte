@@ -3,7 +3,7 @@
   import { IconLayoutSidebar, IconPlus, IconSettings, IconTerminal2 } from '@tabler/icons-svelte';
 
   import ContextMenu from './ContextMenu.svelte';
-  import { profileById as officialProfileById } from '../config/providers';
+  import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
   import type { HarnessProfile, ThreadState } from '../types';
   import { folderName } from '../utils/threads';
 
@@ -38,7 +38,7 @@
   }: Props = $props();
 
   function profileById(profileId: string) {
-    return profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId);
+    return profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId) ?? officialProfiles[0];
   }
 </script>
 

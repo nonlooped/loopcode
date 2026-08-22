@@ -28,5 +28,5 @@ export const profiles: HarnessProfile[] = providerDefinitions.map((profile) => {
 });
 
 export function profileById(profileId: string) {
-  return profiles.find((profile) => profile.id === profileId) ?? profiles[0];
+  return profiles.find((profile) => profile.id === profileId);
 }
