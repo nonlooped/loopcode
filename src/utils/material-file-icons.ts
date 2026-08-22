@@ -137,7 +137,9 @@ function dictionaryValue<T extends Record<PropertyKey, string>>(values: T, key: 
 }
 
 function iconUrl(iconName: string) {
-  return iconAssets[`../../node_modules/material-icon-theme/icons/${iconName}.svg`];
+  const fallback = iconAssets["../../node_modules/material-icon-theme/icons/file.svg"];
+  if (!fallback) throw new Error("Material file icon asset is missing");
+  return iconAssets[`../../node_modules/material-icon-theme/icons/${iconName}.svg`] ?? fallback;
 }
 
 export function materialFileIcon(name: string) {

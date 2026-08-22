@@ -15,7 +15,7 @@ export function composerLayoutKeyframes(previous: LayoutBox, current: LayoutBox)
   return [
     {
       transformOrigin: "top left",
-      transform: `translate(${previous.left - current.left}px, ${previous.top - current.top}px) scale(${previous.width / current.width}, ${previous.height / current.height})`,
+      transform: `translate(${previous.left - current.left}px, ${previous.top - current.top}px) scale(${previous.width / (current.width || 1)}, ${previous.height / (current.height || 1)})`,
     },
     { transformOrigin: "top left", transform: "none" },
   ];
