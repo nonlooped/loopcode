@@ -9,6 +9,7 @@ use atomic_write_file::AtomicWriteFile;
 
 pub const THREADS_FILE_NAME: &str = "threads.json";
 const BACKUP_FILE_NAME: &str = "threads.json.bak";
+const MAX_WORKSPACE_BYTES: u64 = 10 * 1024 * 1024;
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn load_from_directory<T>(
@@ -23,14 +24,35 @@ pub fn load_from_directory<T>(
     let mut found_file = false;
 
     for path in candidates {
-        let contents = match fs::read_to_string(&path) {
-            Ok(contents) => {
+        let size = match fs::metadata(&path) {
+            Ok(metadata) => {
                 found_file = true;
-                contents
+                metadata.len()
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => {
                 found_file = true;
+                failures.push(format!("Could not inspect {}: {error}", path.display()));
+                continue;
+            }
+        };
+        if size > MAX_WORKSPACE_BYTES {
+            failures.push(format!(
+                "{} exceeds the 10 MB workspace limit",
+                path.display()
+            ));
+            continue;
+        }
+        let contents = match fs::read_to_string(&path) {
+            Ok(contents) if contents.len() as u64 <= MAX_WORKSPACE_BYTES => contents,
+            Ok(_) => {
+                failures.push(format!(
+                    "{} grew beyond the 10 MB workspace limit while being read",
+                    path.display()
+                ));
+                continue;
+            }
+            Err(error) => {
                 failures.push(format!("Could not read {}: {error}", path.display()));
                 continue;
             }
@@ -166,6 +188,24 @@ mod tests {
                 "invalid {name}: {contents}"
             );
         }
+    }
+
+    #[test]
+    fn loads_the_backup_when_the_primary_file_is_oversized() {
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        let workspace = r#"{"version":1,"threads":[{"id":"recoverable"}]}"#;
+        let primary = fs::File::create(directory.path().join(THREADS_FILE_NAME))
+            .expect("primary fixture should be created");
+        primary
+            .set_len(super::MAX_WORKSPACE_BYTES + 1)
+            .expect("primary fixture should be oversized");
+        fs::write(directory.path().join(BACKUP_FILE_NAME), workspace)
+            .expect("backup fixture should write");
+
+        assert_eq!(
+            load(&directory.path()).expect("backup should load"),
+            Some(workspace.to_owned())
+        );
     }
 
     #[test]

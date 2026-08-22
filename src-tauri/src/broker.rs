@@ -18,7 +18,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State, ipc::Channel};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{ChildStdin, Command},
     sync::{Mutex, mpsc, watch},
     time::{Duration, timeout},
@@ -27,6 +27,8 @@ use tokio::{
 use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
 const HARNESS_STOP_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_ACP_LINE_BYTES: usize = 1024 * 1024;
+const MAX_PENDING_REQUESTS: usize = 1000;
 
 fn wrap_harness_command(command: Command) -> CommandWrap {
     let mut command = CommandWrap::from(command);
@@ -204,9 +206,9 @@ pub async fn launch_harness(
     let stdout_profile_id = request.profile_id.clone();
     let stdout_thread_id = request.thread_id.clone();
     tauri::async_runtime::spawn(async move {
-        let mut lines = BufReader::new(stdout).lines();
+        let mut stdout = BufReader::new(stdout);
         loop {
-            match lines.next_line().await {
+            match read_bounded_line(&mut stdout).await {
                 Ok(Some(line)) if line.trim().is_empty() => {}
                 Ok(Some(line)) => match serde_json::from_str::<Value>(&line) {
                     Ok(message) => {
@@ -281,8 +283,8 @@ pub async fn launch_harness(
     let stderr_profile_id = request.profile_id.clone();
     let stderr_thread_id = request.thread_id.clone();
     tauri::async_runtime::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
+        let mut stderr = BufReader::new(stderr);
+        while let Ok(Some(line)) = read_bounded_line(&mut stderr).await {
             if !line.trim().is_empty() {
                 stderr_diagnostics.record(
                     "warn",
@@ -383,13 +385,8 @@ pub async fn send_rpc(
         message.get("method").and_then(Value::as_str),
         request_key(&message),
     ) {
-        pending_requests.lock().await.insert(
-            key,
-            PendingRequest {
-                method: method.to_owned(),
-                started_at: Instant::now(),
-            },
-        );
+        let mut pending_requests = pending_requests.lock().await;
+        insert_pending_request(&mut pending_requests, key, method)?;
     }
     diagnostics.record(
         "debug",
@@ -429,6 +426,69 @@ pub async fn send_rpc(
 
 fn request_key(message: &Value) -> Option<String> {
     message.get("id").map(Value::to_string)
+}
+
+fn insert_pending_request(
+    pending_requests: &mut HashMap<String, PendingRequest>,
+    key: String,
+    method: &str,
+) -> Result<(), String> {
+    if pending_requests.len() >= MAX_PENDING_REQUESTS && !pending_requests.contains_key(&key) {
+        return Err("Too many ACP requests are awaiting responses".into());
+    }
+    pending_requests.insert(
+        key,
+        PendingRequest {
+            method: method.to_owned(),
+            started_at: Instant::now(),
+        },
+    );
+    Ok(())
+}
+
+async fn read_bounded_line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+) -> std::io::Result<Option<String>> {
+    let mut bytes = Vec::new();
+    let mut oversized = false;
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            if bytes.is_empty() && !oversized {
+                return Ok(None);
+            }
+            break;
+        }
+        let length = available
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(available.len(), |position| position + 1);
+        let ends_line = available[length - 1] == b'\n';
+        if bytes.len() + length > MAX_ACP_LINE_BYTES + usize::from(ends_line) {
+            oversized = true;
+        } else if !oversized {
+            bytes.extend_from_slice(&available[..length]);
+        }
+        reader.consume(length);
+        if ends_line {
+            break;
+        }
+    }
+    if oversized {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "ACP output line exceeds 1 MB",
+        ));
+    }
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+    }
+    String::from_utf8(bytes)
+        .map(Some)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
 }
 
 #[tauri::command]
@@ -606,11 +666,15 @@ async fn wait_for_harness_stop(
 
 #[cfg(test)]
 mod tests {
-    use super::{wait_for_harness_stop, wrap_harness_command};
+    use super::{
+        MAX_ACP_LINE_BYTES, MAX_PENDING_REQUESTS, insert_pending_request, read_bounded_line,
+        wait_for_harness_stop, wrap_harness_command,
+    };
     #[cfg(unix)]
     use std::process::Stdio;
+    use tokio::io::BufReader;
     #[cfg(unix)]
-    use tokio::{io::AsyncBufReadExt, io::BufReader, process::Command, time::sleep};
+    use tokio::{io::AsyncBufReadExt, process::Command, time::sleep};
     use tokio::{
         sync::{mpsc, watch},
         time::{Duration, timeout},
@@ -656,6 +720,28 @@ mod tests {
             .args(["-KILL", &descendant_pid])
             .status();
         panic!("descendant {descendant_pid} survived harness stop");
+    }
+
+    #[test]
+    fn bounds_pending_rpc_requests() {
+        let mut pending = std::collections::HashMap::new();
+        for index in 0..MAX_PENDING_REQUESTS {
+            insert_pending_request(&mut pending, index.to_string(), "test")
+                .expect("request within limit should be tracked");
+        }
+
+        assert!(insert_pending_request(&mut pending, "overflow".into(), "test").is_err());
+        assert_eq!(pending.len(), MAX_PENDING_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn rejects_oversized_harness_output_lines() {
+        let input = vec![b'x'; MAX_ACP_LINE_BYTES + 1];
+        let error = read_bounded_line(&mut BufReader::new(input.as_slice()))
+            .await
+            .expect_err("oversized lines should fail");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     }
 
     #[tokio::test]

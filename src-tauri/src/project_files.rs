@@ -12,6 +12,9 @@ use std::{
 use tauri::{Manager, ipc::Channel};
 use tauri_plugin_opener::OpenerExt;
 
+const MAX_PROJECT_DIRECTORY_ENTRIES: usize = 10_000;
+const MAX_SKILL_BYTES: u64 = 1024 * 1024;
+
 #[derive(Default)]
 pub struct ProjectFileWatchers {
     next_id: AtomicU64,
@@ -82,6 +85,9 @@ fn project_directory_entries(
     for entry in std::fs::read_dir(&directory)
         .map_err(|error| format!("Could not read project folder: {error}"))?
     {
+        if entries.len() == MAX_PROJECT_DIRECTORY_ENTRIES {
+            return Err("Project folders cannot contain more than 10,000 entries.".to_owned());
+        }
         let entry = entry.map_err(|error| format!("Could not read project entry: {error}"))?;
         let file_type = entry
             .file_type()
@@ -200,9 +206,18 @@ fn collect_skill_entries(
             if child.file_name() != "SKILL.md" || !file_type.is_file() {
                 continue;
             }
+            let Ok(metadata) = child.metadata() else {
+                continue;
+            };
+            if metadata.len() > MAX_SKILL_BYTES {
+                continue;
+            }
             let Ok(contents) = std::fs::read_to_string(child.path()) else {
                 continue;
             };
+            if contents.len() as u64 > MAX_SKILL_BYTES {
+                continue;
+            }
             let Some(name) = frontmatter_value(&contents, "name") else {
                 continue;
             };
