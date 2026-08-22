@@ -13,6 +13,7 @@ use tauri::{Manager, ipc::Channel};
 use tauri_plugin_opener::OpenerExt;
 
 const MAX_PROJECT_DIRECTORY_ENTRIES: usize = 10_000;
+const MAX_PROJECT_WATCHERS: usize = 50;
 const MAX_SKILL_BYTES: u64 = 1024 * 1024;
 
 #[derive(Default)]
@@ -44,6 +45,14 @@ pub struct ComposerCompletionEntry {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectFileChange {
     paths: Vec<String>,
+}
+
+fn ensure_watcher_capacity(count: usize) -> Result<(), String> {
+    if count >= MAX_PROJECT_WATCHERS {
+        Err("Too many project folders are being watched.".to_owned())
+    } else {
+        Ok(())
+    }
 }
 
 fn project_file_change(event: Event) -> Option<ProjectFileChange> {
@@ -385,6 +394,11 @@ pub fn start_project_file_watcher(
     if !root.is_dir() {
         return Err("The project path is not a folder.".to_owned());
     }
+    let mut watchers = state
+        .watchers
+        .lock()
+        .map_err(|_| "The project watcher lock was poisoned.".to_owned())?;
+    ensure_watcher_capacity(watchers.len())?;
 
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         let Ok(event) = result else { return };
@@ -399,11 +413,7 @@ pub fn start_project_file_watcher(
         .map_err(|error| format!("Could not watch project folder: {error}"))?;
 
     let watcher_id = state.next_id.fetch_add(1, Ordering::Relaxed) + 1;
-    state
-        .watchers
-        .lock()
-        .map_err(|_| "The project watcher lock was poisoned.".to_owned())?
-        .insert(watcher_id, watcher);
+    watchers.insert(watcher_id, watcher);
     Ok(watcher_id)
 }
 
@@ -423,11 +433,18 @@ pub fn stop_project_file_watcher(
 #[cfg(test)]
 mod tests {
     use super::{
-        composer_project_entries, frontmatter_value, project_directory_entries,
-        project_file_change, project_image_media_type, resolve_project_path,
+        MAX_PROJECT_WATCHERS, composer_project_entries, ensure_watcher_capacity, frontmatter_value,
+        project_directory_entries, project_file_change, project_image_media_type,
+        resolve_project_path,
     };
     use notify::{Event, EventKind, event::AccessKind};
     use std::{fs, path::Path};
+
+    #[test]
+    fn caps_project_watchers() {
+        assert!(ensure_watcher_capacity(MAX_PROJECT_WATCHERS - 1).is_ok());
+        assert!(ensure_watcher_capacity(MAX_PROJECT_WATCHERS).is_err());
+    }
 
     #[test]
     fn ignores_non_mutating_file_access_events() {
