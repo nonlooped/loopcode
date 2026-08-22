@@ -147,6 +147,12 @@ void test("keeps project, selection, reuse, and deletion invariants behind one i
     workspace.addThread("C:\\default", () => false),
     first,
   );
+  assert.notEqual(
+    workspace.addThread("C:\\default", () => false, project.id, false),
+    first,
+  );
+  state.threads = [first];
+  state.selectedThreadId = first.id;
   first.draft = "keep this";
   const second = workspace.addThread("C:\\default", () => false);
   assert.notEqual(second.id, first.id);

@@ -74,13 +74,16 @@ export class Workspace {
     defaultWorkingFolder: string,
     hasAttachments: (threadId: string) => boolean,
     projectId = this.state.selectedProjectId,
+    reuseEmptyThread = true,
   ) {
     const project = projectId ? this.state.projects.find((item) => item.id === projectId) : null;
     if (projectId && !project) return undefined;
 
     this.state.selectedProjectId = project?.id ?? null;
     const target = { cwd: project?.path ?? defaultWorkingFolder, projectId: project?.id ?? null };
-    const reusable = findReusableEmptyThread(this.state.threads, target, hasAttachments);
+    const reusable = reuseEmptyThread
+      ? findReusableEmptyThread(this.state.threads, target, hasAttachments)
+      : undefined;
     const thread = reusable ?? createThread(target.cwd, target.projectId, this.catalogs);
     if (!reusable) this.state.threads.unshift(thread);
     this.state.selectedThreadId = thread.id;
