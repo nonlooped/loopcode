@@ -10,6 +10,39 @@ void test("rejects malformed Cursor model catalogs", () => {
   );
 });
 
+void test("prefers the model selector when fx advertises provider and model categories", () => {
+  const state = readModelState({
+    configOptions: [
+      {
+        id: "provider",
+        name: "Provider",
+        category: "model",
+        type: "select",
+        currentValue: "gateway",
+        options: [{ value: "gateway", name: "Vercel AI Gateway" }],
+      },
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: "anthropic/claude-opus-4.6",
+        options: [
+          { value: "anthropic/claude-opus-4.6", name: "Claude Opus 4.6" },
+          { value: "openai/gpt-5.4", name: "GPT-5.4" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(state.modelConfigId, "model");
+  assert.equal(state.selectedModelId, "anthropic/claude-opus-4.6");
+  assert.deepEqual(
+    state.models.map(({ id }) => id),
+    ["anthropic/claude-opus-4.6", "openai/gpt-5.4"],
+  );
+});
+
 void test("reads model and reasoning selectors from typed ACP config options", () => {
   const state = readModelState({
     configOptions: [

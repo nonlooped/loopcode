@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  configuredProviderProfiles,
   loadAppPreferences,
   loadLinuxShellTransparency,
   loadPermissionMode,
   loadSidebarWidths,
   loadTerminalHeight,
+  providerVersionFromOutput,
   resetAppSettings,
   saveAppPreference,
   saveLinuxShellTransparency,
@@ -64,6 +66,9 @@ void test("app preferences use safe defaults and validate persisted values", () 
     composerAutocomplete: true,
     defaultProviderId: "codex",
     providerModelDefaults: {},
+    providerSettings: {},
+    titleProviderId: "codex",
+    titleModelId: "",
     terminalFontSize: 12,
     terminalScrollback: 5_000,
     sendShortcut: "enter",
@@ -75,6 +80,20 @@ void test("app preferences use safe defaults and validate persisted values", () 
   saveAppPreference("motionMode", "reduced", storage);
   saveAppPreference("interfaceZoom", 140, storage);
   saveAppPreference("providerModelDefaults", { codex: "gpt-5" }, storage);
+  saveAppPreference(
+    "providerSettings",
+    {
+      codex: {
+        enabled: false,
+        name: "Work Codex",
+        command: "/opt/codex-acp",
+        models: [{ id: "custom-model", name: "Custom model" }],
+      },
+    },
+    storage,
+  );
+  saveAppPreference("titleProviderId", "pi", storage);
+  saveAppPreference("titleModelId", "pi-model", storage);
   saveAppPreference("sendShortcut", "modifier-enter", storage);
   assert.deepEqual(loadAppPreferences(storage), {
     ...defaults,
@@ -83,19 +102,55 @@ void test("app preferences use safe defaults and validate persisted values", () 
     motionMode: "reduced",
     interfaceZoom: 140,
     providerModelDefaults: { codex: "gpt-5" },
+    providerSettings: {
+      codex: {
+        enabled: false,
+        name: "Work Codex",
+        command: "/opt/codex-acp",
+        models: [{ id: "custom-model", name: "Custom model" }],
+      },
+    },
+    titleProviderId: "pi",
+    titleModelId: "pi-model",
     sendShortcut: "modifier-enter",
   });
 
   values.set("loopcode.interface-zoom", "500");
   values.set("loopcode.content-width", "200");
   values.set("loopcode.provider-model-defaults", "invalid");
+  values.set(
+    "loopcode.provider-settings",
+    JSON.stringify({
+      codex: { enabled: "yes", name: "  ", models: [{ id: "", name: "Missing ID" }] },
+      __proto__: { enabled: false },
+    }),
+  );
   values.set("loopcode.terminal-font-size", "invalid");
   values.set("loopcode.terminal-scrollback", "20");
   assert.equal(loadAppPreferences(storage).interfaceZoom, 200);
   assert.equal(loadAppPreferences(storage).contentWidth, 600);
   assert.deepEqual(loadAppPreferences(storage).providerModelDefaults, {});
+  assert.deepEqual(loadAppPreferences(storage).providerSettings, {});
   assert.equal(loadAppPreferences(storage).terminalFontSize, 12);
   assert.equal(loadAppPreferences(storage).terminalScrollback, 5_000);
+});
+
+void test("provider settings preserve ACP arguments without mutating defaults", () => {
+  const profiles = [{ id: "codex", label: "Codex", command: "npx", args: ["adapter"] }];
+  const configured = configuredProviderProfiles(profiles, {
+    codex: { name: "Work Codex", command: "/opt/npx" },
+  });
+
+  assert.equal(configured[0].label, "Work Codex");
+  assert.equal(configured[0].command, "/opt/npx");
+  assert.deepEqual(configured[0].args, ["adapter"]);
+  assert.equal(profiles[0].label, "Codex");
+});
+
+void test("provider versions are read from common CLI output", () => {
+  assert.equal(providerVersionFromOutput("codex-cli 0.149.0"), "0.149.0");
+  assert.equal(providerVersionFromOutput("claude 2.1.240 (Claude Code)"), "2.1.240");
+  assert.equal(providerVersionFromOutput("unknown"), undefined);
 });
 
 void test("reset removes preferences without touching workspace history", () => {
@@ -103,6 +158,7 @@ void test("reset removes preferences without touching workspace history", () => 
   resetAppSettings({ removeItem: (key) => removed.push(key) });
 
   assert.ok(removed.includes("loopcode.default-provider"));
+  assert.ok(removed.includes("loopcode.title-provider"));
   assert.ok(removed.includes("loopcode.permission-mode"));
   assert.ok(removed.includes("loopcode.terminal-height"));
   assert.ok(!removed.includes("loopcode.workspace"));

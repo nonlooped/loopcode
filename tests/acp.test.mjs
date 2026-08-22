@@ -3,7 +3,14 @@ import test from "node:test";
 
 import { AcpConnection } from "../src/services/acp.ts";
 
-function fakeTransport({ loadSession = false, resumeSession = false, promptMode = "normal" } = {}) {
+function fakeTransport({
+  loadSession = false,
+  resumeSession = false,
+  promptMode = "normal",
+  legacyModels = false,
+  authMethods = [],
+  agentInfo,
+} = {}) {
   let onEvent;
   let session = 0;
   const sent = [];
@@ -32,11 +39,27 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
             loadSession,
             sessionCapabilities: resumeSession ? { resume: {} } : {},
           },
-          authMethods: [],
+          authMethods,
+          agentInfo,
         });
+      } else if (message.method === "authenticate") {
+        reply(message.id, {});
       } else if (message.method === "session/new") {
         session += 1;
-        reply(message.id, { sessionId: `session-${session}`, configOptions });
+        reply(message.id, {
+          sessionId: `session-${session}`,
+          ...(legacyModels
+            ? {
+                models: {
+                  currentModelId: "grok-code-fast-1",
+                  availableModels: [
+                    { modelId: "grok-code-fast-1", name: "Grok Code Fast 1" },
+                    { modelId: "grok-4.5", name: "Grok 4.5" },
+                  ],
+                },
+              }
+            : { configOptions }),
+        });
       } else if (message.method === "cursor/list_available_models") {
         reply(message.id, { models: [{ value: "claude-opus-5", name: "Claude Opus 5" }] });
       } else if (message.method === "session/load") {
@@ -61,6 +84,8 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
         reply(message.id, { configOptions });
       } else if (message.method === "session/set_config_option") {
         reply(message.id, { configOptions });
+      } else if (message.method === "session/set_model") {
+        reply(message.id, {});
       } else if (message.method === "session/prompt") {
         if (promptMode === "pending") return;
         if (promptMode === "error") {
@@ -116,6 +141,9 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
   return {
     transport,
     sent,
+    emit(event) {
+      onEvent(event);
+    },
     requestPermission() {
       onEvent({
         event: "rpc",
@@ -355,13 +383,46 @@ function fakeTransport({ loadSession = false, resumeSession = false, promptMode 
   };
 }
 
-void test("uses the official SDK to initialize, create a session, and route updates", async () => {
+void test("ignores broker events after the ACP stream has been stopped", async () => {
   const fake = fakeTransport();
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  await connection.stop();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.doesNotThrow(() => fake.emit({ event: "exited", data: { code: 0, success: true } }));
+  assert.doesNotThrow(() =>
+    fake.emit({
+      event: "rpc",
+      data: { message: { jsonrpc: "2.0", method: "late-notification" } },
+    }),
+  );
+});
+
+void test("uses the official SDK to initialize, create a session, and route updates", async () => {
+  const fake = fakeTransport({
+    agentInfo: { name: "test-agent", title: "Test agent", version: "1.2.3" },
+  });
   const updates = [];
+  let initialized;
   let ready;
   const connection = new AcpConnection(
     {
       status: () => {},
+      initialized: (agentInfo) => {
+        initialized = agentInfo;
+      },
       ready: (session) => {
         ready = session;
       },
@@ -389,6 +450,7 @@ void test("uses the official SDK to initialize, create a session, and route upda
   assert.equal(ready.harnessId, "harness-1");
   assert.equal(ready.sessionId, "session-1");
   assert.equal(ready.selectedModelId, "model-1");
+  assert.equal(initialized.version, "1.2.3");
   assert.deepEqual(
     fake.sent.find((message) => message.method === "session/set_config_option")?.params,
     { sessionId: "session-1", configId: "fast_mode", value: true, type: "boolean" },
@@ -435,6 +497,50 @@ void test("enables Cursor's parameterized model picker", async () => {
         message.method === "session/set_config_option" && message.params.configId === "fast",
     )?.params,
     { sessionId: "session-1", configId: "fast", value: "true" },
+  );
+});
+
+void test("uses Grok legacy discovery and session/set_model", async () => {
+  const fake = fakeTransport({
+    legacyModels: true,
+    authMethods: [{ id: "cached_token", name: "Cached login" }],
+  });
+  let ready;
+  const connection = new AcpConnection(
+    {
+      ready: (session) => {
+        ready = session;
+      },
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({
+    cwd: "C:\\workspace",
+    command: "grok",
+    args: ["agent", "stdio"],
+    profileId: "grok",
+  });
+  const updated = await connection.setModel("model", "grok-4.5");
+
+  assert.equal(ready.selectedModelId, "grok-code-fast-1");
+  assert.deepEqual(
+    ready.models.map(({ id }) => id),
+    ["grok-code-fast-1", "grok-4.5"],
+  );
+  assert.equal(updated.selectedModelId, "grok-4.5");
+  assert.deepEqual(fake.sent.find((message) => message.method === "session/set_model")?.params, {
+    sessionId: "session-1",
+    modelId: "grok-4.5",
+  });
+  assert.equal(
+    fake.sent.some((message) => message.method === "authenticate"),
+    true,
   );
 });
 

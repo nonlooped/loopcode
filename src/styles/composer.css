@@ -359,11 +359,15 @@
   font-weight: 560;
 }
 
-.model-picker-trigger:hover,
+.model-picker-trigger:hover:not(:disabled),
 .model-picker-trigger[aria-expanded="true"] {
   border-color: rgba(255, 255, 255, 0.04);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-soft);
+}
+
+.model-picker-trigger:disabled {
+  opacity: 0.62;
 }
 
 .model-picker-trigger img,

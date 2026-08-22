@@ -16,11 +16,13 @@
   import TerminalDrawer from './components/TerminalDrawer.svelte';
   import Titlebar from './components/Titlebar.svelte';
   import Transcript from './components/Transcript.svelte';
-  import { profileById, profiles } from './config/providers';
+  import { profileById, profiles as officialProfiles } from './config/providers';
   import { preferredAllowOptionId } from './services/acp';
   import {
     getGitBranch,
     getInitialWorkingDirectory,
+    getProviderAuthStatus,
+    getProviderVersion,
     loadWorkspace,
     openProjectPath,
     pickFolder,
@@ -34,6 +36,7 @@
   import { createWorkspaceState, Workspace } from './services/workspace';
   import type {
     ComposerImage,
+    HarnessProfile,
     MessageImage,
     ModelOption,
     PermissionMode,
@@ -53,11 +56,13 @@
     TERMINAL_HEIGHT_RANGE,
     LINUX_SHELL_TRANSPARENCY_RANGE,
     MAX_LINUX_SHELL_TRANSPARENCY,
+    configuredProviderProfiles,
     loadAppPreferences,
     loadLinuxShellTransparency,
     loadPermissionMode,
     loadSidebarWidths,
     loadTerminalHeight,
+    providerVersionFromOutput,
     resetAppSettings as resetStoredAppSettings,
     saveAppPreference,
     saveLinuxShellTransparency,
@@ -65,34 +70,51 @@
     saveSidebarWidth,
     saveTerminalHeight,
     type AppPreferences,
+    type ProviderPreference,
     type SettingsCategory,
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
   import { hasPromptContent, promptParts, promptText } from './utils/prompt-content';
+  import {
+    initialProviderCatalog,
+    previewProviderCatalog,
+    readyProviderId,
+  } from './utils/provider-availability';
   import { timelineEntries } from './utils/timeline';
   import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
 
   const appWindow = getCurrentWindow();
   const appWebview = getCurrentWebview();
+  const webPreview = !import.meta.env.TAURI_ENV_PLATFORM;
   const isLinux = navigator.userAgent.includes('Linux');
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const loadedPreferences = loadAppPreferences();
   loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId).id;
   loadedPreferences.providerModelDefaults = Object.fromEntries(
-    profiles.flatMap((profile) => {
+    officialProfiles.flatMap((profile) => {
       const modelId = loadedPreferences.providerModelDefaults[profile.id];
       return modelId ? [[profile.id, modelId]] : [];
     }),
   );
+  loadedPreferences.providerSettings = Object.fromEntries(
+    officialProfiles.flatMap((profile) => {
+      const setting = loadedPreferences.providerSettings[profile.id];
+      return setting ? [[profile.id, setting]] : [];
+    }),
+  );
+  loadedPreferences.titleProviderId = profileById(loadedPreferences.titleProviderId).id;
+  const initialProfiles = configuredProviderProfiles(officialProfiles, loadedPreferences.providerSettings);
   const initialCatalogs = Object.fromEntries(
-    profiles.map((profile) => [
+    initialProfiles.map((profile) => [
       profile.id,
-      { status: 'loading', models: [], reasoningOptions: [] } satisfies ProviderModelCatalog,
+      webPreview ? previewProviderCatalog(profile) : initialProviderCatalog(profile),
     ]),
   );
 
   let defaultWorkingFolder = $state('');
   let providerCatalogs = $state<Record<string, ProviderModelCatalog>>(initialCatalogs);
+  let providerVersions = $state<Record<string, string>>({});
+  let providerAuthStatuses = $state<Record<string, boolean>>({});
   const workspaceState = $state(createWorkspaceState('', providerCatalogs));
   const projects = $derived(workspaceState.projects);
   const selectedProjectId = $derived(workspaceState.selectedProjectId);
@@ -138,12 +160,19 @@
   let completionRefreshTimer: number | undefined;
   let closing = false;
   let branchLookup = 0;
+  const providerVersionGenerations = new Map<string, number>();
+  const providerAuthGenerations = new Map<string, number>();
   let stopSidebarResize: (() => void) | undefined;
   let stopTerminalResize: (() => void) | undefined;
 
   const reducedMotion = $derived(
     systemReducedMotion || preferences.motionMode === 'reduced',
   );
+  const profiles = $derived(configuredProviderProfiles(officialProfiles, preferences.providerSettings));
+  const enabledProfiles = $derived(
+    profiles.filter((profile) => preferences.providerSettings[profile.id]?.enabled !== false),
+  );
+  const selectableProfiles = $derived(enabledProfiles);
   const layoutStyle = $derived([
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
@@ -207,6 +236,13 @@
 
   $effect(() => {
     void appWebview.setZoom(preferences.interfaceZoom / 100);
+  });
+
+  $effect(() => {
+    providers.setTitlePreference({
+      profileId: preferences.titleProviderId,
+      modelId: preferences.titleModelId,
+    });
   });
 
   $effect(() => {
@@ -322,12 +358,16 @@
   }
 
   function applyNewThreadDefaults(thread: ThreadState) {
-    providers.activate(thread, preferences.defaultProviderId, false);
+    const defaultProviderId = readyProviderId(
+      preferences.defaultProviderId,
+      enabledProfiles,
+      providerCatalogs,
+    ) ?? (providerCatalogs[preferences.defaultProviderId]?.status === 'loading'
+      ? preferences.defaultProviderId
+      : thread.profileId);
+    providers.activate(thread, defaultProviderId, false);
     for (const [profileId, modelId] of Object.entries(preferences.providerModelDefaults)) {
-      const provider = thread.providers[profileId];
-      if (provider && (provider.models.length === 0 || provider.models.some((model) => model.id === modelId))) {
-        provider.selectedModelId = modelId;
-      }
+      if (thread.providers[profileId]) void providers.selectModel(thread, profileId, modelId);
     }
   }
 
@@ -595,6 +635,7 @@
     settingsOpen = true;
     sidebarCollapsed = false;
     sidebarOpen = false;
+    void Promise.all(profiles.map(loadProviderMetadata));
   }
 
   function closeSettings() {
@@ -604,6 +645,7 @@
 
   function setSettingsCategory(category: SettingsCategory) {
     settingsCategory = category;
+    if (category === 'providers') void Promise.all(profiles.map(loadProviderMetadata));
     if (!compactLayout) return;
     sidebarOpen = false;
     void tick().then(() => document.getElementById('settings-title')?.focus());
@@ -617,6 +659,14 @@
       if (!workspace.initialize(savedWorkspace, defaultWorkingFolder)) {
         throw new Error('The saved thread file has an unsupported or invalid format.');
       }
+      providers.setProfiles(initialProfiles, threads);
+      for (const profile of initialProfiles) {
+        providers.setCustomModels(profile.id, loadedPreferences.providerSettings[profile.id]?.models ?? [], threads);
+      }
+      providers.setDisabledProfiles(
+        initialProfiles.filter((profile) => loadedPreferences.providerSettings[profile.id]?.enabled === false).map((profile) => profile.id),
+        threads,
+      );
       if (preferences.startupBehavior === 'new-thread') {
         const startupThread = workspace.addThread(
           defaultWorkingFolder,
@@ -628,7 +678,8 @@
       } else if (savedWorkspace === null && selectedThread) {
         applyNewThreadDefaults(selectedThread);
       }
-      await providers.discoverAll(defaultWorkingFolder, threads);
+      if (!webPreview) await providers.discoverAll(defaultWorkingFolder, threads);
+      void Promise.all(initialProfiles.map(loadProviderMetadata));
     } catch (error) {
       const thread = selectedThread ?? threads[0];
       if (!thread) return;
@@ -730,6 +781,96 @@
     saveAppPreference(key, value);
   }
 
+  function setProviderPreference(profileId: string, preference: ProviderPreference) {
+    const official = officialProfiles.find((profile) => profile.id === profileId);
+    if (!official) return;
+    const models = [...new Map((preference.models ?? []).flatMap((model) => {
+      const id = model.id.trim().slice(0, 256);
+      const name = model.name.trim().slice(0, 256);
+      const option: ModelOption = { id, name };
+      return id && name ? [[id, option] as const] : [];
+    })).values()].slice(0, 100);
+    const setting: ProviderPreference = {
+      ...(preference.enabled === false ? { enabled: false } : {}),
+      ...(preference.name?.trim() && preference.name.trim() !== official.label
+        ? { name: preference.name.trim().slice(0, 100) }
+        : {}),
+      ...(preference.command?.trim() && preference.command.trim() !== official.command
+        ? { command: preference.command.trim().slice(0, 4096) }
+        : {}),
+      ...(models.length > 0 ? { models } : {}),
+    };
+    const previous = preferences.providerSettings[profileId];
+    const providerSettings = { ...preferences.providerSettings };
+    if (Object.keys(setting).length > 0) providerSettings[profileId] = setting;
+    else delete providerSettings[profileId];
+    setPreference('providerSettings', providerSettings);
+
+    const nextProfiles = configuredProviderProfiles(officialProfiles, providerSettings);
+    providers.setProfiles(nextProfiles, threads);
+    providers.setCustomModels(profileId, models, threads);
+    providers.setDisabledProfiles(
+      nextProfiles.filter((profile) => providerSettings[profile.id]?.enabled === false).map((profile) => profile.id),
+      threads,
+    );
+    const enabled = setting.enabled !== false;
+    const commandChanged = (previous?.command || official.command) !== (setting.command || official.command);
+    if (!webPreview && enabled && (previous?.enabled === false || commandChanged)) {
+      const profile = nextProfiles.find((candidate) => candidate.id === profileId);
+      if (profile) void rediscoverProvider(profile);
+    } else if (commandChanged) {
+      const profile = nextProfiles.find((candidate) => candidate.id === profileId);
+      if (profile) void loadProviderMetadata(profile);
+    }
+  }
+
+  async function rediscoverProvider(profile: HarnessProfile) {
+    await providers.discover(profile, defaultWorkingFolder, threads);
+    await loadProviderMetadata(profile);
+  }
+
+  async function loadProviderMetadata(profile: HarnessProfile) {
+    const catalog = providerCatalogs[profile.id];
+    await Promise.all([
+      catalog?.status === 'unavailable' && catalog.unavailableReason === 'missing-executable'
+        ? Promise.resolve()
+        : loadProviderVersion(profile),
+      loadProviderAuthStatus(profile),
+    ]);
+  }
+
+  async function loadProviderVersion(profile: HarnessProfile) {
+    const generation = (providerVersionGenerations.get(profile.id) ?? 0) + 1;
+    providerVersionGenerations.set(profile.id, generation);
+    try {
+      const output = await getProviderVersion(profile.versionCommand, profile.versionArgs);
+      if (providerVersionGenerations.get(profile.id) !== generation) return;
+      const version = output ? providerVersionFromOutput(output) : undefined;
+      if (version) providerVersions[profile.id] = version;
+      else delete providerVersions[profile.id];
+    } catch {
+      if (providerVersionGenerations.get(profile.id) === generation) {
+        delete providerVersions[profile.id];
+      }
+    }
+  }
+
+  async function loadProviderAuthStatus(profile: HarnessProfile) {
+    if (!profile.authCommand || !profile.authArgs) return;
+    const generation = (providerAuthGenerations.get(profile.id) ?? 0) + 1;
+    providerAuthGenerations.set(profile.id, generation);
+    try {
+      const authenticated = await getProviderAuthStatus(profile.authCommand, profile.authArgs);
+      if (providerAuthGenerations.get(profile.id) !== generation) return;
+      if (authenticated === null) delete providerAuthStatuses[profile.id];
+      else providerAuthStatuses[profile.id] = authenticated;
+    } catch {
+      if (providerAuthGenerations.get(profile.id) === generation) {
+        delete providerAuthStatuses[profile.id];
+      }
+    }
+  }
+
   function setLinuxShellTransparency(transparency: number) {
     linuxShellTransparency = saveLinuxShellTransparency(transparency);
   }
@@ -748,6 +889,9 @@
       ...DEFAULT_APP_PREFERENCES,
       defaultProviderId: profileById(DEFAULT_APP_PREFERENCES.defaultProviderId).id,
       providerModelDefaults: {},
+      providerSettings: {},
+      titleProviderId: profileById(DEFAULT_APP_PREFERENCES.titleProviderId).id,
+      titleModelId: '',
     };
     projectExplorerCollapsed = false;
     terminalHeight = DEFAULT_TERMINAL_HEIGHT;
@@ -755,6 +899,14 @@
     rightSidebarWidth = null;
     linuxShellTransparency = 0;
     permissionMode = 'restricted';
+    const resetProfiles = configuredProviderProfiles(officialProfiles, {});
+    providers.setProfiles(resetProfiles, threads);
+    for (const profile of resetProfiles) providers.setCustomModels(profile.id, [], threads);
+    providers.setDisabledProfiles([], threads);
+    void (async () => {
+      if (!webPreview) await providers.discoverAll(defaultWorkingFolder, threads);
+      await Promise.all(resetProfiles.map(loadProviderMetadata));
+    })();
     providers.setPermissionMode('restricted');
   }
 
@@ -844,6 +996,7 @@
     {selectedThread}
     {windowMaximized}
     {reducedMotion}
+    {profiles}
     terminalOpen={terminalVisible}
     {toggleSidebar}
     {toggleTerminal}
@@ -861,6 +1014,7 @@
       open={sidebarOpen}
       {settingsOpen}
       {settingsCategory}
+      {profiles}
       compactMotion={reducedMotion}
       {defaultWorkingFolder}
       {projects}
@@ -896,13 +1050,17 @@
             category={settingsCategory}
             {preferences}
             {profiles}
+            baseProfiles={officialProfiles}
             catalogs={providerCatalogs}
+            {providerVersions}
+            {providerAuthStatuses}
             {isLinux}
             {linuxShellTransparency}
             {permissionMode}
             {terminalHeight}
             {reducedMotion}
             {setPreference}
+            {setProviderPreference}
             setLinuxShellTransparency={setLinuxShellTransparency}
             linuxShellTransparencyRange={LINUX_SHELL_TRANSPARENCY_RANGE}
             {setPermissionMode}
@@ -942,6 +1100,7 @@
                   <Transcript
                     thread={selectedThread}
                     entries={selectedTimelineEntries}
+                    {profiles}
                     {reducedMotion}
                     autoFollowOutput={preferences.autoFollowOutput}
                   />
@@ -960,6 +1119,8 @@
                 <Composer
                   thread={selectedThread}
                   catalogs={providerCatalogs}
+                  {profiles}
+                  {selectableProfiles}
                   images={composerImages(selectedThread.id)}
                   attachmentError={attachmentErrorsByThread[selectedThread.id]}
                   projectName={workspace.projectNameForThread(selectedThread)}
@@ -979,7 +1140,8 @@
                   selectFastMode={(enabled) => { void selectFastMode(enabled); }}
                   {activateProvider}
                   retryDiscovery={(profileId) => {
-                    void providers.discover(profileById(profileId), defaultWorkingFolder, threads);
+                    const profile = profiles.find((candidate) => candidate.id === profileId);
+                    if (profile) void providers.discover(profile, defaultWorkingFolder, threads);
                   }}
                 />
               {/if}

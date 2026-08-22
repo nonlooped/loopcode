@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ProviderRuntime } from "../src/services/provider-runtime.ts";
+import {
+  discoverProviderModelOptions,
+  mergeProviderModels,
+  ProviderRuntime,
+} from "../src/services/provider-runtime.ts";
+import { providerDefinitions } from "../src/config/provider-definitions.ts";
+import { restoreWorkspace } from "../src/utils/workspace.ts";
 
 const catalogs = {
   codex: {
@@ -49,9 +55,6 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
     async prompt(content) {
       calls.push(content);
     },
-    async generateTitle() {
-      return "**Runtime Owns Turns.**";
-    },
   };
   class Runtime extends ProviderRuntime {
     connection() {
@@ -97,7 +100,164 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
   ]);
   assert.equal(state.messages[0].role, "user");
   assert.equal(state.messages[0].images[0].name, "reference.png");
-  assert.equal(state.title, "Runtime Owns Turns");
+  assert.equal(state.title, "Implement this @src/Composer.svelte");
+});
+
+void test("unavailable providers cannot become active and restored providers fall back", () => {
+  const unavailableCatalogs = {
+    ...catalogs,
+    grok: {
+      status: "unavailable",
+      models: [],
+      reasoningOptions: [],
+      unavailableReason: "authentication",
+      error: "Authentication required",
+    },
+  };
+  const state = thread();
+  state.providers.grok = provider();
+  const runtime = new ProviderRuntime(unavailableCatalogs, hooks);
+
+  runtime.activate(state, "grok", false);
+  assert.equal(state.profileId, "codex");
+
+  const restored = restoreWorkspace(
+    {
+      version: 1,
+      selectedThreadId: "restored-thread",
+      threads: [
+        {
+          id: "restored-thread",
+          title: "Restored Grok thread",
+          profileId: "grok",
+          cwd: "C:\\workspace",
+          messages: [],
+          tools: [],
+          draft: "",
+          updatedAt: 1,
+        },
+      ],
+    },
+    "C:\\workspace",
+    unavailableCatalogs,
+  );
+  assert.ok(restored);
+  runtime.applyCatalog("grok", restored.threads);
+  assert.equal(restored.threads[0].profileId, "codex");
+  assert.equal(restored.threads[0].providers.grok.selectedModelId, undefined);
+});
+
+void test("unchanged custom models do not disconnect ready providers", () => {
+  const state = thread();
+  const runtime = new ProviderRuntime(catalogs, hooks);
+
+  runtime.setCustomModels("codex", [], [state]);
+
+  assert.equal(state.providers.codex.connectionStatus, "ready");
+});
+
+void test("custom models extend advertised models and replace duplicate labels", () => {
+  assert.deepEqual(
+    mergeProviderModels(
+      [
+        { id: "model-1", name: "Model 1" },
+        { id: "model-2", name: "Old model 2" },
+      ],
+      [
+        { id: "model-2", name: "Model 2" },
+        { id: "custom", name: "Custom" },
+      ],
+    ),
+    [
+      { id: "model-1", name: "Model 1" },
+      { id: "model-2", name: "Model 2" },
+      { id: "custom", name: "Custom" },
+    ],
+  );
+});
+
+void test("disabling the active provider falls back to an enabled ready provider", () => {
+  const state = thread();
+  const readyCatalogs = { ...catalogs, claude: catalogs.codex };
+  const runtime = new ProviderRuntime(readyCatalogs, hooks);
+
+  runtime.setDisabledProfiles(["codex"], [state]);
+
+  assert.equal(state.profileId, "claude");
+  assert.equal(state.providers.codex.connectionStatus, "disconnected");
+});
+
+void test("model defaults apply while discovery is still loading", async () => {
+  const state = thread("disconnected");
+  state.providers.codex.reasoningOptionsByModel = {
+    "model-2": { options: [{ id: "high", name: "High" }], selectedId: "high" },
+  };
+  const runtime = new ProviderRuntime(
+    { codex: { status: "loading", models: [], reasoningOptions: [] } },
+    hooks,
+  );
+
+  await runtime.selectModel(state, "codex", "model-2");
+
+  assert.equal(state.providers.codex.selectedModelId, "model-2");
+  assert.equal(state.providers.codex.selectedReasoningId, "high");
+});
+
+void test("Grok and fx image turns are rejected before timeline changes", () => {
+  for (const profileId of ["grok", "fx"]) {
+    const imageCatalogs = {
+      ...catalogs,
+      [profileId]: catalogs.codex,
+    };
+    const state = thread();
+    state.profileId = profileId;
+    state.providers[profileId] = provider();
+    const runtime = new ProviderRuntime(imageCatalogs, hooks);
+
+    assert.equal(
+      runtime.runTurn(state, "Describe this", [
+        { data: "image-data", mimeType: "image/png", name: "reference.png" },
+      ]),
+      undefined,
+    );
+    assert.deepEqual(state.messages, []);
+  }
+});
+
+void test("Pi discovery skips per-model option probing", async () => {
+  const pi = providerDefinitions.find((profile) => profile.id === "pi");
+  assert.ok(pi);
+  let modelChanges = 0;
+  const state = {
+    modelConfigId: "model",
+    models: [
+      { id: "pi-fast", name: "Pi Fast" },
+      { id: "pi-smart", name: "Pi Smart" },
+    ],
+    selectedModelId: "pi-fast",
+    reasoningConfigId: "thinking",
+    reasoningOptions: [{ id: "medium", name: "Medium" }],
+    selectedReasoningId: "medium",
+  };
+
+  const options = await discoverProviderModelOptions(
+    pi,
+    {
+      async setModel() {
+        modelChanges += 1;
+        return state;
+      },
+    },
+    state,
+  );
+
+  assert.equal(modelChanges, 0);
+  assert.deepEqual(options.reasoningOptionsByModel, {
+    "pi-fast": {
+      options: [{ id: "medium", name: "Medium" }],
+      selectedId: "medium",
+    },
+  });
 });
 
 void test("a provider switch prevents a stale reconnect from prompting", async () => {

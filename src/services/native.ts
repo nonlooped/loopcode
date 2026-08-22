@@ -168,6 +168,24 @@ export function getGitBranch(cwd: string): Promise<string | null> {
   return invoke<string | null>("get_git_branch", { cwd });
 }
 
+export async function getProviderVersion(command: string, args: string[]): Promise<string | null> {
+  return z
+    .string()
+    .max(512)
+    .nullable()
+    .parse(await invoke("provider_version", { command, args }));
+}
+
+export async function getProviderAuthStatus(
+  command: string,
+  args: string[],
+): Promise<boolean | null> {
+  return z
+    .boolean()
+    .nullable()
+    .parse(await invoke("provider_auth_status", { command, args }));
+}
+
 export function listComposerCompletions(projectRoot: string): Promise<ComposerCompletionEntry[]> {
   return invoke<ComposerCompletionEntry[]>("list_composer_completions", { projectRoot });
 }

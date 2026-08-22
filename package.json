@@ -2,7 +2,7 @@
   "name": "loopcode",
   "version": "0.1.0",
   "private": true,
-  "description": "A local desktop workspace for Codex, Claude, Cursor, and OpenCode.",
+  "description": "A local desktop workspace for ACP coding agents.",
   "keywords": [
     "acp",
     "agent-client-protocol",
@@ -11,7 +11,10 @@
     "codex",
     "coding-agents",
     "cursor",
+    "fx",
+    "grok",
     "opencode",
+    "pi",
     "svelte",
     "tauri"
   ],
@@ -24,6 +27,7 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
+    "web": "vp dev --host 127.0.0.1",
     "build": "vp build",
     "check": "svelte-check --tsconfig ./tsconfig.json && vp check",
     "test": "node --test tests/*.test.mjs",

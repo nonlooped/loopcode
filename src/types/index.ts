@@ -158,12 +158,24 @@ export interface ProviderSessionState {
   errorDetails?: AcpErrorDetails;
 }
 
+export type DesktopPlatform = "linux" | "windows";
+
 export interface HarnessProfile {
   id: string;
   label: string;
   icon: string;
   command: string;
   args: string[];
+  versionCommand: string;
+  versionArgs: string[];
+  authCommand?: string;
+  authArgs?: string[];
+  platforms: DesktopPlatform[];
+  supportsImages: boolean;
+  titleGeneration: boolean;
+  probeModelOptions: boolean;
+  installCommand: string;
+  loginCommand: string;
 }
 
 export interface ConnectRequest {
@@ -208,8 +220,14 @@ export interface QuestionAnswer {
   customAnswer?: string;
 }
 
-export interface ProviderModelCatalog {
-  status: "loading" | "ready" | "error";
+export type ProviderUnavailableReason =
+  | "authentication"
+  | "discovery"
+  | "missing-executable"
+  | "unsupported-platform";
+
+interface ProviderModelCatalogState {
+  agentVersion?: string;
   models: ModelOption[];
   selectedModelId?: string;
   reasoningOptions: ReasoningOption[];
@@ -221,8 +239,13 @@ export interface ProviderModelCatalog {
   fastModeEnabled?: boolean;
   fastModeValueType?: FastModeValueType;
   fastModeDescription?: string;
-  error?: string;
 }
+
+export type ProviderModelCatalog = ProviderModelCatalogState &
+  (
+    | { status: "loading" | "ready"; error?: never; unavailableReason?: never }
+    | { status: "unavailable"; error: string; unavailableReason: ProviderUnavailableReason }
+  );
 
 export interface ComposerImage {
   id: string;

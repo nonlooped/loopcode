@@ -100,6 +100,7 @@ export interface AcpCallbacks {
   connectionStatus?: (status: ConnectionStatus) => void;
   turnStatus?: (status: TurnStatus) => void;
   status?: (status: ThreadStatus) => void;
+  initialized?: (agentInfo?: acp.Implementation | null) => void;
   ready: (session: AcpSessionInfo) => void;
   update: (update: acp.SessionUpdate) => void;
   permission: (request: PermissionRequest) => void;
@@ -119,6 +120,8 @@ export class AcpConnection {
   #transport: AcpTransport;
   #harnessId?: string;
   #sessionId?: string;
+  #profileId?: string;
+  #modelState: AcpModelState = { models: [], reasoningOptions: [] };
   #context?: acp.ClientContext;
   #connection?: acp.ClientConnection;
   #incoming?: ReadableStreamDefaultController<acp.AnyMessage>;
@@ -142,11 +145,18 @@ export class AcpConnection {
 
   async connect(request: ConnectRequest) {
     this.#emitConnectionStatus("connecting");
+    this.#profileId = request.profileId;
+    this.#modelState = { models: [], reasoningOptions: [] };
     let method = "launch";
     try {
       const readable = new ReadableStream<acp.AnyMessage>({
         start: (controller) => {
           this.#incoming = controller;
+          this.#incomingClosed = false;
+        },
+        cancel: () => {
+          this.#incoming = undefined;
+          this.#incomingClosed = true;
         },
       });
 
@@ -198,10 +208,21 @@ export class AcpConnection {
           version: "0.1.0",
         },
       });
+      this.#callbacks.initialized?.(initialized.agentInfo);
 
-      if (initialized.authMethods?.length) {
+      if (request.profileId === "grok") {
+        const authMethod = initialized.authMethods?.find(
+          (candidate) => candidate.id === "cached_token" || candidate.id === "xai.api_key",
+        );
+        if (authMethod) {
+          method = "authenticate";
+          await this.#context.request(acp.methods.agent.authenticate, {
+            methodId: authMethod.id,
+          });
+        }
+      } else if (initialized.authMethods?.length) {
         this.#callbacks.stderr(
-          "This harness advertises an authentication flow. LoopCode currently expects its CLI to be signed in already.",
+          "This harness advertises an authentication flow. LoopCode expects its CLI to be signed in already.",
         );
       }
 
@@ -245,10 +266,11 @@ export class AcpConnection {
         this.#sessionId = sessionId;
         sessionState = session;
       }
+      this.#modelState = readModelState(sessionState);
       this.#callbacks.ready({
         harnessId,
         sessionId,
-        ...readModelState(sessionState),
+        ...this.#modelState,
       });
       this.#emitConnectionStatus("ready");
     } catch (error) {
@@ -317,7 +339,13 @@ export class AcpConnection {
   }
 
   async setModel(configId: string, modelId: string) {
-    return this.setConfigOption(configId, modelId);
+    if (this.#profileId !== "grok") return this.setConfigOption(configId, modelId);
+    await this.#requireContext().request<unknown>("session/set_model", {
+      sessionId: this.#requireSessionId(),
+      modelId,
+    });
+    this.#modelState = { ...this.#modelState, selectedModelId: modelId };
+    return this.#modelState;
   }
 
   async setConfigOption(configId: string, value: string | boolean) {
@@ -329,7 +357,8 @@ export class AcpConnection {
       acp.methods.agent.session.setConfigOption,
       params,
     );
-    return readModelState(response);
+    this.#modelState = readModelState(response);
+    return this.#modelState;
   }
 
   setFastModeConfigOption(
@@ -407,6 +436,8 @@ export class AcpConnection {
     const harnessId = this.#harnessId;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
+    this.#profileId = undefined;
+    this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#loadingSession = false;
     this.#turnActive = false;
@@ -447,7 +478,7 @@ export class AcpConnection {
 
   #receiveBrokerEvent(event: BrokerEvent) {
     if (event.event === "rpc") {
-      this.#incoming?.enqueue(event.data.message);
+      if (!this.#incomingClosed) this.#incoming?.enqueue(event.data.message);
       return;
     }
     if (event.event === "stderr") {
@@ -464,6 +495,8 @@ export class AcpConnection {
     this.#stopping = false;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
+    this.#profileId = undefined;
+    this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#connection = undefined;
     this.#loadingSession = false;
@@ -474,6 +507,7 @@ export class AcpConnection {
     if (!this.#incomingClosed) {
       this.#incomingClosed = true;
       this.#incoming?.close();
+      this.#incoming = undefined;
     }
     if (!wasStopping) this.#callbacks.exited(event.data.code);
   }

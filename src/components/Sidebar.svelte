@@ -15,6 +15,7 @@
     IconInbox,
     IconMessageCircle,
     IconPlus,
+    IconPlugConnected,
     IconRobot,
     IconSettings,
     IconTerminal2,
@@ -22,8 +23,8 @@
   } from '@tabler/icons-svelte';
 
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
-  import { profileById } from '../config/providers';
-  import type { ProjectState, ThreadState } from '../types';
+  import { profileById as officialProfileById } from '../config/providers';
+  import type { HarnessProfile, ProjectState, ThreadState } from '../types';
   import type { SettingsCategory } from '../utils/app-settings';
   import { copyText } from '../utils/clipboard';
   import { folderName, relativeTime, threadHarness, threadStatus } from '../utils/threads';
@@ -32,6 +33,7 @@
     open: boolean;
     settingsOpen: boolean;
     settingsCategory: SettingsCategory;
+    profiles: HarnessProfile[];
     compactMotion: boolean;
     defaultWorkingFolder: string;
     projects: ProjectState[];
@@ -66,9 +68,14 @@
     { category: 'appearance', label: 'Appearance', icon: IconContrast },
     { category: 'conversation', label: 'Conversation', icon: IconMessageCircle },
     { category: 'agents', label: 'Agents and permissions', icon: IconRobot },
+    { category: 'providers', label: 'Providers', icon: IconPlugConnected },
     { category: 'terminal', label: 'Terminal and editor', icon: IconTerminal2 },
     { category: 'data', label: 'Data and diagnostics', icon: IconDatabase },
   ] satisfies { category: SettingsCategory; label: string; icon: typeof IconSettings }[];
+
+  function profileById(profileId: string) {
+    return props.profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId);
+  }
 
   function threadMenuItems(thread: ThreadState): ContextMenuItem[] {
     return [
@@ -239,7 +246,7 @@
                     </span>
                     <span class="thread-details">
                       <img src={threadProfile.icon} alt="" />
-                      <span>{threadHarness(thread)}</span>
+                      <span>{threadHarness(thread, props.profiles)}</span>
                     </span>
                   </span>
                   </button>

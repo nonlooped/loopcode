@@ -2,12 +2,13 @@
   import { Combobox, Popover, Tabs } from 'bits-ui';
   import { IconCheck, IconChevronDown, IconSearch } from '@tabler/icons-svelte';
 
-  import { profileById, profiles } from '../config/providers';
-  import type { ModelOption, ProviderModelCatalog, ThreadState } from '../types';
+  import { profileById as officialProfileById } from '../config/providers';
+  import type { HarnessProfile, ModelOption, ProviderModelCatalog, ThreadState } from '../types';
 
   interface Props {
     thread: ThreadState;
     catalogs: Record<string, ProviderModelCatalog>;
+    profiles: HarnessProfile[];
     label: string;
     open: boolean;
     setOpen: (open: boolean) => void;
@@ -16,10 +17,14 @@
   }
 
   const props: Props = $props();
-  let pickerProviderId = $state(profiles[0].id);
+  let pickerProviderId = $state('');
   let modelSearch = $state('');
   let modelListOpen = $state(false);
-  const pickerProfile = $derived(profileById(pickerProviderId));
+  const pickerProfile = $derived(
+    props.profiles.find((profile) => profile.id === pickerProviderId)
+      ?? props.profiles[0]
+      ?? officialProfileById(props.thread.profileId),
+  );
   const pickerProvider = $derived(props.thread.providers[pickerProfile.id]);
   const pickerCatalog = $derived(props.catalogs[pickerProfile.id]);
   const visibleModels = $derived(matchingModels(pickerCatalog.models));
@@ -32,7 +37,9 @@
 
   function setOpen(open: boolean) {
     if (open) {
-      pickerProviderId = props.thread.profileId;
+      pickerProviderId = props.profiles.some((profile) => profile.id === props.thread.profileId)
+        ? props.thread.profileId
+        : (props.profiles[0]?.id ?? '');
       modelSearch = '';
       modelListOpen = true;
     }
@@ -42,6 +49,20 @@
   function chooseModel(modelId: string) {
     const model = pickerCatalog.models.find((item) => item.id === modelId);
     if (model) props.choose(pickerProfile.id, model);
+  }
+
+  function setupCommands() {
+    if (pickerCatalog.status !== 'unavailable') return [];
+    if (pickerCatalog.unavailableReason === 'unsupported-platform') return [];
+    if (pickerCatalog.unavailableReason === 'authentication') return [pickerProfile.loginCommand];
+    return [pickerProfile.installCommand, pickerProfile.loginCommand];
+  }
+
+  function providerStatusLabel(profileId: string) {
+    const catalog = props.catalogs[profileId];
+    if (catalog.status === 'ready') return 'ready';
+    if (catalog.status === 'unavailable') return 'unavailable';
+    return 'loading';
   }
 
   function modelLabel(model: ModelOption) {
@@ -59,7 +80,7 @@
     class="model-picker-trigger"
     title="Choose provider and model"
   >
-    <img src={profileById(props.thread.profileId).icon} alt="" />
+    <img src={(props.profiles.find((profile) => profile.id === props.thread.profileId) ?? pickerProfile).icon} alt="" />
     <span>{props.label}</span>
     <IconChevronDown size={11} stroke={1.7} />
   </Popover.Trigger>
@@ -79,18 +100,18 @@
         loop
       >
         <Tabs.List class="model-providers" aria-label="Providers">
-          {#each profiles as profile}
+          {#each props.profiles as profile}
             {@const state = props.thread.providers[profile.id]}
             <Tabs.Trigger
               class={`model-provider ${profile.id === props.thread.profileId ? 'selected' : ''}`}
               value={profile.id}
-              aria-label={profile.label}
-              title={profile.label}
+              aria-label={`${profile.label}, ${providerStatusLabel(profile.id)}`}
+              title={`${profile.label}, ${providerStatusLabel(profile.id)}`}
             >
               <span class="provider-icon"><img src={profile.icon} alt="" /></span>
               <span
                 class:ready={state.connectionStatus === 'ready'}
-                class:error={state.connectionStatus === 'error' || props.catalogs[profile.id].status === 'error'}
+                class:error={state.connectionStatus === 'error' || props.catalogs[profile.id].status === 'unavailable'}
                 class="provider-status"
               ></span>
             </Tabs.Trigger>
@@ -99,7 +120,7 @@
         <Tabs.Content class="model-options" value={pickerProfile.id}>
           <Combobox.Root
             type="single"
-            value={pickerProvider.selectedModelId ?? ''}
+            value={pickerProfile.id === props.thread.profileId ? pickerProvider.selectedModelId ?? '' : ''}
             onValueChange={chooseModel}
             open={modelListOpen}
             onOpenChange={(open) => { modelListOpen = open; }}
@@ -118,10 +139,17 @@
             <Combobox.ContentStatic class="model-options-scroll">
               {#if pickerCatalog.status === 'loading'}
                 <div class="model-picker-state"><span class="model-spinner"></span>Loading models…</div>
-              {:else if pickerCatalog.status === 'error'}
+              {:else if pickerCatalog.status === 'unavailable'}
                 <div class="model-picker-state error">
-                  <span>{pickerCatalog.error ?? `${pickerProfile.label} models are unavailable.`}</span>
-                  <button onclick={() => props.retryDiscovery(pickerProfile.id)}>Retry</button>
+                  <span>{pickerCatalog.error}</span>
+                  {#each setupCommands() as command (command)}
+                    <code>{command}</code>
+                  {/each}
+                  <button
+                    disabled={pickerCatalog.unavailableReason === 'unsupported-platform'}
+                    title={pickerCatalog.unavailableReason === 'unsupported-platform' ? 'This provider does not support the current platform' : 'Retry provider discovery'}
+                    onclick={() => props.retryDiscovery(pickerProfile.id)}
+                  >Retry</button>
                 </div>
               {:else if pickerCatalog.models.length === 0}
                 <div class="model-picker-state">No advertised models.</div>

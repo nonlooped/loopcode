@@ -1,4 +1,4 @@
-import type { PermissionMode } from "../types/index.ts";
+import type { HarnessProfile, ModelOption, PermissionMode } from "../types/index.ts";
 
 const PERMISSION_MODE_KEY = "loopcode.permission-mode";
 const LEFT_SIDEBAR_WIDTH_KEY = "loopcode.left-sidebar-width";
@@ -12,9 +12,17 @@ export type SettingsCategory =
   | "appearance"
   | "conversation"
   | "agents"
+  | "providers"
   | "terminal"
   | "data";
 export type SendShortcut = "enter" | "modifier-enter";
+
+export interface ProviderPreference {
+  enabled?: boolean;
+  name?: string;
+  command?: string;
+  models?: ModelOption[];
+}
 
 export interface AppPreferences {
   compactSessionRows: boolean;
@@ -34,6 +42,9 @@ export interface AppPreferences {
   composerAutocomplete: boolean;
   defaultProviderId: string;
   providerModelDefaults: Record<string, string>;
+  providerSettings: Record<string, ProviderPreference>;
+  titleProviderId: string;
+  titleModelId: string;
   terminalFontSize: number;
   terminalScrollback: number;
   sendShortcut: SendShortcut;
@@ -57,6 +68,9 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   composerAutocomplete: true,
   defaultProviderId: "codex",
   providerModelDefaults: {},
+  providerSettings: {},
+  titleProviderId: "codex",
+  titleModelId: "",
   terminalFontSize: 12,
   terminalScrollback: 5_000,
   sendShortcut: "enter",
@@ -80,6 +94,9 @@ const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
   composerAutocomplete: "loopcode.composer-autocomplete",
   defaultProviderId: "loopcode.default-provider",
   providerModelDefaults: "loopcode.provider-model-defaults",
+  providerSettings: "loopcode.provider-settings",
+  titleProviderId: "loopcode.title-provider",
+  titleModelId: "loopcode.title-model",
   terminalFontSize: "loopcode.terminal-font-size",
   terminalScrollback: "loopcode.terminal-scrollback",
   sendShortcut: "loopcode.send-shortcut",
@@ -156,6 +173,11 @@ export function loadAppPreferences(
       providerModelDefaults: storedStringRecord(
         storage.getItem(PREFERENCE_KEYS.providerModelDefaults),
       ),
+      providerSettings: storedProviderSettings(storage.getItem(PREFERENCE_KEYS.providerSettings)),
+      titleProviderId:
+        storage.getItem(PREFERENCE_KEYS.titleProviderId)?.trim() ||
+        DEFAULT_APP_PREFERENCES.titleProviderId,
+      titleModelId: storage.getItem(PREFERENCE_KEYS.titleModelId)?.trim() ?? "",
       terminalFontSize:
         storedNumber(storage.getItem(PREFERENCE_KEYS.terminalFontSize), TERMINAL_FONT_SIZE_RANGE) ??
         DEFAULT_APP_PREFERENCES.terminalFontSize,
@@ -166,7 +188,7 @@ export function loadAppPreferences(
           : "enter",
     };
   } catch {
-    return { ...DEFAULT_APP_PREFERENCES, providerModelDefaults: {} };
+    return { ...DEFAULT_APP_PREFERENCES, providerModelDefaults: {}, providerSettings: {} };
   }
 }
 
@@ -316,6 +338,73 @@ function storedStringRecord(value: string | null) {
   } catch {
     return {};
   }
+}
+
+function storedProviderSettings(value: string | null): Record<string, ProviderPreference> {
+  if (!value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([profileId, candidate]) => {
+        if (
+          !profileId ||
+          profileId === "__proto__" ||
+          profileId === "constructor" ||
+          profileId === "prototype" ||
+          !candidate ||
+          typeof candidate !== "object" ||
+          Array.isArray(candidate)
+        )
+          return [];
+        const setting: ProviderPreference = {};
+        if ("enabled" in candidate && typeof candidate.enabled === "boolean") {
+          setting.enabled = candidate.enabled;
+        }
+        if ("name" in candidate && typeof candidate.name === "string") {
+          const name = candidate.name.trim().slice(0, 100);
+          if (name) setting.name = name;
+        }
+        if ("command" in candidate && typeof candidate.command === "string") {
+          const command = candidate.command.trim().slice(0, 4096);
+          if (command) setting.command = command;
+        }
+        if ("models" in candidate && Array.isArray(candidate.models)) {
+          const models = candidate.models.slice(0, 100).flatMap((model: unknown) => {
+            if (!model || typeof model !== "object" || Array.isArray(model)) return [];
+            const id = "id" in model && typeof model.id === "string" ? model.id.trim() : "";
+            const name = "name" in model && typeof model.name === "string" ? model.name.trim() : "";
+            return id && name
+              ? [{ id: id.slice(0, 256), name: name.slice(0, 256) } satisfies ModelOption]
+              : [];
+          });
+          if (models.length > 0) setting.models = models;
+        }
+        return Object.keys(setting).length > 0 ? [[profileId, setting] as const] : [];
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function configuredProviderProfiles(
+  profiles: HarnessProfile[],
+  settings: Record<string, ProviderPreference>,
+) {
+  return profiles.map((profile) => {
+    const command = settings[profile.id]?.command || profile.command;
+    return {
+      ...profile,
+      label: settings[profile.id]?.name || profile.label,
+      command,
+      versionCommand: profile.versionCommand === profile.command ? command : profile.versionCommand,
+    };
+  });
+}
+
+export function providerVersionFromOutput(output: string) {
+  return output.match(/\bv?(\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1];
 }
 
 function storedScrollback(value: string | null) {

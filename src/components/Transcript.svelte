@@ -7,7 +7,7 @@
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import ImagePreview from './ImagePreview.svelte';
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
-  import type { MessageImage, ThreadState, TimelineMessage, ToolActivity } from '../types';
+  import type { HarnessProfile, MessageImage, ThreadState, TimelineMessage, ToolActivity } from '../types';
   import type { TimelineDisplayEntry } from '../types/timeline';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
@@ -17,11 +17,12 @@
   interface Props {
     thread: ThreadState;
     entries: TimelineDisplayEntry[];
+    profiles: HarnessProfile[];
     reducedMotion: boolean;
     autoFollowOutput: boolean;
   }
 
-  const { thread, entries, reducedMotion, autoFollowOutput }: Props = $props();
+  const { thread, entries, profiles, reducedMotion, autoFollowOutput }: Props = $props();
   let transcriptElement = $state<HTMLElement>();
   let canScrollUp = $state(false);
   let canScrollDown = $state(false);
@@ -230,7 +231,7 @@
                 in:fly={{ y: entryMotion ? (message.role === 'user' ? 10 : 4) : 0, duration: entryMotion ? 180 : 0 }}
               >
             <header>
-              <span>{message.role === 'user' ? 'You' : threadHarness(thread)}</span>
+              <span>{message.role === 'user' ? 'You' : threadHarness(thread, profiles)}</span>
               <time datetime={new Date(message.createdAt).toISOString()} title={new Date(message.createdAt).toLocaleString()}>
                 {timeFormatter.format(message.createdAt)}
               </time>

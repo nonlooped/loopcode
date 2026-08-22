@@ -2,7 +2,7 @@
 
 **Your coding agents, one desktop workspace.**
 
-Run Codex, Claude, Cursor, and OpenCode with project-bound threads, visible tool activity, and permission controls.
+Run Codex, Claude, Cursor, OpenCode, Grok, Pi, and fx with project-bound threads, visible tool activity, and permission controls.
 
 [Releases](https://github.com/nonlooped/loopcode/releases) · [Build from source](#build-from-source) · [Contribute](CONTRIBUTING.md)
 
@@ -10,7 +10,7 @@ Run Codex, Claude, Cursor, and OpenCode with project-bound threads, visible tool
 
 Agent CLIs work well for one task. They get messy when you juggle projects, providers, terminal tabs, and old conversations. LoopCode keeps the whole job in one window.
 
-- **Pick the right agent.** Use Codex, Claude, Cursor, or OpenCode per thread.
+- **Pick the right agent.** Use any supported provider per thread.
 - **Keep project context.** Threads, drafts, file references, and history survive restarts.
 - **See what changed.** Messages, commands, file edits, questions, and approvals share one timeline.
 - **Stay in control.** Restricted mode asks before sensitive actions. Full Access removes the prompts when you trust the agent.
@@ -19,12 +19,17 @@ Agent CLIs work well for one task. They get messy when you juggle projects, prov
 
 ## Supported agents
 
-| Agent    | Setup                                                              |
-| -------- | ------------------------------------------------------------------ |
-| Codex    | The pinned ACP adapter downloads on first launch.                  |
-| Claude   | The pinned ACP adapter downloads on first launch.                  |
-| Cursor   | Install the `agent` CLI, put it on `PATH`, then run `agent login`. |
-| OpenCode | Install `opencode` and put it on `PATH`.                           |
+| Agent    | Install                                                                                                                                             | Login                         |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| Codex    | `npm install --global @openai/codex`                                                                                                                | `codex login`                 |
+| Claude   | `npm install --global @anthropic-ai/claude-code`                                                                                                    | `claude auth login`           |
+| Cursor   | Linux: `curl https://cursor.com/install -fsS \| bash`<br>Windows: `irm 'https://cursor.com/install?win32=true' \| iex`                              | `agent login`                 |
+| OpenCode | `npm install --global opencode-ai`                                                                                                                  | `opencode auth login`         |
+| Grok     | Linux: `curl -fsSL https://x.ai/cli/install.sh \| bash -s 1.0.5`<br>Windows: `irm https://x.ai/cli/install.ps1 \| iex; grok update --version 1.0.5` | `grok login`                  |
+| Pi       | `npm install --global @earendil-works/pi-coding-agent@0.84.2`                                                                                       | Run `pi`, then enter `/login` |
+| fx       | `curl -fsSL https://fx.sh/setup.sh \| bash` on Linux                                                                                                | `fx login` or `fx setup`      |
+
+LoopCode downloads the pinned Codex, Claude, and Pi ACP adapters on first use. fx is visible but unavailable on Windows because its official release supports Linux and macOS only.
 
 Models, reasoning levels, and fast modes come from each agent, so every thread gets the controls its provider supports.
 
@@ -40,6 +45,18 @@ npm run tauri -- dev
 ```
 
 You will need Node.js 24+, npm 12+, Rust, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your operating system.
+
+### Browser preview
+
+Run the real frontend with Tauri's web mocks for browser-driven UI checks:
+
+```sh
+npm run web
+agent-browser open http://127.0.0.1:1420
+agent-browser snapshot -i
+```
+
+The preview persists workspace state in local storage and exposes deterministic provider models. Native filesystem, terminal, and agent-process behavior remains available only in the desktop app.
 
 ## Built on ACP
 
