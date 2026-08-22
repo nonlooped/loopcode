@@ -41,8 +41,10 @@ export class SessionUpdateHandler {
       update.sessionUpdate === "agent_thought_chunk"
     ) {
       const role = update.sessionUpdate === "agent_message_chunk" ? "agent" : "thought";
-      const fallback = this.#streamIds.get(connectionKey(thread.id, profileId))?.[role];
-      const messageId = update.messageId ?? fallback ?? `${role}-${Date.now()}`;
+      const streams =
+        this.#streamIds.get(connectionKey(thread.id, profileId)) ??
+        this.#resetStreams(thread.id, profileId);
+      const messageId = update.messageId ?? streams[role];
       const text = contentText(update.content);
       if (text) appendMessage(thread, messageId, role, text);
       return;
@@ -93,10 +95,12 @@ export class SessionUpdateHandler {
 
   #resetStreams(threadId: string, profileId: string) {
     const boundary = crypto.randomUUID();
-    this.#streamIds.set(connectionKey(threadId, profileId), {
+    const streams = {
       agent: `agent-${boundary}`,
       thought: `thought-${boundary}`,
-    });
+    };
+    this.#streamIds.set(connectionKey(threadId, profileId), streams);
+    return streams;
   }
 }
 
