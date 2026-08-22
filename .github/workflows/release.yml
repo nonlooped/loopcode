@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  provenance:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require successful master CI for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f event=push -f branch=master -f head_sha="$GITHUB_SHA" -f status=success \
+            --jq '[.workflow_runs[] | select(.head_sha == env.GITHUB_SHA and .event == "push" and .head_branch == "master" and .status == "completed" and .conclusion == "success")] | length')"
+          test "$count" -gt 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - run: node scripts/check-versions.mjs "$GITHUB_REF_NAME"
+
+  bundle:
+    needs: provenance
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            artifact: linux-bundles
+            cache-key: linux-rust
+          - platform: windows-latest
+            artifact: windows-bundles
+            cache-key: windows-rust
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm install --global npm@12
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: ${{ matrix.cache-key }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      - name: Install verified AppImage tools
+        if: runner.os == 'Linux'
+        run: |
+          tools="$HOME/.cache/tauri"
+          mkdir -p "$tools"
+          curl --fail --location --retry 3 https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64 --output "$tools/AppRun-x86_64"
+          curl --fail --location --retry 3 https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy/linuxdeploy-x86_64.AppImage --output "$tools/linuxdeploy-x86_64.AppImage"
+          curl --fail --location --retry 3 https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/b5eb8d05b4c0ed40107fe2158c5d8527f94568ef/linuxdeploy-plugin-gtk.sh --output "$tools/linuxdeploy-plugin-gtk.sh"
+          curl --fail --location --retry 3 https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gstreamer/2a2e67491c32995a3f279ad0ecbe77abd512b42a/linuxdeploy-plugin-gstreamer.sh --output "$tools/linuxdeploy-plugin-gstreamer.sh"
+          curl --fail --location --retry 3 https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage --output "$tools/linuxdeploy-plugin-appimage.AppImage"
+          cd "$tools"
+          sha256sum --check <<'SHA256'
+          f30140a43a0a59e46db21bdefdf749b9e9f2c6946e92afabbacf98b8ae73fb4f  AppRun-x86_64
+          e762bea85c8eb0d4b3508d46e5c1f037f717d0f9303ae3b4aafc8b04991fa1ef  linuxdeploy-x86_64.AppImage
+          cb379f9b0733e9ad9f8bd78f8c2fa038aef2478523bb7d4c8e64ff6a1ea3501a  linuxdeploy-plugin-gtk.sh
+          c107b49d84edbffc6ab226ed1007e0626a4f7aa2c3a36b7782bef62351d49e94  linuxdeploy-plugin-gstreamer.sh
+          a45d3e227bc7f397e9cf6bfa4c9507494efa2293357b6e86690a3de2ca992e79  linuxdeploy-plugin-appimage.AppImage
+          SHA256
+          chmod +x ./*
+      - run: npm run tauri -- build --ci -- --locked
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.rpm
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.sig
+          if-no-files-found: error
+
+  publish:
+    needs: bundle
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mapfile -d '' files < <(find artifacts -type f -print0)
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" "${files[@]}" --draft --generate-notes \
+              --title "LoopCode $GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          fi
+          gh release edit "$GITHUB_REF_NAME" --draft=false --repo "$GITHUB_REPOSITORY"

@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
 # Bump the version everywhere, regenerate CHANGELOG.md, commit and tag.
 # CI builds installers and publishes the GitHub Release when the tag lands.
-# Usage: scripts/release.sh X.Y.Z   then: git push --follow-tags
+# Usage: scripts/release.sh X.Y.Z
 set -euo pipefail
 
 ver="${1:?usage: scripts/release.sh X.Y.Z}"
 [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not semver: $ver" >&2; exit 1; }
-git diff --quiet --exit-code || { echo "working tree not clean" >&2; exit 1; }
+root="$(git rev-parse --show-toplevel)"
+[[ "$(pwd -P)" == "$root" ]] || { echo "run from repository root: $root" >&2; exit 1; }
+[[ "$(git branch --show-current)" == "master" ]] || { echo "release from master" >&2; exit 1; }
+[[ -z "$(git status --porcelain=v1)" ]] || { echo "working tree not clean" >&2; exit 1; }
+git fetch --quiet origin master
+[[ "$(git rev-parse HEAD)" == "$(git rev-parse refs/remotes/origin/master)" ]] || { echo "local master is not at origin/master" >&2; exit 1; }
+
+npm version "$ver" --no-git-tag-version
 
 node -e '
 const fs = require("fs");
 const ver = process.argv[1];
-for (const f of ["package.json", "src-tauri/tauri.conf.json"]) {
+for (const f of ["src-tauri/tauri.conf.json"]) {
   const s = fs.readFileSync(f, "utf8");
   // Replace only the version field; a full JSON round-trip would reformat the file.
-  const next = s.replace(/("version"\s*:\s*")[^"]*("/, `$1${ver}$2`);
+  const next = s.replace(/("version"\s*:\s*")[^"]*(")/, `$1${ver}$2`);
   if (next === s) { console.error(`no version field in ${f}`); process.exit(1); }
   fs.writeFileSync(f, next);
 }
@@ -24,9 +31,12 @@ fs.writeFileSync("src-tauri/Cargo.toml", t);
 ' "$ver"
 
 cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 > /dev/null # sync Cargo.lock without building
-npx --yes git-cliff --tag "v$ver" -o CHANGELOG.md
+node scripts/check-versions.mjs "v$ver"
+npx --yes git-cliff@2.13.1 --tag "v$ver" -o CHANGELOG.md
 
-git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
+git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
 git commit -m "chore(release): v$ver"
 git tag -a "v$ver" -m "v$ver"
-echo "tagged v$ver — push with: git push --follow-tags"
+echo "tagged v$ver"
+echo "push the commit first: git push origin master"
+echo "after CI / gate passes: git push origin v$ver"
