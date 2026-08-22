@@ -36,10 +36,13 @@ export function appendMessage(
   role: TimelineMessage["role"],
   text: string,
 ) {
+  if (!id.trim()) throw new Error("Message id cannot be empty");
   const existing = thread.messages.find((message) => message.id === id);
+  if (existing && existing.role !== role) throw new Error("Message role cannot change");
+  const timestamp = nextTimestamp(thread);
   if (existing) existing.text += text;
-  else thread.messages.push({ id, role, text, createdAt: nextTimestamp(thread) });
-  thread.updatedAt = nextTimestamp(thread);
+  else thread.messages.push({ id, role, text, createdAt: timestamp });
+  thread.updatedAt = timestamp;
 }
 
 export function titleFromPrompt(prompt: string) {
