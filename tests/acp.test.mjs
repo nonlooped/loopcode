@@ -410,6 +410,41 @@ void test("ignores broker events after the ACP stream has been stopped", async (
   );
 });
 
+void test("rejects concurrent connection attempts", async () => {
+  const fake = fakeTransport();
+  const launch = fake.transport.launch.bind(fake.transport);
+  let releaseLaunch;
+  const launchGate = new Promise((resolve) => {
+    releaseLaunch = resolve;
+  });
+  let launches = 0;
+  fake.transport.launch = async (...args) => {
+    launches += 1;
+    await launchGate;
+    return launch(...args);
+  };
+  const connection = new AcpConnection(
+    {
+      connectionStatus: () => {},
+      turnStatus: () => {},
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+  const request = { cwd: "C:\\workspace", command: "agent", args: [] };
+
+  const first = connection.connect(request);
+  await assert.rejects(connection.connect(request), /already active/);
+  assert.equal(launches, 1);
+  releaseLaunch();
+  await first;
+});
+
 void test("uses the official SDK to initialize, create a session, and route updates", async () => {
   const fake = fakeTransport({
     agentInfo: { name: "test-agent", title: "Test agent", version: "1.2.3" },

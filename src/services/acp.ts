@@ -132,6 +132,7 @@ export class AcpConnection {
   #questions = new Map<RpcId, PendingQuestions>();
   #activeToolIds = new Set<string>();
   #turnActive = false;
+  #connecting = false;
   #stopping = false;
 
   constructor(callbacks: AcpCallbacks, transport: AcpTransport = nativeTransport) {
@@ -144,6 +145,10 @@ export class AcpConnection {
   }
 
   async connect(request: ConnectRequest) {
+    if (this.#connecting || this.#harnessId || this.#stopping) {
+      throw new Error("This ACP connection is already active");
+    }
+    this.#connecting = true;
     this.#emitConnectionStatus("connecting");
     this.#profileId = request.profileId;
     this.#modelState = { models: [], reasoningOptions: [] };
@@ -278,6 +283,8 @@ export class AcpConnection {
       this.#emitConnectionStatus("error");
       await this.stop();
       throw error;
+    } finally {
+      this.#connecting = false;
     }
   }
 
@@ -431,8 +438,7 @@ export class AcpConnection {
   }
 
   async stop() {
-    if (!this.#harnessId || this.#stopping) return;
-    this.#stopping = true;
+    if (this.#stopping) return;
     const harnessId = this.#harnessId;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
@@ -444,8 +450,11 @@ export class AcpConnection {
     this.#activeToolIds.clear();
     this.#connection?.close();
     this.#connection = undefined;
+    this.#closeIncoming();
     this.#titleSessions.clear();
     this.#cancelInteractions();
+    if (!harnessId) return;
+    this.#stopping = true;
     try {
       await this.#transport.stop(harnessId);
     } catch (error) {
@@ -504,12 +513,14 @@ export class AcpConnection {
     this.#activeToolIds.clear();
     this.#titleSessions.clear();
     this.#cancelInteractions();
-    if (!this.#incomingClosed) {
-      this.#incomingClosed = true;
-      this.#incoming?.close();
-      this.#incoming = undefined;
-    }
+    this.#closeIncoming();
     if (!wasStopping) this.#callbacks.exited(event.data.code);
+  }
+
+  #closeIncoming() {
+    if (!this.#incomingClosed) this.#incoming?.close();
+    this.#incoming = undefined;
+    this.#incomingClosed = true;
   }
 
   #receiveSessionUpdate(notification: acp.SessionNotification) {
