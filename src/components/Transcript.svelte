@@ -11,7 +11,7 @@
   import type { TimelineDisplayEntry } from '../types/timeline';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
-  import { isStreamingMessage, workGroupMeta } from '../utils/timeline';
+  import { isStreamingMessage, shouldFollowTranscript, workGroupMeta } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -27,6 +27,7 @@
   let canScrollDown = $state(false);
   let pinnedToBottom = true;
   let renderedThreadId: string | undefined;
+  let renderedUserMessageId: string | undefined;
   let animateEntries = $state(false);
   let imagePreview = $state<{ src: string; name: string }>();
   let toolOpen = $state<Record<string, boolean>>({});
@@ -44,10 +45,17 @@
     const updatedAt = thread.updatedAt;
     const threadId = thread.id;
     const transcript = transcriptElement;
+    const userMessageId = thread.messages.filter((message) => message.role === 'user').at(-1)?.id;
     if (updatedAt >= 0 && transcript) {
       const threadChanged = renderedThreadId !== threadId;
-      const shouldFollow = threadChanged || (autoFollowOutput && pinnedToBottom);
+      const shouldFollow = shouldFollowTranscript(
+        threadChanged,
+        renderedUserMessageId !== userMessageId,
+        autoFollowOutput,
+        pinnedToBottom,
+      );
       renderedThreadId = threadId;
+      renderedUserMessageId = userMessageId;
       void tick().then(() => {
         if (!transcriptElement) return;
         if (shouldFollow) scrollToBottom('auto');

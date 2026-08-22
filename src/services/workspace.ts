@@ -98,15 +98,20 @@ export class Workspace {
 
   removeThread(threadId: string, defaultWorkingFolder: string) {
     this.state.threads = this.state.threads.filter((thread) => thread.id !== threadId);
+    let replacement: ThreadState | undefined;
     if (this.state.threads.length === 0) {
       const project = this.activeProject;
-      this.state.threads = [
-        createThread(project?.path ?? defaultWorkingFolder, project?.id ?? null, this.catalogs),
-      ];
+      replacement = createThread(
+        project?.path ?? defaultWorkingFolder,
+        project?.id ?? null,
+        this.catalogs,
+      );
+      this.state.threads = [replacement];
     }
     if (!this.state.threads.some((thread) => thread.id === this.state.selectedThreadId)) {
       this.state.selectedThreadId = this.state.threads[0].id;
     }
+    return replacement;
   }
 
   renameThread(threadId: string, title: string) {

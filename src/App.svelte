@@ -428,7 +428,8 @@
     for (const [key, interaction] of Object.entries(interactions)) {
       if (interaction.threadId === threadId) delete interactions[key];
     }
-    workspace.removeThread(threadId, defaultWorkingFolder);
+    const replacement = workspace.removeThread(threadId, defaultWorkingFolder);
+    if (replacement) applyNewThreadDefaults(replacement);
   }
 
   async function clearArchivedThreads() {

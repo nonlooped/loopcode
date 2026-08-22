@@ -163,9 +163,11 @@ void test("keeps project, selection, reuse, and deletion invariants behind one i
   assert.equal(state.selectedProjectId, null);
   assert.equal(first.projectId, null);
 
+  let replacement;
   for (const id of state.threads.map((thread) => thread.id)) {
-    workspace.removeThread(id, "C:\\default");
+    replacement = workspace.removeThread(id, "C:\\default") ?? replacement;
   }
+  assert.equal(replacement, state.threads[0]);
   assert.equal(state.threads.length, 1);
   assert.equal(state.selectedThreadId, state.threads[0].id);
   assert.equal(state.threads[0].cwd, "C:\\default");

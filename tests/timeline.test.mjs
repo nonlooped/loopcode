@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isStreamingMessage, timelineEntries } from "../src/utils/timeline.ts";
+import {
+  isStreamingMessage,
+  shouldFollowTranscript,
+  timelineEntries,
+} from "../src/utils/timeline.ts";
 
 function thread(status = "ready") {
   return {
@@ -71,6 +75,11 @@ void test("keeps the substantive response visible when a completed turn ends wit
 
   const entries = timelineEntries(value);
   assert.ok(entries.some((entry) => entry.type === "message" && entry.message.id === "final"));
+});
+
+void test("keeps submitted prompts visible when automatic output following is off", () => {
+  assert.equal(shouldFollowTranscript(false, true, false, true), true);
+  assert.equal(shouldFollowTranscript(false, false, false, true), false);
 });
 
 void test("does not mark the previous turn's response as streaming while the next turn starts", () => {
