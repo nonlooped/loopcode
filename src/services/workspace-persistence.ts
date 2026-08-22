@@ -2,10 +2,15 @@ import { saveWorkspace } from "./native.ts";
 import type { PersistedWorkspace } from "../types/index.ts";
 
 export class WorkspacePersistence {
+  readonly #saveWorkspace: typeof saveWorkspace;
   #ready = false;
   #timer?: ReturnType<typeof setTimeout>;
   #pending?: PersistedWorkspace;
   #save?: Promise<void>;
+
+  constructor(save = saveWorkspace) {
+    this.#saveWorkspace = save;
+  }
 
   setReady() {
     this.#ready = true;
@@ -32,11 +37,12 @@ export class WorkspacePersistence {
     const workspace = this.#pending;
     if (!workspace) return;
     this.#pending = undefined;
-    this.#save = saveWorkspace(workspace);
+    this.#save = this.#saveWorkspace(workspace);
     try {
       await this.#save;
     } catch (error) {
       this.#pending ??= workspace;
+      this.queue(this.#pending);
       throw error;
     } finally {
       this.#save = undefined;
