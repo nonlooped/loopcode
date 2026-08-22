@@ -1,9 +1,15 @@
-use std::{fs, io::Write, path::Path};
+use std::{
+    fs,
+    io::{self, Write},
+    path::Path,
+    sync::Mutex,
+};
 
 use atomic_write_file::AtomicWriteFile;
 
 pub const THREADS_FILE_NAME: &str = "threads.json";
 const BACKUP_FILE_NAME: &str = "threads.json.bak";
+static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn load_from_directory<T>(
     directory: &Path,
@@ -44,6 +50,9 @@ pub fn load_from_directory<T>(
 }
 
 pub fn save_to_directory(directory: &Path, workspace_json: &str) -> Result<(), String> {
+    let _save = SAVE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     fs::create_dir_all(directory).map_err(|error| {
         format!(
             "Could not create the LoopCode data directory {}: {error}",
@@ -60,35 +69,20 @@ pub fn save_to_directory(directory: &Path, workspace_json: &str) -> Result<(), S
         .and_then(|()| file.write_all(b"\n"))
         .map_err(|error| format!("Could not write {}: {error}", target.display()))?;
 
-    if backup.exists() {
-        fs::remove_file(&backup)
-            .map_err(|error| format!("Could not replace backup {}: {error}", backup.display()))?;
-    }
     if target.exists() {
-        fs::rename(&target, &backup).map_err(|error| {
-            format!(
-                "Could not rotate {} to {}: {error}",
-                target.display(),
-                backup.display()
-            )
+        let mut previous = fs::File::open(&target)
+            .map_err(|error| format!("Could not read {}: {error}", target.display()))?;
+        let mut backup_file = AtomicWriteFile::open(&backup)
+            .map_err(|error| format!("Could not open {}: {error}", backup.display()))?;
+        io::copy(&mut previous, &mut backup_file)
+            .map_err(|error| format!("Could not write {}: {error}", backup.display()))?;
+        backup_file.commit().map_err(|error| {
+            format!("Could not publish {} atomically: {error}", backup.display())
         })?;
     }
 
-    if let Err(error) = file.commit() {
-        restore_backup(&backup, &target);
-        return Err(format!(
-            "Could not publish {} atomically: {error}",
-            target.display()
-        ));
-    }
-
-    Ok(())
-}
-
-fn restore_backup(backup: &Path, target: &Path) {
-    if backup.exists() && !target.exists() {
-        let _ = fs::rename(backup, target);
-    }
+    file.commit()
+        .map_err(|error| format!("Could not publish {} atomically: {error}", target.display()))
 }
 
 #[cfg(test)]
@@ -141,6 +135,37 @@ mod tests {
             .filter(|name| name != THREADS_FILE_NAME && name != BACKUP_FILE_NAME)
             .collect();
         assert!(leftovers.is_empty(), "stray files: {leftovers:?}");
+    }
+
+    #[test]
+    fn concurrent_saves_leave_valid_primary_and_backup_files() {
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        save_to_directory(directory.path(), r#"{"seed":true}"#).expect("seed should save");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+        let saves: Vec<_> = (0..8)
+            .map(|index| {
+                let path = directory.path().to_owned();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    save_to_directory(&path, &format!(r#"{{"save":{index}}}"#))
+                })
+            })
+            .collect();
+
+        for save in saves {
+            save.join()
+                .expect("save thread should finish")
+                .expect("concurrent save should succeed");
+        }
+        for name in [THREADS_FILE_NAME, BACKUP_FILE_NAME] {
+            let contents = fs::read_to_string(directory.path().join(name))
+                .expect("snapshot should remain readable");
+            assert!(
+                contents.trim().starts_with("{\"save\":"),
+                "invalid {name}: {contents}"
+            );
+        }
     }
 
     #[test]
