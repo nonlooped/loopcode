@@ -43,9 +43,11 @@ fn wrap_harness_command(command: Command) -> CommandWrap {
 }
 
 #[derive(Default)]
+pub struct FrontendGeneration(pub(crate) AtomicU64);
+
+#[derive(Default)]
 pub struct Broker {
     next_id: AtomicU64,
-    frontend_generation: AtomicU64,
     shutting_down: AtomicBool,
     lifecycle: Mutex<()>,
     harnesses: Mutex<HashMap<String, HarnessHandle>>,
@@ -114,6 +116,7 @@ pub enum BrokerEvent {
 pub async fn launch_harness(
     app: AppHandle,
     broker: State<'_, Broker>,
+    frontend_generation: State<'_, FrontendGeneration>,
     request: LaunchRequest,
     on_event: Channel<BrokerEvent>,
 ) -> Result<LaunchResult, String> {
@@ -131,7 +134,7 @@ pub async fn launch_harness(
     if broker.shutting_down.load(Ordering::Acquire) {
         return Err("LoopCode is shutting down".into());
     }
-    if request.frontend_generation != broker.frontend_generation.load(Ordering::Acquire) {
+    if request.frontend_generation != frontend_generation.0.load(Ordering::Acquire) {
         return Err("The frontend was replaced before the harness could start".into());
     }
     stop_matching_harnesses(
@@ -495,12 +498,13 @@ async fn read_bounded_line<R: AsyncBufRead + Unpin>(
 pub async fn register_frontend(
     broker: State<'_, Broker>,
     terminals: State<'_, crate::terminal::TerminalManager>,
+    frontend_generation: State<'_, FrontendGeneration>,
     diagnostics: State<'_, Diagnostics>,
 ) -> Result<u64, String> {
-    let generation = broker.register_frontend(&diagnostics).await?;
-    terminals
-        .register_frontend(generation, &diagnostics)
+    let generation = broker
+        .register_frontend(&frontend_generation, &diagnostics)
         .await?;
+    terminals.register_frontend(&diagnostics).await?;
     Ok(generation)
 }
 
@@ -533,12 +537,16 @@ pub async fn stop_all_harnesses(
 }
 
 impl Broker {
-    async fn register_frontend(&self, diagnostics: &Diagnostics) -> Result<u64, String> {
+    async fn register_frontend(
+        &self,
+        frontend_generation: &FrontendGeneration,
+        diagnostics: &Diagnostics,
+    ) -> Result<u64, String> {
         let _lifecycle = self.lifecycle.lock().await;
         if self.shutting_down.load(Ordering::Acquire) {
             return Err("LoopCode is shutting down".into());
         }
-        let generation = self.frontend_generation.fetch_add(1, Ordering::AcqRel) + 1;
+        let generation = frontend_generation.0.fetch_add(1, Ordering::AcqRel) + 1;
         self.stop_all_locked(diagnostics, "frontend_registered")
             .await?;
         diagnostics.record(

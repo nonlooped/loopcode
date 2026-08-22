@@ -5,7 +5,8 @@ mod project_files;
 mod terminal;
 
 use broker::{
-    Broker, launch_harness, register_frontend, send_rpc, stop_all_harnesses, stop_harness,
+    Broker, FrontendGeneration, launch_harness, register_frontend, send_rpc, stop_all_harnesses,
+    stop_harness,
 };
 use diagnostics::Diagnostics;
 use project_files::{
@@ -283,6 +284,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Broker::default())
+        .manage(FrontendGeneration::default())
         .manage(ProjectFileWatchers::default())
         .manage(TerminalManager::default())
         .setup(|app| {

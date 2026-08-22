@@ -1,4 +1,4 @@
-use crate::diagnostics::Diagnostics;
+use crate::{broker::FrontendGeneration, diagnostics::Diagnostics};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -23,7 +23,6 @@ const MAX_TERMINAL_INPUT_BYTES: usize = 1024 * 1024;
 #[derive(Default)]
 pub struct TerminalManager {
     next_id: AtomicU64,
-    frontend_generation: AtomicU64,
     shutting_down: AtomicBool,
     lifecycle: Mutex<()>,
     sessions: Mutex<HashMap<String, TerminalHandle>>,
@@ -82,6 +81,7 @@ pub enum TerminalEvent {
 pub async fn start_terminal(
     app: AppHandle,
     manager: State<'_, TerminalManager>,
+    frontend_generation: State<'_, FrontendGeneration>,
     diagnostics: State<'_, Diagnostics>,
     request: StartTerminalRequest,
     on_event: Channel<TerminalEvent>,
@@ -108,7 +108,7 @@ pub async fn start_terminal(
     if manager.shutting_down.load(Ordering::Acquire) {
         return Err("LoopCode is shutting down".into());
     }
-    if request.frontend_generation != manager.frontend_generation.load(Ordering::Acquire) {
+    if request.frontend_generation != frontend_generation.0.load(Ordering::Acquire) {
         return Err("The frontend was replaced before the terminal could start".into());
     }
     stop_matching_terminal(&manager, &diagnostics, &thread_id).await?;
@@ -341,20 +341,13 @@ pub async fn stop_all_terminals(
 }
 
 impl TerminalManager {
-    pub async fn register_frontend(
-        &self,
-        generation: u64,
-        diagnostics: &Diagnostics,
-    ) -> Result<(), String> {
+    pub async fn register_frontend(&self, diagnostics: &Diagnostics) -> Result<(), String> {
         let _lifecycle = self.lifecycle.lock().await;
         if self.shutting_down.load(Ordering::Acquire) {
             return Err("LoopCode is shutting down".into());
         }
         self.stop_all_locked(diagnostics, "frontend_registered")
-            .await?;
-        self.frontend_generation
-            .store(generation, Ordering::Release);
-        Ok(())
+            .await
     }
 
     pub async fn stop_all(&self, diagnostics: &Diagnostics, reason: &str) -> Result<(), String> {
