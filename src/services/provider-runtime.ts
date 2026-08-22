@@ -1,8 +1,8 @@
 import type { SessionUpdate } from "@agentclientprotocol/sdk";
 
 import {
-  providerDefinitionById,
   providerDefinitions,
+  providerSupportsPlatform,
   type ProviderDefinition,
 } from "../config/provider-definitions.ts";
 import type {
@@ -21,6 +21,12 @@ import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { jsonValueSchema } from "../utils/json.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
 import { discoverModelOptions, modelOptionsFromStates } from "../utils/model-options.ts";
+import {
+  firstReadyProviderId,
+  titleGenerationSelection,
+  unavailableReason,
+  type TitleGenerationPreference,
+} from "../utils/provider-availability.ts";
 import { applyReasoningForSelectedModel } from "../utils/reasoning-options.ts";
 import { buildThreadTitlePrompt, normalizeThreadTitle } from "../utils/thread-title.ts";
 import { AcpConnection, readModelState, type AcpModelState, type PromptContent } from "./acp.ts";
@@ -35,16 +41,26 @@ interface RuntimeHooks {
 export class ProviderRuntime {
   #catalogs: Record<string, ProviderModelCatalog>;
   #hooks: RuntimeHooks;
+  #profiles: ProviderDefinition[] = providerDefinitions;
+  #threads: ThreadState[] = [];
+  #disabledProfiles = new Set<string>();
+  #baseModels = new Map<string, ProviderModelCatalog["models"]>();
+  #customModels = new Map<string, ProviderModelCatalog["models"]>();
   #permissionMode: PermissionMode = "restricted";
   #connections = new Map<string, AcpConnection>();
   #tokens = new Map<string, string>();
   #turnTokens = new Map<string, string>();
   #titleTokens = new Map<string, string>();
+  #titleConnections = new Map<string, AcpConnection>();
+  #titlePreference?: TitleGenerationPreference;
   #updates = new SessionUpdateHandler(applyProviderConfigState);
 
   constructor(catalogs: Record<string, ProviderModelCatalog>, hooks: RuntimeHooks) {
     this.#catalogs = catalogs;
     this.#hooks = hooks;
+    for (const [profileId, catalog] of Object.entries(catalogs)) {
+      this.#baseModels.set(profileId, catalog.models);
+    }
   }
 
   connection(threadId: string, profileId: string) {
@@ -55,16 +71,64 @@ export class ProviderRuntime {
     this.#permissionMode = mode;
   }
 
+  setTitlePreference(preference: TitleGenerationPreference) {
+    this.#titlePreference = preference;
+  }
+
+  setProfiles(profiles: ProviderDefinition[], threads = this.#threads) {
+    const changedCommands = profiles
+      .filter(
+        (profile) =>
+          this.#profiles.find((current) => current.id === profile.id)?.command !== profile.command,
+      )
+      .map((profile) => profile.id);
+    this.#profiles = profiles;
+    for (const profileId of changedCommands) this.#disconnectProfile(profileId, threads);
+  }
+
+  setCustomModels(
+    profileId: string,
+    models: ProviderModelCatalog["models"],
+    threads = this.#threads,
+  ) {
+    this.#customModels.set(profileId, models);
+    const catalog = this.#catalogs[profileId];
+    if (catalog?.status !== "ready") return;
+    const mergedModels = mergeProviderModels(this.#baseModels.get(profileId) ?? [], models);
+    const selectedModelId = mergedModels.some((model) => model.id === catalog.selectedModelId)
+      ? catalog.selectedModelId
+      : mergedModels[0]?.id;
+    this.#catalogs[profileId] = { ...catalog, models: mergedModels, selectedModelId };
+    this.#disconnectProfile(profileId, threads);
+    this.applyCatalog(profileId, threads);
+  }
+
+  setDisabledProfiles(profileIds: string[], threads = this.#threads) {
+    this.#threads = [...threads];
+    const disabled = new Set(profileIds);
+    for (const profileId of disabled) {
+      if (!this.#disabledProfiles.has(profileId)) this.#disconnectProfile(profileId, threads);
+    }
+    this.#disabledProfiles = disabled;
+    const fallbackProfileId = firstReadyProviderId(this.#enabledProfiles(), this.#catalogs);
+    if (!fallbackProfileId) return;
+    for (const thread of threads) {
+      if (disabled.has(thread.profileId)) this.activate(thread, fallbackProfileId, false);
+    }
+  }
+
   runTurn(thread: ThreadState, text: string, images: MessageImage[] = [], content?: PromptPart[]) {
+    this.#rememberThread(thread);
     const profileId = thread.profileId;
     const provider = thread.providers[profileId];
+    if (this.#disabledProfiles.has(profileId)) return;
     if (!text && images.length === 0) return;
+    if (images.length > 0 && !this.#profileById(profileId).supportsImages) return;
     if (provider.turnStatus !== "idle") return;
     if (provider.connectionStatus !== "disconnected" && provider.connectionStatus !== "ready")
       return;
     if (this.#catalogs[profileId]?.status !== "ready" || !provider.selectedModelId) return;
 
-    const selectedModelId = provider.selectedModelId;
     const isFirstPrompt = !thread.messages.some((message) => message.role === "user");
     const turnToken = crypto.randomUUID();
     this.#turnTokens.set(thread.id, turnToken);
@@ -74,21 +138,18 @@ export class ProviderRuntime {
     addMessage(thread, "user", text, images, content);
     this.#updates.startTurn(thread.id, profileId);
 
-    return this.#completeTurn(
-      thread,
-      profileId,
-      selectedModelId,
-      text,
-      images,
-      content,
-      isFirstPrompt,
-      turnToken,
-    );
+    return this.#completeTurn(thread, profileId, text, images, content, isFirstPrompt, turnToken);
   }
 
   activate(thread: ThreadState, profileId: string, announceSwitch = true) {
-    if (profileId === thread.profileId) return;
-    const profile = providerDefinitionById(profileId);
+    this.#rememberThread(thread);
+    if (
+      profileId === thread.profileId ||
+      this.#disabledProfiles.has(profileId) ||
+      this.#catalogs[profileId]?.status === "unavailable"
+    )
+      return;
+    const profile = this.#profileById(profileId);
     this.#turnTokens.delete(thread.id);
     thread.profileId = profile.id;
     thread.updatedAt = Date.now();
@@ -99,17 +160,36 @@ export class ProviderRuntime {
   }
 
   async discoverAll(cwd: string, threads: ThreadState[]) {
+    this.#threads = [...threads];
+    this.setDisabledProfiles([...this.#disabledProfiles], threads);
     await Promise.allSettled(
-      providerDefinitions.map((profile) => this.discover(profile, cwd, threads)),
+      this.#enabledProfiles().map((profile) => this.discover(profile, cwd, threads)),
     );
   }
 
   async discover(profile: ProviderDefinition, cwd: string, threads: ThreadState[]) {
+    this.#threads = [...threads];
+    if (this.#disabledProfiles.has(profile.id)) return;
+    if (!providerSupportsPlatform(profile)) {
+      this.#catalogs[profile.id] = {
+        status: "unavailable",
+        models: [],
+        reasoningOptions: [],
+        unavailableReason: "unsupported-platform",
+        error: `${profile.label} is not available on this platform.`,
+      };
+      this.applyCatalog(profile.id, threads);
+      return;
+    }
     this.#catalogs[profile.id] = { status: "loading", models: [], reasoningOptions: [] };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
+    let agentVersion: string | undefined;
     const connection = new AcpConnection({
       connectionStatus: () => {},
       turnStatus: () => {},
+      initialized: (agentInfo) => {
+        agentVersion = agentInfo?.version;
+      },
       ready: (session) => {
         discovered = session;
       },
@@ -135,20 +215,29 @@ export class ProviderRuntime {
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
       }
+      this.#baseModels.set(profile.id, discovered.models);
+      const models = mergeProviderModels(
+        discovered.models,
+        this.#customModels.get(profile.id) ?? [],
+      );
       const advertisedModelId = discovered.selectedModelId;
       const selectedModelId =
-        advertisedModelId && discovered.models.some((model) => model.id === advertisedModelId)
+        advertisedModelId && models.some((model) => model.id === advertisedModelId)
           ? advertisedModelId
-          : discovered.models[0].id;
+          : models[0].id;
       const { reasoningOptionsByModel, fastModeOptionsByModel } =
-        profile.id === "cursor"
-          ? modelOptionsFromStates(cursorModels)
-          : await discoverModelOptions(connection, discovered);
+        await discoverProviderModelOptions(
+          profile,
+          connection,
+          { ...discovered, selectedModelId },
+          cursorModels,
+        );
       const selectedReasoning = reasoningOptionsByModel[selectedModelId];
       const selectedFastMode = fastModeOptionsByModel[selectedModelId];
       this.#catalogs[profile.id] = {
         status: "ready",
-        models: discovered.models,
+        agentVersion,
+        models,
         selectedModelId,
         reasoningOptions: selectedReasoning?.options ?? [],
         selectedReasoningId: selectedReasoning?.selectedId,
@@ -161,10 +250,13 @@ export class ProviderRuntime {
         fastModeDescription: selectedFastMode?.description,
       };
     } catch (error) {
+      this.#baseModels.set(profile.id, []);
       this.#catalogs[profile.id] = {
-        status: "error",
+        status: "unavailable",
+        agentVersion,
         models: [],
         reasoningOptions: [],
+        unavailableReason: unavailableReason(error),
         error: error instanceof Error ? error.message : String(error),
       };
     } finally {
@@ -179,27 +271,46 @@ export class ProviderRuntime {
 
   applyCatalog(profileId: string, threads: ThreadState[]) {
     const catalog = this.#catalogs[profileId];
-    if (!catalog || catalog.status !== "ready") return;
+    if (!catalog) return;
     for (const thread of threads) {
       const provider = thread.providers[profileId];
       if (!provider) continue;
-      provider.models = catalog.models;
-      if (
-        !provider.selectedModelId ||
-        !catalog.models.some((model) => model.id === provider.selectedModelId)
-      ) {
-        provider.selectedModelId = catalog.selectedModelId;
+      if (catalog.status === "ready") {
+        provider.models = catalog.models;
+        if (
+          !provider.selectedModelId ||
+          !catalog.models.some((model) => model.id === provider.selectedModelId)
+        ) {
+          provider.selectedModelId = catalog.selectedModelId;
+        }
+        provider.reasoningOptionsByModel = catalog.reasoningOptionsByModel;
+        applyReasoningForSelectedModel(provider);
+        provider.fastModeOptionsByModel = catalog.fastModeOptionsByModel;
+        applyFastModeForSelectedModel(provider);
+      } else if (catalog.status === "unavailable") {
+        provider.models = [];
+        provider.selectedModelId = undefined;
       }
-      provider.reasoningOptionsByModel = catalog.reasoningOptionsByModel;
-      applyReasoningForSelectedModel(provider);
-      provider.fastModeOptionsByModel = catalog.fastModeOptionsByModel;
-      applyFastModeForSelectedModel(provider);
+    }
+
+    const fallbackProfileId = firstReadyProviderId(this.#enabledProfiles(), this.#catalogs);
+    if (!fallbackProfileId) return;
+    for (const thread of threads) {
+      if (this.#catalogs[thread.profileId]?.status === "unavailable") {
+        this.activate(thread, fallbackProfileId, false);
+      }
     }
   }
 
   async connect(thread: ThreadState, profileId: string) {
-    if (!thread.cwd) return;
-    const profile = providerDefinitionById(profileId);
+    this.#rememberThread(thread);
+    if (
+      !thread.cwd ||
+      this.#disabledProfiles.has(profileId) ||
+      this.#catalogs[profileId]?.status !== "ready"
+    )
+      return;
+    const profile = this.#profileById(profileId);
     const provider = thread.providers[profile.id];
     const selectedModelId = provider.selectedModelId;
     const requestedReasoningId = provider.selectedReasoningId;
@@ -291,6 +402,10 @@ export class ProviderRuntime {
         }).catch(() => {});
         if (error.scope !== "turn") connectionReportedError = true;
         this.#setError(thread, profile.id, error);
+        const reason = unavailableReason(error.message);
+        if (reason === "authentication" || reason === "missing-executable") {
+          this.#markProviderUnavailable(profile, error.message, reason);
+        }
         if (thread.profileId === profile.id) addMessage(thread, "error", error.message);
       },
       exited: (code) => {
@@ -381,7 +496,6 @@ export class ProviderRuntime {
   async #completeTurn(
     thread: ThreadState,
     profileId: string,
-    selectedModelId: string,
     text: string,
     images: MessageImage[],
     content: PromptPart[] | undefined,
@@ -406,9 +520,7 @@ export class ProviderRuntime {
 
     const turnCompletion = connection.prompt(acpPrompt(content, text, images));
     const titleCompletion =
-      isFirstPrompt && text
-        ? this.#generateThreadTitle(thread, connection, text, selectedModelId)
-        : undefined;
+      isFirstPrompt && text ? this.#generateThreadTitle(thread, text) : undefined;
     try {
       await turnCompletion;
     } catch {
@@ -419,25 +531,53 @@ export class ProviderRuntime {
     await titleCompletion;
   }
 
-  async #generateThreadTitle(
-    thread: ThreadState,
-    connection: AcpConnection,
-    request: string,
-    selectedModelId: string,
-  ) {
+  async #generateThreadTitle(thread: ThreadState, request: string) {
     const token = crypto.randomUUID();
     this.#titleTokens.set(thread.id, token);
+    const selection = this.#titlePreference
+      ? titleGenerationSelection(this.#titlePreference, this.#enabledProfiles(), this.#catalogs)
+      : undefined;
     let title: string | undefined;
+    let connection: AcpConnection | undefined;
     try {
-      title = normalizeThreadTitle(
-        await connection.generateTitle(
-          thread.cwd,
-          buildThreadTitlePrompt(request),
-          selectedModelId,
-        ),
-      );
+      if (selection) {
+        connection = new AcpConnection({
+          connectionStatus: () => {},
+          turnStatus: () => {},
+          ready: () => {},
+          update: () => {},
+          permission: () => {},
+          stderr: () => {},
+          error: () => {},
+          exited: () => {},
+        });
+        this.#titleConnections.set(thread.id, connection);
+        await connection.connect({
+          cwd: thread.cwd,
+          command: selection.profile.command,
+          args: selection.profile.args,
+          profileId: selection.profile.id,
+          threadId: thread.id,
+        });
+        title = normalizeThreadTitle(
+          await connection.generateTitle(
+            thread.cwd,
+            buildThreadTitlePrompt(request),
+            selection.model.id,
+          ),
+        );
+      }
     } catch {
-      // Use the local fallback when a provider cannot create a quiet title session.
+      // Title generation is isolated from the active turn and falls back locally.
+    } finally {
+      if (connection && this.#titleConnections.get(thread.id) === connection) {
+        this.#titleConnections.delete(thread.id);
+      }
+      try {
+        await connection?.stop();
+      } catch {
+        // Preserve the generated title or local fallback when cleanup fails.
+      }
     }
     if (this.#titleTokens.get(thread.id) !== token) return;
     this.#titleTokens.delete(thread.id);
@@ -447,6 +587,13 @@ export class ProviderRuntime {
 
   async selectModel(thread: ThreadState, profileId: string, modelId: string) {
     const provider = thread.providers[profileId];
+    const catalog = this.#catalogs[profileId];
+    if (
+      !catalog ||
+      catalog.status === "unavailable" ||
+      (catalog.status === "ready" && !catalog.models.some((model) => model.id === modelId))
+    )
+      return;
     const previousModelId = provider.selectedModelId;
     provider.selectedModelId = modelId;
     provider.error = undefined;
@@ -461,8 +608,7 @@ export class ProviderRuntime {
     }
     try {
       const connection = this.connection(thread.id, profileId);
-      if (!connection)
-        throw new Error(`${providerDefinitionById(profileId).label} is not connected`);
+      if (!connection) throw new Error(`${this.#profileById(profileId).label} is not connected`);
       const updated = await connection.setModel(provider.modelConfigId, modelId);
       applyProviderConfigState(provider, updated);
       provider.selectedModelId = updated.selectedModelId ?? modelId;
@@ -490,12 +636,12 @@ export class ProviderRuntime {
     try {
       const connection = this.connection(thread.id, thread.profileId);
       if (!connection) {
-        throw new Error(`${providerDefinitionById(thread.profileId).label} is not connected`);
+        throw new Error(`${this.#profileById(thread.profileId).label} is not connected`);
       }
       const updated = await connection.setConfigOption(provider.reasoningConfigId, reasoningId);
       if (updated.selectedReasoningId !== reasoningId) {
         throw new Error(
-          `${providerDefinitionById(thread.profileId).label} did not apply reasoning variant ${reasoningId}.`,
+          `${this.#profileById(thread.profileId).label} did not apply reasoning variant ${reasoningId}.`,
         );
       }
       applyProviderConfigState(provider, updated);
@@ -517,7 +663,7 @@ export class ProviderRuntime {
     try {
       const connection = this.connection(thread.id, thread.profileId);
       if (!connection) {
-        throw new Error(`${providerDefinitionById(thread.profileId).label} is not connected`);
+        throw new Error(`${this.#profileById(thread.profileId).label} is not connected`);
       }
       const updated = await connection.setFastModeConfigOption(
         provider.fastModeConfigId,
@@ -525,9 +671,7 @@ export class ProviderRuntime {
         provider.fastModeValueType,
       );
       if (updated.fastModeEnabled !== enabled) {
-        throw new Error(
-          `${providerDefinitionById(thread.profileId).label} did not apply Fast mode.`,
-        );
+        throw new Error(`${this.#profileById(thread.profileId).label} did not apply Fast mode.`);
       }
       applyProviderConfigState(provider, updated);
     } catch (error) {
@@ -539,9 +683,12 @@ export class ProviderRuntime {
   }
 
   async removeThread(threadId: string) {
+    this.#threads = this.#threads.filter((thread) => thread.id !== threadId);
     this.#turnTokens.delete(threadId);
     this.#titleTokens.delete(threadId);
-    const threadConnections = providerDefinitions.flatMap((profile) => {
+    const titleConnection = this.#titleConnections.get(threadId);
+    this.#titleConnections.delete(threadId);
+    const threadConnections = this.#profiles.flatMap((profile) => {
       const key = connectionKey(threadId, profile.id);
       this.#tokens.delete(key);
       const connection = this.#connections.get(key);
@@ -549,7 +696,11 @@ export class ProviderRuntime {
       this.#updates.clear(threadId, profile.id);
       return connection ? [connection] : [];
     });
-    await Promise.allSettled(threadConnections.map((connection) => connection.stop()));
+    await Promise.allSettled(
+      [...threadConnections, ...(titleConnection ? [titleConnection] : [])].map((connection) =>
+        connection.stop(),
+      ),
+    );
   }
 
   cancel(thread: ThreadState) {
@@ -575,6 +726,60 @@ export class ProviderRuntime {
     answer: QuestionAnswer,
   ) {
     this.connection(threadId, profileId)?.answerQuestion(requestId, answer);
+  }
+
+  #rememberThread(thread: ThreadState) {
+    if (!this.#threads.some((item) => item.id === thread.id)) this.#threads.push(thread);
+  }
+
+  #profileById(profileId: string) {
+    return this.#profiles.find((profile) => profile.id === profileId) ?? this.#profiles[0];
+  }
+
+  #enabledProfiles() {
+    return this.#profiles.filter((profile) => !this.#disabledProfiles.has(profile.id));
+  }
+
+  #disconnectProfile(profileId: string, threads: ThreadState[]) {
+    const connections: AcpConnection[] = [];
+    for (const thread of threads) {
+      const key = connectionKey(thread.id, profileId);
+      this.#tokens.delete(key);
+      const connection = this.#connections.get(key);
+      this.#connections.delete(key);
+      if (connection) connections.push(connection);
+      const provider = thread.providers[profileId];
+      if (provider) {
+        provider.connectionStatus = "disconnected";
+        provider.turnStatus = "idle";
+      }
+      this.#hooks.clearPermission(thread.id, profileId);
+    }
+    void Promise.allSettled(connections.map((connection) => connection.stop()));
+  }
+
+  #markProviderUnavailable(
+    profile: ProviderDefinition,
+    message: string,
+    reason: "authentication" | "missing-executable",
+  ) {
+    this.#catalogs[profile.id] = {
+      status: "unavailable",
+      models: [],
+      reasoningOptions: [],
+      unavailableReason: reason,
+      error: message,
+    };
+    const connections: AcpConnection[] = [];
+    for (const thread of this.#threads) {
+      const key = connectionKey(thread.id, profile.id);
+      this.#tokens.delete(key);
+      const connection = this.#connections.get(key);
+      this.#connections.delete(key);
+      if (connection) connections.push(connection);
+    }
+    void Promise.allSettled(connections.map((connection) => connection.stop()));
+    this.applyCatalog(profile.id, this.#threads);
   }
 
   #setConnectionStatus(thread: ThreadState, profileId: string, status: ConnectionStatus) {
@@ -631,6 +836,25 @@ export class ProviderRuntime {
     this.#setError(thread, profileId, details);
     if (thread.profileId === profileId) addMessage(thread, "error", details.message);
   }
+}
+
+export async function discoverProviderModelOptions(
+  profile: ProviderDefinition,
+  connection: Pick<AcpConnection, "setModel">,
+  state: AcpModelState,
+  cursorStates: Awaited<ReturnType<AcpConnection["listCursorModels"]>> = [],
+) {
+  if (profile.id === "cursor") return modelOptionsFromStates(cursorStates);
+  if (profile.probeModelOptions) return discoverModelOptions(connection, state);
+  const model = state.models.find((item) => item.id === state.selectedModelId);
+  return modelOptionsFromStates(model ? [{ ...state, model }] : []);
+}
+
+export function mergeProviderModels(
+  advertised: ProviderModelCatalog["models"],
+  custom: ProviderModelCatalog["models"],
+) {
+  return [...new Map([...advertised, ...custom].map((model) => [model.id, model])).values()];
 }
 
 function acpPrompt(content: PromptPart[] | undefined, text: string, images: MessageImage[]) {

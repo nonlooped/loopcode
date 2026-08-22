@@ -4,6 +4,7 @@
   height: min(300px, calc(100vh - 150px));
   min-height: 210px;
   grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 13px;
@@ -15,9 +16,15 @@
   white-space: normal;
 }
 
+.model-picker > div,
+.model-picker > [data-tabs-root] {
+  display: contents;
+}
+
 .model-providers,
 .model-options {
   min-width: 0;
+  min-height: 0;
 }
 
 .model-providers {
@@ -26,6 +33,7 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  overflow-y: auto;
   border-right: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.012);
 }
@@ -40,6 +48,7 @@
   border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
+  flex: 0 0 auto;
   color: var(--muted);
 }
 
@@ -215,6 +224,19 @@
   flex-direction: column;
 }
 
+.model-picker-state code {
+  display: block;
+  max-width: 100%;
+  padding: 5px 7px;
+  overflow-wrap: anywhere;
+  border-radius: 5px;
+  background: var(--recessed-surface);
+  color: var(--text-soft);
+  font-size: 9px;
+  text-align: left;
+  user-select: text;
+}
+
 .model-picker-state button {
   height: 28px;
   padding: 0 10px;
@@ -223,6 +245,14 @@
   background: var(--panel-hover);
   color: var(--text-soft);
   font-size: 10px;
+}
+
+.model-picker-state button:disabled {
+  opacity: 0.55;
+}
+
+.model-picker-state button:hover:not(:disabled) {
+  background: var(--panel-active);
 }
 
 .model-spinner {

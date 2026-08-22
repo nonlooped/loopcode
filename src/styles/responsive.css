@@ -197,6 +197,7 @@
       .toggle-control,
       .settings-segmented-control,
       .settings-select,
+      .settings-text-input,
       .settings-action,
       .settings-range-control
     ) {
@@ -206,6 +207,41 @@
 
   .settings-row > :is(.settings-segmented-control, .settings-range-control) {
     width: 100%;
+  }
+
+  .settings-row > .settings-text-input {
+    width: 100%;
+  }
+
+  .provider-settings-row {
+    display: flex;
+    padding-right: 14px;
+  }
+
+  .provider-settings-open {
+    padding-left: 14px;
+  }
+
+  .provider-model-editor {
+    padding: 16px 14px 20px;
+  }
+
+  .provider-model-heading {
+    align-items: flex-start;
+  }
+
+  .provider-model-row {
+    grid-template-columns: minmax(0, 1fr) 30px;
+  }
+
+  .provider-model-row label {
+    grid-column: 1;
+  }
+
+  .provider-model-remove {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
   }
 
   .settings-segmented-option {

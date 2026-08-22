@@ -15,6 +15,7 @@
   import ContextMenu from './ContextMenu.svelte';
   import ImagePreview from './ImagePreview.svelte';
   import ModelPicker from './ModelPicker.svelte';
+  import { profileById as officialProfileById } from '../config/providers';
   import ReasoningPicker from './ReasoningPicker.svelte';
   import {
     listComposerCompletions,
@@ -23,6 +24,7 @@
   import type {
     ComposerImage,
     ComposerReference,
+    HarnessProfile,
     ModelOption,
     ProviderModelCatalog,
     ThreadState,
@@ -48,6 +50,8 @@
   interface Props {
     thread: ThreadState;
     catalogs: Record<string, ProviderModelCatalog>;
+    profiles: HarnessProfile[];
+    selectableProfiles: HarnessProfile[];
     images: ComposerImage[];
     attachmentError?: string;
     projectName: string;
@@ -89,7 +93,16 @@
   let localDraft = '';
   let localThreadId = '';
   const provider = $derived(activeProvider(props.thread));
+  const profile = $derived(
+    props.profiles.find((candidate) => candidate.id === props.thread.profileId)
+      ?? officialProfileById(props.thread.profileId),
+  );
   const status = $derived(threadStatus(props.thread));
+  const imageSupportError = $derived(
+    props.images.length > 0 && !profile.supportsImages
+      ? `${profile.label} does not support image prompts.`
+      : '',
+  );
   const completionResults = $derived.by(() => {
     const prefix = completionPrefix;
     if (!prefix || completionStatus !== 'ready') return [];
@@ -171,7 +184,9 @@
   function canSend() {
     return canEdit()
       && props.catalogs[props.thread.profileId]?.status === 'ready'
-      && Boolean(provider.selectedModelId);
+      && props.selectableProfiles.some((candidate) => candidate.id === props.thread.profileId)
+      && Boolean(provider.selectedModelId)
+      && !imageSupportError;
   }
 
   function resizePromptEditor() {
@@ -511,7 +526,7 @@
       });
     const text = event.clipboardData?.getData('text/plain') ?? '';
     if (text) insertText(text);
-    if (files.length > 0) props.attachImages(files);
+    if (files.length > 0 && profile.supportsImages) props.attachImages(files);
   }
 
   function chooseModel(profileId: string, model: ModelOption) {
@@ -527,7 +542,7 @@
   in:fly|global={{ y: props.reducedMotion ? 0 : 4, duration: props.reducedMotion ? 0 : 180 }}
 >
   <div bind:this={composerElement} class="composer" class:expanded={expanded} class:working={status === 'running'}>
-    {#if props.images.length > 0 || props.attachmentError}
+    {#if props.images.length > 0 || props.attachmentError || imageSupportError}
       <div class="attachment-strip" aria-label="Attached images">
         {#each props.images as image (image.id)}
           <ContextMenu items={imageMenuItems(image)}>
@@ -546,11 +561,20 @@
             {/snippet}
           </ContextMenu>
         {/each}
+        {#if imageSupportError}<span class="attachment-error">{imageSupportError}</span>{/if}
         {#if props.attachmentError}<span class="attachment-error">{props.attachmentError}</span>{/if}
       </div>
     {/if}
-    <input bind:this={imageInput} class="image-input" type="file" accept="image/*" multiple disabled={!canEdit()} onchange={handleImageSelection} />
-    <button bind:this={attachButton} class="attach-button" type="button" aria-label="Attach images" title="Attach images (you can also paste them)" disabled={!canEdit()} onclick={() => imageInput?.click()}>
+    <input bind:this={imageInput} class="image-input" type="file" accept="image/*" multiple disabled={!canEdit() || !profile.supportsImages} onchange={handleImageSelection} />
+    <button
+      bind:this={attachButton}
+      class="attach-button"
+      type="button"
+      aria-label={profile.supportsImages ? 'Attach images' : `${profile.label} does not support images`}
+      title={profile.supportsImages ? 'Attach images (you can also paste them)' : `${profile.label} does not support image prompts`}
+      disabled={!canEdit() || !profile.supportsImages}
+      onclick={() => imageInput?.click()}
+    >
       <IconPaperclip size={16} stroke={1.7} />
     </button>
     <!-- svelte-ignore a11y_role_supports_aria_props -->
@@ -572,11 +596,11 @@
       data-placeholder={status === 'running'
         ? 'Agent is working...'
         : status === 'connecting'
-          ? `Starting ${threadHarness(props.thread)}...`
+          ? `Starting ${threadHarness(props.thread, props.profiles)}...`
           : status === 'error'
             ? provider.turnStatus === 'blocked'
               ? 'Turn state is inconsistent — reconnect provider'
-              : `${threadHarness(props.thread)} unavailable — switch provider or retry`
+              : `${threadHarness(props.thread, props.profiles)} unavailable — switch provider or retry`
             : status === 'stopped'
               ? 'Provider stopped — switch provider or reconnect'
               : 'Ask anything…'}
@@ -625,15 +649,23 @@
     <div bind:this={composerFooter} class="composer-footer">
       <div class="composer-context">
           <div class="model-picker-wrap">
-            <ModelPicker
-              thread={props.thread}
-              catalogs={props.catalogs}
-              label={activeModelName()}
-              open={modelPickerOpen}
-              setOpen={(open) => { reasoningPickerOpen = false; modelPickerOpen = open; }}
-              choose={chooseModel}
-              retryDiscovery={props.retryDiscovery}
-            />
+            {#if props.selectableProfiles.length > 0}
+              <ModelPicker
+                thread={props.thread}
+                catalogs={props.catalogs}
+                profiles={props.selectableProfiles}
+                label={activeModelName()}
+                open={modelPickerOpen}
+                setOpen={(open) => { reasoningPickerOpen = false; modelPickerOpen = open; }}
+                choose={chooseModel}
+                retryDiscovery={props.retryDiscovery}
+              />
+            {:else}
+              <button class="model-picker-trigger" title="No authenticated providers" disabled>
+                <img src={profile.icon} alt="" />
+                <span>No providers</span>
+              </button>
+            {/if}
           </div>
         {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider)}
           <ReasoningPicker

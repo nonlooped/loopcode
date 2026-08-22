@@ -3,8 +3,8 @@
   import { IconLayoutSidebar, IconPlus, IconSettings, IconTerminal2 } from '@tabler/icons-svelte';
 
   import ContextMenu from './ContextMenu.svelte';
-  import { profileById } from '../config/providers';
-  import type { ThreadState } from '../types';
+  import { profileById as officialProfileById } from '../config/providers';
+  import type { HarnessProfile, ThreadState } from '../types';
   import { folderName } from '../utils/threads';
 
   interface Props {
@@ -12,6 +12,7 @@
     selectedThread?: ThreadState;
     windowMaximized: boolean;
     reducedMotion: boolean;
+    profiles: HarnessProfile[];
     terminalOpen: boolean;
     toggleSidebar: () => void;
     toggleTerminal: () => void;
@@ -26,6 +27,7 @@
     selectedThread,
     windowMaximized,
     reducedMotion,
+    profiles,
     terminalOpen,
     toggleSidebar,
     toggleTerminal,
@@ -34,6 +36,10 @@
     minimize,
     toggleMaximize,
   }: Props = $props();
+
+  function profileById(profileId: string) {
+    return profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId);
+  }
 </script>
 
 <ContextMenu

@@ -190,12 +190,36 @@
   width: 180px;
 }
 
+.settings-text-input {
+  width: 180px;
+  height: 30px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.settings-path-input {
+  font-family: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+}
+
+.settings-text-input:hover {
+  border-color: var(--line-strong);
+}
+
 .settings-select:disabled {
   opacity: 0.62;
 }
 
 .settings-action {
+  display: inline-flex;
   min-width: 76px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
 }
 
 .settings-select:hover:not(:disabled),
@@ -211,6 +235,150 @@
 
 .settings-action:disabled {
   opacity: 0.55;
+}
+
+.provider-settings-row {
+  padding: 0 20px 0 0;
+}
+
+.provider-settings-open {
+  display: flex;
+  min-width: 0;
+  min-height: 65px;
+  flex: 1;
+  padding: 14px 0 14px 20px;
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.provider-settings-open:hover .settings-row-icon {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+}
+
+.provider-version {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.provider-auth-status.authenticated {
+  color: var(--success);
+}
+
+.provider-auth-status.disabled {
+  color: var(--faint);
+}
+
+.provider-auth-status.not-logged-in {
+  color: var(--warning);
+}
+
+.provider-auth-status.not-installed {
+  color: var(--danger);
+}
+
+.provider-settings-row .toggle-control:disabled {
+  opacity: 0.48;
+}
+
+.provider-detail-back {
+  display: inline-flex;
+  min-height: 28px;
+  margin: -6px 0 12px -7px;
+  padding: 5px 7px;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.provider-detail-back:hover {
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.provider-model-editor {
+  padding: 16px 20px 20px 70px;
+}
+
+.provider-model-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.provider-model-heading > span {
+  display: grid;
+  gap: 4px;
+}
+
+.provider-model-heading strong {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.provider-model-heading small,
+.provider-model-empty {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.provider-model-empty {
+  margin: 16px 0 0;
+}
+
+.provider-model-list {
+  display: grid;
+  margin-top: 14px;
+  gap: 8px;
+}
+
+.provider-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px;
+  align-items: end;
+  gap: 8px;
+}
+
+.provider-model-row label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 9.5px;
+}
+
+.provider-model-row .settings-text-input {
+  width: 100%;
+}
+
+.provider-model-remove {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.provider-model-remove:hover {
+  border-color: var(--line);
+  background: var(--panel-hover);
+  color: var(--danger);
 }
 
 .settings-range-control {

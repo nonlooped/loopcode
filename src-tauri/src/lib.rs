@@ -194,6 +194,77 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
     .map_err(|error| format!("Could not join Git branch task: {error}"))
 }
 
+#[tauri::command]
+async fn provider_version(command: String, args: Vec<String>) -> Result<Option<String>, String> {
+    validate_provider_command(&command, &args)?;
+    let command = command.trim();
+
+    let mut process = tokio::process::Command::new(command);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        process.as_std_mut().creation_flags(0x0800_0000);
+    }
+    process
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    let output =
+        match tokio::time::timeout(std::time::Duration::from_secs(4), process.output()).await {
+            Ok(Ok(output)) if output.status.success() => output,
+            _ => return Ok(None),
+        };
+    Ok(first_version_line(&output.stdout, &output.stderr))
+}
+
+#[tauri::command]
+async fn provider_auth_status(command: String, args: Vec<String>) -> Result<Option<bool>, String> {
+    validate_provider_command(&command, &args)?;
+    let mut process = tokio::process::Command::new(command.trim());
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        process.as_std_mut().creation_flags(0x0800_0000);
+    }
+    process
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    Ok(
+        match tokio::time::timeout(std::time::Duration::from_secs(4), process.status()).await {
+            Ok(Ok(status)) => Some(status.success()),
+            _ => None,
+        },
+    )
+}
+
+fn validate_provider_command(command: &str, args: &[String]) -> Result<(), String> {
+    if command.trim().is_empty() || command.len() > 4096 {
+        return Err("Enter a valid provider executable".into());
+    }
+    if args.len() > 16 || args.iter().any(|arg| arg.len() > 4096) {
+        return Err("Provider command arguments are too long".into());
+    }
+    Ok(())
+}
+
+fn first_version_line(stdout: &[u8], stderr: &[u8]) -> Option<String> {
+    let bytes = if stdout.iter().any(|byte| !byte.is_ascii_whitespace()) {
+        stdout
+    } else {
+        stderr
+    };
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| line.chars().take(512).collect())
+}
+
 pub fn run() {
     let shutdown_started = Arc::new(AtomicBool::new(false));
     let shutdown_completed = Arc::new(AtomicBool::new(false));
@@ -231,6 +302,8 @@ pub fn run() {
             export_diagnostics,
             pick_folder,
             get_git_branch,
+            provider_version,
+            provider_auth_status,
             list_composer_completions,
             read_project_directory,
             read_project_file,
@@ -273,4 +346,29 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{first_version_line, validate_provider_command};
+
+    #[test]
+    fn provider_version_output_prefers_stdout_and_is_bounded() {
+        assert_eq!(
+            first_version_line(b"\ncodex-cli 0.149.0\n", b"ignored"),
+            Some("codex-cli 0.149.0".into())
+        );
+        assert_eq!(
+            first_version_line(b"", format!("  {}  ", "x".repeat(600)).as_bytes())
+                .map(|line| line.len()),
+            Some(512)
+        );
+    }
+
+    #[test]
+    fn provider_metadata_commands_are_bounded() {
+        assert!(validate_provider_command("claude", &["auth".into(), "status".into()]).is_ok());
+        assert!(validate_provider_command("", &[]).is_err());
+        assert!(validate_provider_command("claude", &vec!["x".into(); 17]).is_err());
+    }
 }

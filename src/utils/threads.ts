@@ -3,6 +3,7 @@ import { applyFastModeForSelectedModel } from "./fast-mode.ts";
 import { applyReasoningForSelectedModel } from "./reasoning-options.ts";
 import { newThreadTitle } from "./thread-title.ts";
 import type {
+  HarnessProfile,
   ProviderModelCatalog,
   ProviderSessionState,
   ThreadState,
@@ -64,8 +65,14 @@ export function threadStatus(thread: ThreadState): ThreadStatus {
   return provider.connectionStatus;
 }
 
-export function threadHarness(thread: ThreadState) {
-  return providerDefinitionById(thread.profileId).label;
+export function threadHarness(
+  thread: ThreadState,
+  profiles: Pick<HarnessProfile, "id" | "label">[] = providerDefinitions,
+) {
+  return (
+    profiles.find((profile) => profile.id === thread.profileId)?.label ??
+    providerDefinitionById(thread.profileId).label
+  );
 }
 
 export function compareSidebarThreads(left: ThreadState, right: ThreadState) {

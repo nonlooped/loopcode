@@ -29,15 +29,25 @@ type ConfigState = Pick<
 
 export function readModelState(value: ConfigState): AcpModelState {
   const configOptions = value.configOptions ?? [];
-  const modelConfig = configOptions.find((option) => option.category === "model");
+  const modelConfigs = configOptions.filter(
+    (option) => option.type === "select" && option.category === "model",
+  );
+  const modelConfig =
+    modelConfigs.find((option) => option.id.toLowerCase() === "model") ??
+    modelConfigs.find((option) => option.name.toLowerCase() === "model") ??
+    modelConfigs.find((option) => !/provider/.test(`${option.id} ${option.name}`.toLowerCase())) ??
+    modelConfigs[0];
+  const legacyModelState = readLegacyModelState(value);
+  const models = configChoices(modelConfig);
   const reasoningConfig =
     configOptions.find(isExplicitReasoningConfig) ?? configOptions.find(isReasoningConfig);
   const fastModeConfig = configOptions.find(isFastModeConfig);
 
   return {
-    modelConfigId: modelConfig?.id,
-    models: configChoices(modelConfig),
-    selectedModelId: modelConfig?.type === "select" ? modelConfig.currentValue : undefined,
+    modelConfigId: modelConfig?.id ?? legacyModelState?.modelConfigId,
+    models: models.length > 0 ? models : (legacyModelState?.models ?? []),
+    selectedModelId:
+      modelConfig?.type === "select" ? modelConfig.currentValue : legacyModelState?.selectedModelId,
     reasoningConfigId: reasoningConfig?.id,
     reasoningOptions: configChoices(reasoningConfig),
     selectedReasoningId:
@@ -51,6 +61,34 @@ export function readModelState(value: ConfigState): AcpModelState {
           ? "string"
           : undefined,
     fastModeDescription: fastModeConfig?.description ?? undefined,
+  };
+}
+
+const legacyModelStateSchema = z.object({
+  models: z.object({
+    currentModelId: z.string().trim().min(1),
+    availableModels: z.array(
+      z.object({
+        modelId: z.string().trim().min(1),
+        name: z.string().trim().min(1).optional(),
+        description: z.string().nullable().optional(),
+      }),
+    ),
+  }),
+});
+
+function readLegacyModelState(value: unknown): AcpModelState | undefined {
+  const parsed = legacyModelStateSchema.safeParse(value);
+  if (!parsed.success) return;
+  return {
+    modelConfigId: "model",
+    models: parsed.data.models.availableModels.map((model) => ({
+      id: model.modelId,
+      name: model.name ?? model.modelId,
+      description: model.description ?? undefined,
+    })),
+    selectedModelId: parsed.data.models.currentModelId,
+    reasoningOptions: [],
   };
 }
 

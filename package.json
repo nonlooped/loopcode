@@ -2,7 +2,7 @@
   "name": "loopcode",
   "version": "0.1.0",
   "private": true,
-  "description": "A local desktop workspace for Codex, Claude, Cursor, and OpenCode.",
+  "description": "A local desktop workspace for ACP coding agents.",
   "keywords": [
     "acp",
     "agent-client-protocol",
@@ -11,7 +11,10 @@
     "codex",
     "coding-agents",
     "cursor",
+    "fx",
+    "grok",
     "opencode",
+    "pi",
     "svelte",
     "tauri"
   ],

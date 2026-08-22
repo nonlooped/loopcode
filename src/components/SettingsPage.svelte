@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { fly } from 'svelte/transition';
   import {
     IconActivity,
     IconArchive,
+    IconArrowLeft,
     IconArrowsHorizontal,
     IconAt,
     IconClock,
@@ -15,9 +17,11 @@
     IconLayoutSidebarRight,
     IconListDetails,
     IconPlayerPlay,
+    IconPlus,
     IconRestore,
     IconRobot,
     IconShieldLock,
+    IconSparkles,
     IconTerminal2,
     IconTextSize,
     IconTrash,
@@ -34,14 +38,23 @@
     TERMINAL_FONT_SIZE_RANGE,
     TERMINAL_HEIGHT_RANGE,
     type AppPreferences,
+    type ProviderPreference,
     type SettingsCategory,
   } from '../utils/app-settings';
+  import {
+    providerDisplayStatus,
+    providerStatusAvailable,
+    providerVersionLabel,
+  } from '../utils/provider-availability';
 
   interface Props {
     category: SettingsCategory;
     preferences: AppPreferences;
     profiles: HarnessProfile[];
+    baseProfiles: HarnessProfile[];
     catalogs: Record<string, ProviderModelCatalog>;
+    providerVersions: Record<string, string>;
+    providerAuthStatuses: Record<string, boolean>;
     isLinux: boolean;
     linuxShellTransparency: number;
     linuxShellTransparencyRange: { min: number; max: number };
@@ -49,6 +62,7 @@
     terminalHeight: number;
     reducedMotion: boolean;
     setPreference: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void;
+    setProviderPreference: (profileId: string, preference: ProviderPreference) => void;
     setLinuxShellTransparency: (value: number) => void;
     setPermissionMode: (value: PermissionMode) => void;
     setTerminalHeight: (value: number) => void;
@@ -63,7 +77,10 @@
     category,
     preferences,
     profiles,
+    baseProfiles,
     catalogs,
+    providerVersions,
+    providerAuthStatuses,
     isLinux,
     linuxShellTransparency,
     linuxShellTransparencyRange,
@@ -71,6 +88,7 @@
     terminalHeight,
     reducedMotion,
     setPreference,
+    setProviderPreference,
     setLinuxShellTransparency,
     setPermissionMode,
     setTerminalHeight,
@@ -82,15 +100,36 @@
   }: Props = $props();
   let exportState = $state<'idle' | 'exporting' | 'exported' | 'error'>('idle');
   let pendingDataAction = $state<'archived' | 'drafts'>();
+  let selectedProviderId = $state('');
+  const selectedProvider = $derived(profiles.find((profile) => profile.id === selectedProviderId));
+  const selectedBaseProvider = $derived(baseProfiles.find((profile) => profile.id === selectedProviderId));
+  const titleProfiles = $derived(
+    profiles.filter((profile) =>
+      profile.titleGeneration
+      && preferences.providerSettings[profile.id]?.enabled !== false
+      && (catalogs[profile.id]?.status === 'ready' || profile.id === preferences.titleProviderId)
+    ),
+  );
+  const titleCatalog = $derived(catalogs[preferences.titleProviderId]);
 
   const categoryCopy = {
     general: ['General', 'Set defaults for thread navigation and the sidebar.'],
     appearance: ['Appearance', 'Adjust motion, scale, and the desktop surface.'],
     conversation: ['Conversation', 'Control transcript layout and composer behavior.'],
     agents: ['Agents and permissions', 'Choose how new threads start and what agents may run.'],
+    providers: ['Providers', 'Manage the agents available to new and existing threads.'],
     terminal: ['Terminal', 'Tune the terminal drawer and its retained output.'],
     data: ['Data and diagnostics', 'Export troubleshooting data or restore interface defaults.'],
   } satisfies Record<SettingsCategory, [string, string]>;
+  const pageCopy = $derived(
+    category === 'providers' && selectedProvider
+      ? [selectedProvider.label, `Configure the ${selectedProvider.label} ACP connection and models.`]
+      : categoryCopy[category],
+  );
+
+  $effect(() => {
+    if (category !== 'providers') selectedProviderId = '';
+  });
 
   async function exportLogs() {
     exportState = 'exporting';
@@ -118,6 +157,82 @@
     setPreference('providerModelDefaults', defaults);
   }
 
+  function setTitleProvider(profileId: string) {
+    setPreference('titleProviderId', profileId);
+    setPreference('titleModelId', '');
+  }
+
+  function providerPreference(profileId: string) {
+    return preferences.providerSettings[profileId] ?? {};
+  }
+
+  function providerStatus(profileId: string) {
+    return providerDisplayStatus(
+      profileId,
+      providerPreference(profileId).enabled !== false,
+      catalogs[profileId],
+      providerAuthStatuses[profileId],
+    );
+  }
+
+  function providerAvailable(profileId: string) {
+    const status = providerDisplayStatus(
+      profileId,
+      true,
+      catalogs[profileId],
+      providerAuthStatuses[profileId],
+    );
+    return providerStatusAvailable(status);
+  }
+
+  function providerVersion(profileId: string) {
+    return providerVersionLabel(catalogs[profileId], providerVersions[profileId]);
+  }
+
+  function showProvider(profileId: string) {
+    selectedProviderId = profileId;
+    void tick().then(() => document.getElementById('settings-title')?.focus());
+  }
+
+  function hideProvider() {
+    const profileId = selectedProviderId;
+    selectedProviderId = '';
+    void tick().then(() => document.getElementById(`provider-setting-${profileId}`)?.focus());
+  }
+
+  function inputValue(event: Event) {
+    return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+  }
+
+  function updateSelectedProvider(patch: Partial<ProviderPreference>) {
+    if (!selectedProvider) return;
+    setProviderPreference(selectedProvider.id, { ...providerPreference(selectedProvider.id), ...patch });
+  }
+
+  function updateCustomModel(index: number, field: 'id' | 'name', value: string) {
+    if (!selectedProvider) return;
+    const models = [...(providerPreference(selectedProvider.id).models ?? [])];
+    const model = models[index];
+    if (!model) return;
+    models[index] = { ...model, [field]: value };
+    updateSelectedProvider({ models });
+  }
+
+  function addCustomModel() {
+    if (!selectedProvider) return;
+    const models = providerPreference(selectedProvider.id).models ?? [];
+    let suffix = models.length + 1;
+    while (models.some((model) => model.id === `custom-model-${suffix}`)) suffix += 1;
+    updateSelectedProvider({ models: [...models, { id: `custom-model-${suffix}`, name: 'Custom model' }] });
+  }
+
+  function removeCustomModel(index: number) {
+    if (!selectedProvider) return;
+    updateSelectedProvider({
+      models: (providerPreference(selectedProvider.id).models ?? []).filter((_, modelIndex) => modelIndex !== index),
+    });
+  }
+
   function confirmDataAction() {
     if (pendingDataAction === 'archived') clearArchivedThreads();
     else if (pendingDataAction === 'drafts') clearComposerDrafts();
@@ -132,8 +247,13 @@
 >
   <div class="settings-column">
     <header class="settings-page-header">
-      <h1 id="settings-title" tabindex="-1">{categoryCopy[category][0]}</h1>
-      <p>{categoryCopy[category][1]}</p>
+      {#if category === 'providers' && selectedProvider}
+        <button class="provider-detail-back" onclick={hideProvider}>
+          <IconArrowLeft size={13} stroke={1.7} /> All providers
+        </button>
+      {/if}
+      <h1 id="settings-title" tabindex="-1">{pageCopy[0]}</h1>
+      <p>{pageCopy[1]}</p>
     </header>
 
     {#if category === 'general'}
@@ -482,7 +602,52 @@
             onchange={(event) => setPreference('defaultProviderId', selectValue(event))}
           >
             {#each profiles as profile (profile.id)}
-              <option value={profile.id}>{profile.label}</option>
+              <option
+                value={profile.id}
+                disabled={catalogs[profile.id]?.status !== 'ready' || providerPreference(profile.id).enabled === false}
+              >{profile.label}</option>
+            {/each}
+          </select>
+        </div>
+        <div class="settings-row settings-row-separated">
+          <span class="settings-row-icon" aria-hidden="true"><IconSparkles size={17} stroke={1.55} /></span>
+          <span class="settings-row-copy">
+            <strong>Title provider</strong>
+            <small>Use a separate provider connection to name new threads.</small>
+          </span>
+          <select
+            class="settings-select"
+            aria-label="Title provider"
+            value={preferences.titleProviderId}
+            onchange={(event) => setTitleProvider(selectValue(event))}
+          >
+            {#each titleProfiles as profile (profile.id)}
+              <option
+                value={profile.id}
+                disabled={catalogs[profile.id]?.status !== 'ready'}
+              >{profile.label}</option>
+            {/each}
+          </select>
+        </div>
+        <div class="settings-row settings-row-separated">
+          <span class="settings-row-icon" aria-hidden="true"><IconSparkles size={17} stroke={1.55} /></span>
+          <span class="settings-row-copy">
+            <strong>Title model</strong>
+            <small>{titleCatalog?.status === 'ready' ? 'Use this model only for naming new threads.' : 'The saved title provider is unavailable. LoopCode will use a local title.'}</small>
+          </span>
+          <select
+            class="settings-select settings-model-select"
+            aria-label="Title model"
+            disabled={titleCatalog?.status !== 'ready' || providerPreference(preferences.titleProviderId).enabled === false}
+            value={preferences.titleModelId}
+            onchange={(event) => setPreference('titleModelId', selectValue(event))}
+          >
+            <option value="">Provider default</option>
+            {#if preferences.titleModelId && !titleCatalog?.models.some((model) => model.id === preferences.titleModelId)}
+              <option value={preferences.titleModelId} disabled>{preferences.titleModelId} (unavailable)</option>
+            {/if}
+            {#each titleCatalog?.models ?? [] as model (model.id)}
+              <option value={model.id}>{model.name}</option>
             {/each}
           </select>
         </div>
@@ -492,12 +657,12 @@
             <span class="settings-row-icon" aria-hidden="true"><img class="settings-provider-icon" src={profile.icon} alt="" /></span>
             <span class="settings-row-copy">
               <strong>{profile.label} model</strong>
-              <small>{catalog?.status === 'ready' ? `Use this model when a new ${profile.label} thread starts.` : catalog?.status === 'error' ? `${profile.label} models are unavailable.` : `Loading ${profile.label} models…`}</small>
+              <small>{catalog?.status === 'ready' ? `Use this model when a new ${profile.label} thread starts.` : catalog?.status === 'unavailable' ? catalog.error : `Loading ${profile.label} models…`}</small>
             </span>
             <select
               class="settings-select settings-model-select"
               aria-label={`${profile.label} model`}
-              disabled={catalog?.status !== 'ready'}
+              disabled={catalog?.status !== 'ready' || providerPreference(profile.id).enabled === false}
               value={providerModelValue(profile.id)}
               onchange={(event) => setProviderModelDefault(profile.id, selectValue(event))}
             >
@@ -509,6 +674,126 @@
           </div>
         {/each}
       </div>
+    {:else if category === 'providers'}
+      {#if selectedProvider && selectedBaseProvider}
+        {@const setting = providerPreference(selectedProvider.id)}
+        <div class="settings-card">
+          <label class="settings-row">
+            <span class="settings-row-icon" aria-hidden="true"><img class="settings-provider-icon" src={selectedProvider.icon} alt="" /></span>
+            <span class="settings-row-copy">
+              <strong>Provider name</strong>
+              <small>Use this name everywhere the provider appears in LoopCode.</small>
+            </span>
+            <input
+              class="settings-text-input"
+              aria-label="Provider name"
+              value={setting.name ?? selectedBaseProvider.label}
+              onchange={(event) => updateSelectedProvider({ name: inputValue(event) })}
+            />
+          </label>
+          <label class="settings-row settings-row-separated">
+            <span class="settings-row-icon" aria-hidden="true"><IconTerminal2 size={17} stroke={1.55} /></span>
+            <span class="settings-row-copy">
+              <strong>ACP binary path</strong>
+              <small>Set the executable LoopCode launches for this provider's ACP connection.</small>
+            </span>
+            <input
+              class="settings-text-input settings-path-input"
+              aria-label="ACP binary path"
+              spellcheck="false"
+              value={setting.command ?? selectedBaseProvider.command}
+              onchange={(event) => updateSelectedProvider({ command: inputValue(event) })}
+            />
+          </label>
+          <div class="provider-model-editor settings-row-separated">
+            <div class="provider-model-heading">
+              <span>
+                <strong>Custom models</strong>
+                <small>Add models that are not advertised by the provider.</small>
+              </span>
+              <button class="settings-action" onclick={addCustomModel}><IconPlus size={13} stroke={1.7} /> Add model</button>
+            </div>
+            {#if (setting.models ?? []).length === 0}
+              <p class="provider-model-empty">No custom models.</p>
+            {:else}
+              <div class="provider-model-list">
+                {#each setting.models ?? [] as model, index (`${index}-${model.id}`)}
+                  <div class="provider-model-row">
+                    <label>
+                      <span>Name</span>
+                      <input
+                        class="settings-text-input"
+                        aria-label={`Custom model ${index + 1} name`}
+                        value={model.name}
+                        onchange={(event) => updateCustomModel(index, 'name', inputValue(event))}
+                      />
+                    </label>
+                    <label>
+                      <span>Model ID</span>
+                      <input
+                        class="settings-text-input"
+                        aria-label={`Custom model ${index + 1} ID`}
+                        spellcheck="false"
+                        value={model.id}
+                        onchange={(event) => updateCustomModel(index, 'id', inputValue(event))}
+                      />
+                    </label>
+                    <button
+                      class="provider-model-remove"
+                      aria-label={`Remove ${model.name}`}
+                      title={`Remove ${model.name}`}
+                      onclick={() => removeCustomModel(index)}
+                    ><IconTrash size={14} stroke={1.7} /></button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          <div class="settings-row settings-row-separated">
+            <span class="settings-row-icon" aria-hidden="true"><IconRestore size={17} stroke={1.55} /></span>
+            <span class="settings-row-copy">
+              <strong>Restore provider defaults</strong>
+              <small>Reset the name, ACP binary path, models, and enabled state.</small>
+            </span>
+            <button class="settings-action" onclick={() => setProviderPreference(selectedProvider.id, {})}>Reset</button>
+          </div>
+        </div>
+      {:else}
+        <div class="settings-card">
+          {#each profiles as profile, index (profile.id)}
+            {@const available = providerAvailable(profile.id)}
+            {@const enabled = available && providerPreference(profile.id).enabled !== false}
+            {@const version = providerVersion(profile.id)}
+            {@const status = providerStatus(profile.id)}
+            <div class:settings-row-separated={index > 0} class="settings-row provider-settings-row">
+              <button id={`provider-setting-${profile.id}`} class="provider-settings-open" onclick={() => showProvider(profile.id)}>
+                <span class="settings-row-icon" aria-hidden="true"><img class="settings-provider-icon" src={profile.icon} alt="" /></span>
+                <span class="settings-row-copy">
+                  <strong>{profile.label}{#if version} <span class="provider-version">{version}</span>{/if}</strong>
+                  <small
+                    class:authenticated={status === 'Authenticated' || status === 'Connected'}
+                    class:disabled={status === 'Disabled'}
+                    class:not-installed={status === 'Not installed'}
+                    class:not-logged-in={status === 'Not logged in'}
+                    class="provider-auth-status"
+                  >
+                    {status}
+                  </small>
+                </span>
+              </button>
+              <Switch.Root
+                class="toggle-control"
+                aria-label={`${enabled ? 'Disable' : 'Enable'} ${profile.label}`}
+                checked={enabled}
+                disabled={!available}
+                onCheckedChange={(value) => setProviderPreference(profile.id, { ...providerPreference(profile.id), enabled: value })}
+              >
+                <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
+              </Switch.Root>
+            </div>
+          {/each}
+        </div>
+      {/if}
     {:else if category === 'terminal'}
       <div class="settings-card">
         <div class="settings-row">
