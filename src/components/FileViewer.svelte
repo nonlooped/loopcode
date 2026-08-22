@@ -27,12 +27,12 @@
   const language = $derived(languageForPath(path) || 'Plain text');
 
   $effect(() => {
-    void loadFile(path, revision);
+    void loadFile(projectRoot, path, revision);
   });
 
   onDestroy(clearImage);
 
-  async function loadFile(requestedPath: string, requestedRevision: number) {
+  async function loadFile(requestedRoot: string, requestedPath: string, requestedRevision: number) {
     const token = ++loadToken;
     void requestedRevision;
     loading = true;
@@ -40,7 +40,7 @@
     highlighted = '';
     clearImage();
     try {
-      const bytes = new Uint8Array(await readProjectFile(projectRoot, requestedPath));
+      const bytes = new Uint8Array(await readProjectFile(requestedRoot, requestedPath));
       if (token !== loadToken) return;
       const requestedMediaType = imageMediaType(requestedPath);
       if (requestedMediaType) {
