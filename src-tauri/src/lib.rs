@@ -342,20 +342,15 @@ pub fn run() {
             api.prevent_exit();
             if !shutdown_started.swap(true, Ordering::AcqRel) {
                 let app = app.clone();
-                let shutdown_started = Arc::clone(&shutdown_started);
                 let shutdown_completed = Arc::clone(&shutdown_completed);
                 tauri::async_runtime::spawn(async move {
                     let broker = app.state::<Broker>();
                     let terminals = app.state::<TerminalManager>();
                     let diagnostics = app.state::<Diagnostics>();
-                    let harnesses_stopped = broker.shutdown(&diagnostics).await.is_ok();
-                    let terminals_stopped = terminals.shutdown(&diagnostics).await.is_ok();
-                    if harnesses_stopped && terminals_stopped {
-                        shutdown_completed.store(true, Ordering::Release);
-                        app.exit(code.unwrap_or(0));
-                    } else {
-                        shutdown_started.store(false, Ordering::Release);
-                    }
+                    let _ = broker.shutdown(&diagnostics).await;
+                    let _ = terminals.shutdown(&diagnostics).await;
+                    shutdown_completed.store(true, Ordering::Release);
+                    app.exit(code.unwrap_or(0));
                 });
             }
         }

@@ -30,6 +30,7 @@ pub struct TerminalManager {
 
 struct TerminalHandle {
     thread_id: String,
+    process_id: Option<u32>,
     master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
     writer: Arc<StdMutex<Box<dyn Write + Send>>>,
     killer: Arc<StdMutex<Box<dyn portable_pty::ChildKiller + Send + Sync>>>,
@@ -39,6 +40,7 @@ struct TerminalHandle {
 #[derive(Clone)]
 struct TerminalStop {
     thread_id: String,
+    process_id: Option<u32>,
     killer: Arc<StdMutex<Box<dyn portable_pty::ChildKiller + Send + Sync>>>,
     stopped: watch::Receiver<bool>,
 }
@@ -47,6 +49,7 @@ impl TerminalHandle {
     fn stop_control(&self) -> TerminalStop {
         TerminalStop {
             thread_id: self.thread_id.clone(),
+            process_id: self.process_id,
             killer: Arc::clone(&self.killer),
             stopped: self.stopped.clone(),
         }
@@ -136,12 +139,13 @@ pub async fn start_terminal(
             .master
             .take_writer()
             .map_err(|error| format!("Could not open terminal input: {error}"))?;
+        let process_id = child.process_id();
         let killer = child.clone_killer();
-        Ok::<_, String>((pair.master, reader, writer, child, killer))
+        Ok::<_, String>((pair.master, reader, writer, child, process_id, killer))
     })
     .await
     .map_err(|error| format!("Could not join the terminal startup task: {error}"))??;
-    let (master, mut reader, writer, mut child, killer) = startup;
+    let (master, mut reader, writer, mut child, process_id, killer) = startup;
     let master = Arc::new(StdMutex::new(master));
     let writer = Arc::new(StdMutex::new(writer));
     let killer = Arc::new(StdMutex::new(killer));
@@ -151,6 +155,7 @@ pub async fn start_terminal(
         terminal_id.clone(),
         TerminalHandle {
             thread_id: thread_id.clone(),
+            process_id,
             master,
             writer,
             killer,
@@ -430,12 +435,51 @@ async fn stop_terminal_control(
     .await
     .map_err(|error| format!("Could not join the terminal stop task: {error}"))?;
     let mut stopped = control.stopped;
-    let wait_result = timeout(TERMINAL_STOP_TIMEOUT, stopped.wait_for(|value| *value)).await;
-    match wait_result {
-        Ok(Ok(_)) => Ok(()),
-        Ok(Err(_)) => Err("Could not confirm that the terminal stopped".into()),
-        Err(_) => kill_result.and(Err(format!("Timed out waiting for {terminal_id} to stop"))),
+    match timeout(TERMINAL_STOP_TIMEOUT, stopped.wait_for(|value| *value)).await {
+        Ok(Ok(_)) => return Ok(()),
+        Ok(Err(_)) => return Err("Could not confirm that the terminal stopped".into()),
+        Err(_) => {}
     }
+    kill_result?;
+    force_kill_terminal(control.process_id, control.killer).await
+}
+
+#[cfg(unix)]
+async fn force_kill_terminal(
+    process_id: Option<u32>,
+    _killer: Arc<StdMutex<Box<dyn portable_pty::ChildKiller + Send + Sync>>>,
+) -> Result<(), String> {
+    let process_id = process_id.ok_or("The terminal process id is unavailable")?;
+    tauri::async_runtime::spawn_blocking(move || force_kill_process(process_id))
+        .await
+        .map_err(|error| format!("Could not join the terminal force-stop task: {error}"))?
+}
+
+#[cfg(unix)]
+fn force_kill_process(process_id: u32) -> Result<(), String> {
+    std::process::Command::new("kill")
+        .args(["-KILL", &process_id.to_string()])
+        .status()
+        .map_err(|error| format!("Could not force-stop terminal process: {error}"))?
+        .success()
+        .then_some(())
+        .ok_or_else(|| "Could not force-stop terminal process".to_owned())
+}
+
+#[cfg(windows)]
+async fn force_kill_terminal(
+    _process_id: Option<u32>,
+    killer: Arc<StdMutex<Box<dyn portable_pty::ChildKiller + Send + Sync>>>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        killer
+            .lock()
+            .map_err(|_| "Could not lock the terminal process".to_owned())?
+            .kill()
+            .map_err(|error| format!("Could not force-stop terminal process: {error}"))
+    })
+    .await
+    .map_err(|error| format!("Could not join the terminal force-stop task: {error}"))?
 }
 
 fn valid_thread_id(thread_id: &str) -> Result<&str, String> {
@@ -478,7 +522,22 @@ fn terminal_size(cols: u16, rows: u16) -> Result<PtySize, String> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::force_kill_process;
     use super::terminal_size;
+
+    #[cfg(unix)]
+    #[test]
+    fn force_kills_an_unresponsive_process() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("test process should start");
+
+        force_kill_process(child.id()).expect("test process should be killed");
+
+        assert!(!child.wait().expect("test process should exit").success());
+    }
 
     #[test]
     fn validates_terminal_dimensions() {
