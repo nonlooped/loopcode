@@ -5,7 +5,7 @@ use std::{
     hash::{Hash, Hasher},
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -13,52 +13,56 @@ const LOG_FILE_NAME: &str = "acp.jsonl";
 const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
 const RETAINED_LOGS: usize = 5;
 const MAX_STRING_CHARS: usize = 2_000;
+const LOG_QUEUE_CAPACITY: usize = 1024;
+
+enum DiagnosticCommand {
+    Record {
+        level: String,
+        event: String,
+        fields: Value,
+    },
+    Flush(mpsc::Sender<()>),
+}
 
 #[derive(Clone)]
 pub struct Diagnostics {
     directory: PathBuf,
     write_lock: Arc<Mutex<()>>,
+    sender: mpsc::SyncSender<DiagnosticCommand>,
 }
 
 impl Diagnostics {
     pub fn new(directory: PathBuf) -> Self {
+        let write_lock = Arc::new(Mutex::new(()));
+        let (sender, receiver) = mpsc::sync_channel(LOG_QUEUE_CAPACITY);
+        let writer_directory = directory.clone();
+        let writer_lock = Arc::clone(&write_lock);
+        let _ = std::thread::Builder::new()
+            .name("loopcode-diagnostics".into())
+            .spawn(move || diagnostics_writer(receiver, &writer_directory, &writer_lock));
         Self {
             directory,
-            write_lock: Arc::new(Mutex::new(())),
+            write_lock,
+            sender,
         }
     }
 
     pub fn record(&self, level: &str, event: &str, fields: Value) {
-        let Ok(_guard) = self.write_lock.lock() else {
-            return;
-        };
-        if fs::create_dir_all(&self.directory).is_err() {
-            return;
-        }
-        let path = self.directory.join(LOG_FILE_NAME);
-        if path
-            .metadata()
-            .is_ok_and(|metadata| metadata.len() >= MAX_LOG_BYTES)
-        {
-            rotate(&self.directory);
-        }
-
-        let mut entry = Map::new();
-        entry.insert("timestampMs".into(), json!(timestamp_ms()));
-        entry.insert("level".into(), json!(level));
-        entry.insert("event".into(), json!(event));
-        if let Value::Object(fields) = sanitize_value(fields) {
-            entry.extend(fields);
-        }
-        let Ok(line) = serde_json::to_string(&entry) else {
-            return;
-        };
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-            let _ = writeln!(file, "{line}");
-        }
+        let _ = self.sender.try_send(DiagnosticCommand::Record {
+            level: level.to_owned(),
+            event: event.to_owned(),
+            fields,
+        });
     }
 
     pub fn export_to(&self, destination: &Path) -> Result<(), String> {
+        let (flushed, confirmation) = mpsc::channel();
+        self.sender
+            .send(DiagnosticCommand::Flush(flushed))
+            .map_err(|_| "The diagnostics writer stopped".to_owned())?;
+        confirmation
+            .recv()
+            .map_err(|_| "The diagnostics writer stopped".to_owned())?;
         let _guard = self
             .write_lock
             .lock()
@@ -78,6 +82,57 @@ impl Diagnostics {
         }
         append_file(&self.directory.join(LOG_FILE_NAME), &mut output)?;
         Ok(())
+    }
+}
+
+fn diagnostics_writer(
+    receiver: mpsc::Receiver<DiagnosticCommand>,
+    directory: &Path,
+    write_lock: &Mutex<()>,
+) {
+    while let Ok(command) = receiver.recv() {
+        match command {
+            DiagnosticCommand::Record {
+                level,
+                event,
+                fields,
+            } => {
+                let Ok(_guard) = write_lock.lock() else {
+                    continue;
+                };
+                write_record(directory, &level, &event, fields);
+            }
+            DiagnosticCommand::Flush(confirmation) => {
+                let _ = confirmation.send(());
+            }
+        }
+    }
+}
+
+fn write_record(directory: &Path, level: &str, event: &str, fields: Value) {
+    if fs::create_dir_all(directory).is_err() {
+        return;
+    }
+    let path = directory.join(LOG_FILE_NAME);
+    if path
+        .metadata()
+        .is_ok_and(|metadata| metadata.len() >= MAX_LOG_BYTES)
+    {
+        rotate(directory);
+    }
+
+    let mut entry = Map::new();
+    entry.insert("timestampMs".into(), json!(timestamp_ms()));
+    entry.insert("level".into(), json!(level));
+    entry.insert("event".into(), json!(event));
+    if let Value::Object(fields) = sanitize_value(fields) {
+        entry.extend(fields);
+    }
+    let Ok(line) = serde_json::to_string(&entry) else {
+        return;
+    };
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{line}");
     }
 }
 
