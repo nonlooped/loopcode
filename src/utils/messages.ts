@@ -46,6 +46,7 @@ export function appendMessage(
 }
 
 export function titleFromPrompt(prompt: string) {
-  const firstLine = prompt.split(/\r?\n/, 1)[0].trim();
-  return firstLine.length > 42 ? `${firstLine.slice(0, 42)}...` : firstLine || "Untitled thread";
+  const words = prompt.trim().match(/\S+/g) ?? [];
+  if (words.length === 0) return "Untitled thread";
+  return `${words.slice(0, 6).join(" ")}${words.length > 6 ? "..." : ""}`;
 }

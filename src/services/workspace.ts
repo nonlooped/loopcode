@@ -4,7 +4,6 @@ import type {
   ProviderModelCatalog,
   ThreadState,
 } from "../types/index.ts";
-import { findReusableEmptyThread } from "../utils/thread-state.ts";
 import { createThread, folderName } from "../utils/threads.ts";
 import type { JsonValue } from "../utils/json.ts";
 import { restoreWorkspace, workspaceSnapshot } from "../utils/workspace.ts";
@@ -74,22 +73,14 @@ export class Workspace {
     return true;
   }
 
-  addThread(
-    defaultWorkingFolder: string,
-    hasAttachments: (threadId: string) => boolean,
-    projectId = this.state.selectedProjectId,
-    reuseEmptyThread = true,
-  ) {
+  addThread(defaultWorkingFolder: string, projectId = this.state.selectedProjectId) {
     const project = projectId ? this.state.projects.find((item) => item.id === projectId) : null;
     if (projectId && !project) return undefined;
 
     this.state.selectedProjectId = project?.id ?? null;
     const target = { cwd: project?.path ?? defaultWorkingFolder, projectId: project?.id ?? null };
-    const reusable = reuseEmptyThread
-      ? findReusableEmptyThread(this.state.threads, target, hasAttachments)
-      : undefined;
-    const thread = reusable ?? createThread(target.cwd, target.projectId, this.catalogs);
-    if (!reusable) this.state.threads.unshift(thread);
+    const thread = createThread(target.cwd, target.projectId, this.catalogs);
+    this.state.threads.unshift(thread);
     this.state.selectedThreadId = thread.id;
     return thread;
   }

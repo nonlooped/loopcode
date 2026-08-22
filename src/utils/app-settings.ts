@@ -4,8 +4,6 @@ const PERMISSION_MODE_KEY = "loopcode.permission-mode";
 const LEFT_SIDEBAR_WIDTH_KEY = "loopcode.left-sidebar-width";
 const RIGHT_SIDEBAR_WIDTH_KEY = "loopcode.right-sidebar-width";
 const TERMINAL_HEIGHT_KEY = "loopcode.terminal-height";
-const LINUX_SHELL_TRANSPARENCY_KEY = "loopcode.linux-shell-transparency-level";
-const LEGACY_LINUX_SHELL_TRANSPARENCY_KEY = "loopcode.linux-shell-transparency";
 
 export type SettingsCategory =
   | "general"
@@ -19,18 +17,15 @@ export type SendShortcut = "enter" | "modifier-enter";
 
 export interface ProviderPreference {
   enabled?: boolean;
-  name?: string;
   command?: string;
   models?: ModelOption[];
 }
 
 export interface AppPreferences {
   compactSessionRows: boolean;
-  showSettled: boolean;
   startupBehavior: "last-thread" | "new-thread";
   newThreadProject: "selected" | "default-folder";
-  reuseEmptyThreads: boolean;
-  explorerStartup: "open" | "collapsed";
+  defaultWorkingFolder: string;
   motionMode: "system" | "reduced";
   interfaceZoom: number;
   transcriptDensity: "comfortable" | "compact";
@@ -41,6 +36,7 @@ export interface AppPreferences {
   composerSpellcheck: boolean;
   composerAutocomplete: boolean;
   defaultProviderId: string;
+  automaticTitleGeneration: boolean;
   providerModelDefaults: Record<string, string>;
   providerSettings: Record<string, ProviderPreference>;
   titleProviderId: string;
@@ -52,11 +48,9 @@ export interface AppPreferences {
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   compactSessionRows: false,
-  showSettled: false,
   startupBehavior: "last-thread",
   newThreadProject: "selected",
-  reuseEmptyThreads: true,
-  explorerStartup: "open",
+  defaultWorkingFolder: "",
   motionMode: "system",
   interfaceZoom: 100,
   transcriptDensity: "comfortable",
@@ -67,6 +61,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   composerSpellcheck: true,
   composerAutocomplete: true,
   defaultProviderId: "codex",
+  automaticTitleGeneration: true,
   providerModelDefaults: {},
   providerSettings: {},
   titleProviderId: "codex",
@@ -78,11 +73,9 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
 
 const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
   compactSessionRows: "loopcode.compact-session-rows",
-  showSettled: "loopcode.show-settled",
   startupBehavior: "loopcode.startup-behavior",
   newThreadProject: "loopcode.new-thread-project",
-  reuseEmptyThreads: "loopcode.reuse-empty-threads",
-  explorerStartup: "loopcode.explorer-startup",
+  defaultWorkingFolder: "loopcode.default-working-folder",
   motionMode: "loopcode.motion-mode",
   interfaceZoom: "loopcode.interface-zoom",
   transcriptDensity: "loopcode.transcript-density",
@@ -93,6 +86,7 @@ const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
   composerSpellcheck: "loopcode.composer-spellcheck",
   composerAutocomplete: "loopcode.composer-autocomplete",
   defaultProviderId: "loopcode.default-provider",
+  automaticTitleGeneration: "loopcode.automatic-title-generation",
   providerModelDefaults: "loopcode.provider-model-defaults",
   providerSettings: "loopcode.provider-settings",
   titleProviderId: "loopcode.title-provider",
@@ -109,9 +103,6 @@ export const DEFAULT_TERMINAL_HEIGHT = 260;
 export const INTERFACE_ZOOM_RANGE = { min: 60, max: 200 } as const;
 export const CONTENT_WIDTH_RANGE = { min: 600, max: 900 } as const;
 export const TERMINAL_FONT_SIZE_RANGE = { min: 10, max: 16 } as const;
-export const LINUX_SHELL_TRANSPARENCY_RANGE = { min: 0, max: 100 } as const;
-export const MAX_LINUX_SHELL_TRANSPARENCY = 20;
-
 export interface SidebarWidths {
   left: number | null;
   right: number | null;
@@ -125,9 +116,6 @@ export function loadAppPreferences(
       compactSessionRows:
         storedBoolean(storage.getItem(PREFERENCE_KEYS.compactSessionRows)) ??
         DEFAULT_APP_PREFERENCES.compactSessionRows,
-      showSettled:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.showSettled)) ??
-        DEFAULT_APP_PREFERENCES.showSettled,
       startupBehavior:
         storage.getItem(PREFERENCE_KEYS.startupBehavior) === "new-thread"
           ? "new-thread"
@@ -136,11 +124,7 @@ export function loadAppPreferences(
         storage.getItem(PREFERENCE_KEYS.newThreadProject) === "default-folder"
           ? "default-folder"
           : "selected",
-      reuseEmptyThreads:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.reuseEmptyThreads)) ??
-        DEFAULT_APP_PREFERENCES.reuseEmptyThreads,
-      explorerStartup:
-        storage.getItem(PREFERENCE_KEYS.explorerStartup) === "collapsed" ? "collapsed" : "open",
+      defaultWorkingFolder: storedPath(storage.getItem(PREFERENCE_KEYS.defaultWorkingFolder)),
       motionMode: storage.getItem(PREFERENCE_KEYS.motionMode) === "reduced" ? "reduced" : "system",
       interfaceZoom:
         storedNumber(storage.getItem(PREFERENCE_KEYS.interfaceZoom), INTERFACE_ZOOM_RANGE) ??
@@ -170,6 +154,9 @@ export function loadAppPreferences(
       defaultProviderId:
         storage.getItem(PREFERENCE_KEYS.defaultProviderId)?.trim() ||
         DEFAULT_APP_PREFERENCES.defaultProviderId,
+      automaticTitleGeneration:
+        storedBoolean(storage.getItem(PREFERENCE_KEYS.automaticTitleGeneration)) ??
+        DEFAULT_APP_PREFERENCES.automaticTitleGeneration,
       providerModelDefaults: storedStringRecord(
         storage.getItem(PREFERENCE_KEYS.providerModelDefaults),
       ),
@@ -212,8 +199,6 @@ export function resetAppSettings(storage: Pick<Storage, "removeItem"> = localSto
       LEFT_SIDEBAR_WIDTH_KEY,
       RIGHT_SIDEBAR_WIDTH_KEY,
       TERMINAL_HEIGHT_KEY,
-      LINUX_SHELL_TRANSPARENCY_KEY,
-      LEGACY_LINUX_SHELL_TRANSPARENCY_KEY,
     ])
       storage.removeItem(key);
   } catch {
@@ -279,38 +264,6 @@ export function saveTerminalHeight(
   saveSetting(storage, TERMINAL_HEIGHT_KEY, String(height));
 }
 
-export function loadLinuxShellTransparency(storage: Pick<Storage, "getItem"> = localStorage) {
-  try {
-    const savedLevel = storedNumber(
-      storage.getItem(LINUX_SHELL_TRANSPARENCY_KEY),
-      LINUX_SHELL_TRANSPARENCY_RANGE,
-    );
-    if (savedLevel !== null) return savedLevel;
-
-    const legacyTransparency = storedNumber(storage.getItem(LEGACY_LINUX_SHELL_TRANSPARENCY_KEY), {
-      min: 0,
-      max: MAX_LINUX_SHELL_TRANSPARENCY,
-    });
-    return legacyTransparency === null
-      ? LINUX_SHELL_TRANSPARENCY_RANGE.min
-      : Math.round((legacyTransparency / MAX_LINUX_SHELL_TRANSPARENCY) * 100);
-  } catch {
-    return LINUX_SHELL_TRANSPARENCY_RANGE.min;
-  }
-}
-
-export function saveLinuxShellTransparency(
-  transparency: number,
-  storage: Pick<Storage, "setItem"> = localStorage,
-) {
-  const clamped = Math.min(
-    LINUX_SHELL_TRANSPARENCY_RANGE.max,
-    Math.max(LINUX_SHELL_TRANSPARENCY_RANGE.min, Math.round(transparency)),
-  );
-  saveSetting(storage, LINUX_SHELL_TRANSPARENCY_KEY, String(clamped));
-  return clamped;
-}
-
 function saveSetting(storage: Pick<Storage, "setItem">, key: string, value: string) {
   try {
     storage.setItem(key, value);
@@ -361,10 +314,6 @@ function storedProviderSettings(value: string | null): Record<string, ProviderPr
         if ("enabled" in candidate && typeof candidate.enabled === "boolean") {
           setting.enabled = candidate.enabled;
         }
-        if ("name" in candidate && typeof candidate.name === "string") {
-          const name = candidate.name.trim().slice(0, 100);
-          if (name) setting.name = name;
-        }
         if ("command" in candidate && typeof candidate.command === "string") {
           const command = candidate.command.trim().slice(0, 4096);
           if (command) setting.command = command;
@@ -396,7 +345,6 @@ export function configuredProviderProfiles(
     const command = settings[profile.id]?.command || profile.command;
     return {
       ...profile,
-      label: settings[profile.id]?.name || profile.label,
       command,
       versionCommand: profile.versionCommand === profile.command ? command : profile.versionCommand,
     };
@@ -418,6 +366,10 @@ function storedBoolean(value: string | null) {
   if (value === "true") return true;
   if (value === "false") return false;
   return null;
+}
+
+function storedPath(value: string | null) {
+  return value?.trim().slice(0, 4096) ?? "";
 }
 
 function storedNumber(value: string | null, range: { min: number; max: number }) {

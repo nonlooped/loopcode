@@ -4,14 +4,12 @@ import test from "node:test";
 import {
   configuredProviderProfiles,
   loadAppPreferences,
-  loadLinuxShellTransparency,
   loadPermissionMode,
   loadSidebarWidths,
   loadTerminalHeight,
   providerVersionFromOutput,
   resetAppSettings,
   saveAppPreference,
-  saveLinuxShellTransparency,
   savePermissionMode,
   saveSidebarWidth,
   saveTerminalHeight,
@@ -50,11 +48,9 @@ void test("app preferences use safe defaults and validate persisted values", () 
 
   const defaults = {
     compactSessionRows: false,
-    showSettled: false,
     startupBehavior: "last-thread",
     newThreadProject: "selected",
-    reuseEmptyThreads: true,
-    explorerStartup: "open",
+    defaultWorkingFolder: "",
     motionMode: "system",
     interfaceZoom: 100,
     transcriptDensity: "comfortable",
@@ -65,6 +61,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
     composerSpellcheck: true,
     composerAutocomplete: true,
     defaultProviderId: "codex",
+    automaticTitleGeneration: true,
     providerModelDefaults: {},
     providerSettings: {},
     titleProviderId: "codex",
@@ -79,13 +76,14 @@ void test("app preferences use safe defaults and validate persisted values", () 
   saveAppPreference("startupBehavior", "new-thread", storage);
   saveAppPreference("motionMode", "reduced", storage);
   saveAppPreference("interfaceZoom", 140, storage);
+  saveAppPreference("defaultWorkingFolder", "C:\\work", storage);
+  saveAppPreference("automaticTitleGeneration", false, storage);
   saveAppPreference("providerModelDefaults", { codex: "gpt-5" }, storage);
   saveAppPreference(
     "providerSettings",
     {
       codex: {
         enabled: false,
-        name: "Work Codex",
         command: "/opt/codex-acp",
         models: [{ id: "custom-model", name: "Custom model" }],
       },
@@ -101,11 +99,12 @@ void test("app preferences use safe defaults and validate persisted values", () 
     startupBehavior: "new-thread",
     motionMode: "reduced",
     interfaceZoom: 140,
+    defaultWorkingFolder: "C:\\work",
+    automaticTitleGeneration: false,
     providerModelDefaults: { codex: "gpt-5" },
     providerSettings: {
       codex: {
         enabled: false,
-        name: "Work Codex",
         command: "/opt/codex-acp",
         models: [{ id: "custom-model", name: "Custom model" }],
       },
@@ -137,11 +136,9 @@ void test("app preferences use safe defaults and validate persisted values", () 
 
 void test("provider settings preserve ACP arguments without mutating defaults", () => {
   const profiles = [{ id: "codex", label: "Codex", command: "npx", args: ["adapter"] }];
-  const configured = configuredProviderProfiles(profiles, {
-    codex: { name: "Work Codex", command: "/opt/npx" },
-  });
+  const configured = configuredProviderProfiles(profiles, { codex: { command: "/opt/npx" } });
 
-  assert.equal(configured[0].label, "Work Codex");
+  assert.equal(configured[0].label, "Codex");
   assert.equal(configured[0].command, "/opt/npx");
   assert.deepEqual(configured[0].args, ["adapter"]);
   assert.equal(profiles[0].label, "Codex");
@@ -162,26 +159,6 @@ void test("reset removes preferences without touching workspace history", () => 
   assert.ok(removed.includes("loopcode.permission-mode"));
   assert.ok(removed.includes("loopcode.terminal-height"));
   assert.ok(!removed.includes("loopcode.workspace"));
-});
-
-void test("Linux shell transparency maps the old 20% ceiling to 100%", () => {
-  const values = new Map();
-  const storage = {
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => values.set(key, value),
-  };
-
-  assert.equal(loadLinuxShellTransparency(storage), 0);
-  values.set("loopcode.linux-shell-transparency", "20");
-  assert.equal(loadLinuxShellTransparency(storage), 100);
-  values.set("loopcode.linux-shell-transparency", "0");
-  assert.equal(loadLinuxShellTransparency(storage), 0);
-
-  assert.equal(saveLinuxShellTransparency(80.4, storage), 80);
-  assert.equal(loadLinuxShellTransparency(storage), 80);
-  values.set("loopcode.linux-shell-transparency-level", "invalid");
-  values.set("loopcode.linux-shell-transparency", "invalid");
-  assert.equal(loadLinuxShellTransparency(storage), 0);
 });
 
 void test("sidebar widths retain CSS defaults until resized and persist valid sizes", () => {

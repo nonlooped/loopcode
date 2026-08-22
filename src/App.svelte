@@ -54,18 +54,14 @@
     LEFT_SIDEBAR_WIDTH_RANGE,
     RIGHT_SIDEBAR_WIDTH_RANGE,
     TERMINAL_HEIGHT_RANGE,
-    LINUX_SHELL_TRANSPARENCY_RANGE,
-    MAX_LINUX_SHELL_TRANSPARENCY,
     configuredProviderProfiles,
     loadAppPreferences,
-    loadLinuxShellTransparency,
     loadPermissionMode,
     loadSidebarWidths,
     loadTerminalHeight,
     providerVersionFromOutput,
     resetAppSettings as resetStoredAppSettings,
     saveAppPreference,
-    saveLinuxShellTransparency,
     savePermissionMode,
     saveSidebarWidth,
     saveTerminalHeight,
@@ -86,7 +82,6 @@
   const appWindow = getCurrentWindow();
   const appWebview = getCurrentWebview();
   const webPreview = !import.meta.env.TAURI_ENV_PLATFORM;
-  const isLinux = navigator.userAgent.includes('Linux');
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
   const loadedPreferences = loadAppPreferences();
   loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId)?.id ?? officialProfiles[0].id;
@@ -111,7 +106,8 @@
     ]),
   );
 
-  let defaultWorkingFolder = $state('');
+  let defaultWorkingFolder = $state(loadedPreferences.defaultWorkingFolder);
+  let initialWorkingFolder = $state('');
   let providerCatalogs = $state<Record<string, ProviderModelCatalog>>(initialCatalogs);
   let providerVersions = $state<Record<string, string>>({});
   let providerAuthStatuses = $state<Record<string, boolean>>({});
@@ -129,8 +125,9 @@
   }>>({});
   let sidebarOpen = $state(false);
   let sidebarCollapsed = $state(false);
+  let showSettled = $state(false);
   let projectExplorerOpen = $state(false);
-  let projectExplorerCollapsed = $state(loadedPreferences.explorerStartup === 'collapsed');
+  let projectExplorerCollapsed = $state(false);
   let terminalOpen = $state(false);
   let terminalThreadIds = $state<string[]>([]);
   let terminalHeight = $state(loadTerminalHeight());
@@ -142,7 +139,6 @@
   let settingsCategory = $state<SettingsCategory>('general');
   let preferences = $state<AppPreferences>(loadedPreferences);
   let systemReducedMotion = $state(motionPreference.matches);
-  let linuxShellTransparency = $state(isLinux ? loadLinuxShellTransparency() : 0);
   const initialPermissionMode = loadPermissionMode();
   let permissionMode = $state<PermissionMode>(initialPermissionMode);
   let windowMaximized = $state(false);
@@ -178,9 +174,6 @@
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
     `--terminal-height: ${terminalHeight}px`,
     `--content-width: ${preferences.contentWidth}px`,
-    isLinux
-      ? `--linux-shell-opacity: ${1 - (linuxShellTransparency / 100) * MAX_LINUX_SHELL_TRANSPARENCY / 100}`
-      : '',
   ].filter(Boolean).join('; '));
 
   const workspace = new Workspace(workspaceState, providerCatalogs);
@@ -239,10 +232,9 @@
   });
 
   $effect(() => {
-    providers.setTitlePreference({
-      profileId: preferences.titleProviderId,
-      modelId: preferences.titleModelId,
-    });
+    providers.setTitlePreference(preferences.automaticTitleGeneration
+      ? { profileId: preferences.titleProviderId, modelId: preferences.titleModelId }
+      : undefined);
   });
 
   $effect(() => {
@@ -374,9 +366,7 @@
   function addThread() {
     const thread = workspace.addThread(
       defaultWorkingFolder,
-      (threadId) => composerImages(threadId).length > 0,
       preferences.newThreadProject === 'selected' ? selectedProjectId : null,
-      preferences.reuseEmptyThreads,
     );
     if (thread) applyNewThreadDefaults(thread);
     closeThreadSurfaces();
@@ -385,9 +375,7 @@
   function addThreadToProject(projectId: string) {
     const thread = workspace.addThread(
       defaultWorkingFolder,
-      (threadId) => composerImages(threadId).length > 0,
       projectId,
-      preferences.reuseEmptyThreads,
     );
     if (thread) {
       applyNewThreadDefaults(thread);
@@ -654,7 +642,8 @@
   async function initializeWorkspace() {
     try {
       await registerFrontend();
-      defaultWorkingFolder = await getInitialWorkingDirectory();
+      initialWorkingFolder = await getInitialWorkingDirectory();
+      if (!defaultWorkingFolder) defaultWorkingFolder = initialWorkingFolder;
       const savedWorkspace = await loadWorkspace();
       if (!workspace.initialize(savedWorkspace, defaultWorkingFolder)) {
         throw new Error('The saved thread file has an unsupported or invalid format.');
@@ -670,9 +659,7 @@
       if (preferences.startupBehavior === 'new-thread') {
         const startupThread = workspace.addThread(
           defaultWorkingFolder,
-          () => false,
           preferences.newThreadProject === 'selected' ? selectedProjectId : null,
-          preferences.reuseEmptyThreads,
         );
         if (startupThread) applyNewThreadDefaults(startupThread);
       } else if (savedWorkspace === null && selectedThread) {
@@ -781,6 +768,13 @@
     saveAppPreference(key, value);
   }
 
+  async function chooseDefaultWorkingFolder() {
+    const folder = await pickFolder();
+    if (!folder) return;
+    defaultWorkingFolder = folder;
+    setPreference('defaultWorkingFolder', folder);
+  }
+
   function setProviderPreference(profileId: string, preference: ProviderPreference) {
     const official = officialProfiles.find((profile) => profile.id === profileId);
     if (!official) return;
@@ -792,9 +786,6 @@
     })).values()].slice(0, 100);
     const setting: ProviderPreference = {
       ...(preference.enabled === false ? { enabled: false } : {}),
-      ...(preference.name?.trim() && preference.name.trim() !== official.label
-        ? { name: preference.name.trim().slice(0, 100) }
-        : {}),
       ...(preference.command?.trim() && preference.command.trim() !== official.command
         ? { command: preference.command.trim().slice(0, 4096) }
         : {}),
@@ -871,18 +862,6 @@
     }
   }
 
-  function setLinuxShellTransparency(transparency: number) {
-    linuxShellTransparency = saveLinuxShellTransparency(transparency);
-  }
-
-  function setTerminalHeight(height: number) {
-    terminalHeight = Math.min(
-      TERMINAL_HEIGHT_RANGE.max,
-      Math.max(TERMINAL_HEIGHT_RANGE.min, Math.round(height)),
-    );
-    saveTerminalHeight(terminalHeight);
-  }
-
   function resetSettings() {
     resetStoredAppSettings();
     preferences = {
@@ -893,11 +872,11 @@
       titleProviderId: profileById(DEFAULT_APP_PREFERENCES.titleProviderId)?.id ?? officialProfiles[0].id,
       titleModelId: '',
     };
+    defaultWorkingFolder = initialWorkingFolder;
     projectExplorerCollapsed = false;
     terminalHeight = DEFAULT_TERMINAL_HEIGHT;
     leftSidebarWidth = null;
     rightSidebarWidth = null;
-    linuxShellTransparency = 0;
     permissionMode = 'restricted';
     const resetProfiles = configuredProviderProfiles(officialProfiles, {});
     providers.setProfiles(resetProfiles, threads);
@@ -981,7 +960,6 @@
 
 <div
   class:maximized={windowMaximized}
-  class:linux-shell={isLinux}
   class:sidebar-collapsed={sidebarCollapsed}
   class:project-explorer-collapsed={!explorerRoot || (!compactLayout && projectExplorerCollapsed)}
   class:compact-session-rows={preferences.compactSessionRows}
@@ -1023,7 +1001,7 @@
       {inboxThreads}
       {settledThreads}
       {selectedThreadId}
-      showSettled={preferences.showSettled}
+      showSettled={showSettled}
       {selectProject}
       addProject={() => { void openAddProject(); }}
       {addThread}
@@ -1036,7 +1014,7 @@
       {openProjectFolder}
       {revealProjectFolder}
       {removeProject}
-      setShowSettled={(show) => setPreference('showSettled', show)}
+      setShowSettled={(show) => { showSettled = show; }}
       {openSettings}
       {closeSettings}
       {setSettingsCategory}
@@ -1054,17 +1032,13 @@
             catalogs={providerCatalogs}
             {providerVersions}
             {providerAuthStatuses}
-            {isLinux}
-            {linuxShellTransparency}
             {permissionMode}
-            {terminalHeight}
             {reducedMotion}
             {setPreference}
             {setProviderPreference}
-            setLinuxShellTransparency={setLinuxShellTransparency}
-            linuxShellTransparencyRange={LINUX_SHELL_TRANSPARENCY_RANGE}
             {setPermissionMode}
-            {setTerminalHeight}
+            {defaultWorkingFolder}
+            chooseDefaultWorkingFolder={() => { void chooseDefaultWorkingFolder(); }}
             archivedThreadCount={settledThreads.length}
             draftThreadCount={threadsWithDrafts}
             clearArchivedThreads={() => { void clearArchivedThreads(); }}

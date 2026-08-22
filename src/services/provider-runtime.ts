@@ -84,7 +84,7 @@ export class ProviderRuntime {
     this.#permissionMode = mode;
   }
 
-  setTitlePreference(preference: TitleGenerationPreference) {
+  setTitlePreference(preference?: TitleGenerationPreference) {
     this.#titlePreference = preference;
   }
 

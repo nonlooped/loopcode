@@ -163,26 +163,19 @@ void test("snapshots retain private sessions but exclude transient provider stat
   assert.equal(restarted.state.threads[0].providers.codex.sessionId, "private-session");
 });
 
-void test("keeps project, selection, reuse, and deletion invariants behind one interface", () => {
+void test("keeps project, selection, and deletion invariants behind one interface", () => {
   const { state, workspace } = setup();
   const project = workspace.ensureProject("C:\\loopcode");
-  const first = workspace.addThread("C:\\default", () => false, project.id);
+  const first = workspace.addThread("C:\\default", project.id);
   assert.equal(first.projectId, project.id);
   assert.equal(state.selectedProjectId, project.id);
   assert.equal(state.selectedThreadId, first.id);
 
-  assert.equal(
-    workspace.addThread("C:\\default", () => false),
-    first,
-  );
-  assert.notEqual(
-    workspace.addThread("C:\\default", () => false, project.id, false),
-    first,
-  );
+  assert.notEqual(workspace.addThread("C:\\default", project.id), first);
   state.threads = [first];
   state.selectedThreadId = first.id;
   first.draft = "keep this";
-  const second = workspace.addThread("C:\\default", () => false);
+  const second = workspace.addThread("C:\\default");
   assert.notEqual(second.id, first.id);
 
   workspace.removeThread(second.id, "C:\\default");

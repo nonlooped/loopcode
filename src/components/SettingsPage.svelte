@@ -9,12 +9,10 @@
     IconAt,
     IconClock,
     IconCode,
-    IconContrast,
     IconDownload,
     IconFolder,
     IconHistory,
     IconKeyboard,
-    IconLayoutSidebarRight,
     IconListDetails,
     IconPlayerPlay,
     IconPlus,
@@ -36,7 +34,6 @@
     CONTENT_WIDTH_RANGE,
     INTERFACE_ZOOM_RANGE,
     TERMINAL_FONT_SIZE_RANGE,
-    TERMINAL_HEIGHT_RANGE,
     type AppPreferences,
     type ProviderPreference,
     type SettingsCategory,
@@ -54,17 +51,13 @@
     catalogs: Record<string, ProviderModelCatalog>;
     providerVersions: Record<string, string>;
     providerAuthStatuses: Record<string, boolean>;
-    isLinux: boolean;
-    linuxShellTransparency: number;
-    linuxShellTransparencyRange: { min: number; max: number };
     permissionMode: PermissionMode;
-    terminalHeight: number;
     reducedMotion: boolean;
     setPreference: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void;
     setProviderPreference: (profileId: string, preference: ProviderPreference) => void;
-    setLinuxShellTransparency: (value: number) => void;
     setPermissionMode: (value: PermissionMode) => void;
-    setTerminalHeight: (value: number) => void;
+    defaultWorkingFolder: string;
+    chooseDefaultWorkingFolder: () => void;
     archivedThreadCount: number;
     draftThreadCount: number;
     clearArchivedThreads: () => void;
@@ -80,17 +73,13 @@
     catalogs,
     providerVersions,
     providerAuthStatuses,
-    isLinux,
-    linuxShellTransparency,
-    linuxShellTransparencyRange,
     permissionMode,
-    terminalHeight,
     reducedMotion,
     setPreference,
     setProviderPreference,
-    setLinuxShellTransparency,
     setPermissionMode,
-    setTerminalHeight,
+    defaultWorkingFolder,
+    chooseDefaultWorkingFolder,
     archivedThreadCount,
     draftThreadCount,
     clearArchivedThreads,
@@ -263,21 +252,6 @@
           </Switch.Root>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconArchive size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Keep archived threads expanded</strong>
-            <small>Remember whether the archived section stays open between launches.</small>
-          </span>
-          <Switch.Root
-            class="toggle-control"
-            aria-label="Keep archived threads expanded"
-            checked={preferences.showSettled}
-            onCheckedChange={(value) => setPreference('showSettled', value)}
-          >
-            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
-          </Switch.Root>
-        </div>
-        <div class="settings-row settings-row-separated">
           <span class="settings-row-icon" aria-hidden="true"><IconPlayerPlay size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>On startup</strong>
@@ -312,36 +286,12 @@
           </RadioGroup.Root>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconRestore size={17} stroke={1.55} /></span>
+          <span class="settings-row-icon" aria-hidden="true"><IconFolder size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
-            <strong>Reuse empty threads</strong>
-            <small>Use an existing untouched thread instead of adding another empty one.</small>
+            <strong>Default working folder</strong>
+            <small title={defaultWorkingFolder}>New non-project threads start in {defaultWorkingFolder || 'the system folder'}.</small>
           </span>
-          <Switch.Root
-            class="toggle-control"
-            aria-label="Reuse empty threads"
-            checked={preferences.reuseEmptyThreads}
-            onCheckedChange={(value) => setPreference('reuseEmptyThreads', value)}
-          >
-            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
-          </Switch.Root>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconLayoutSidebarRight size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Project explorer on startup</strong>
-            <small>Choose whether the project explorer starts open or collapsed.</small>
-          </span>
-          <RadioGroup.Root
-            class="settings-segmented-control"
-            aria-label="Project explorer on startup"
-            orientation="horizontal"
-            value={preferences.explorerStartup}
-            onValueChange={(value) => setPreference('explorerStartup', value === 'collapsed' ? 'collapsed' : 'open')}
-          >
-            <RadioGroup.Item class="settings-segmented-option" value="open">Open</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="collapsed">Collapsed</RadioGroup.Item>
-          </RadioGroup.Root>
+          <button class="settings-action" onclick={chooseDefaultWorkingFolder}>Choose folder…</button>
         </div>
       </div>
     {:else if category === 'appearance'}
@@ -390,35 +340,6 @@
             </Slider.Root>
           </div>
         </div>
-        {#if isLinux}
-          <div class="settings-row settings-row-separated">
-            <span class="settings-row-icon" aria-hidden="true"><IconContrast size={17} stroke={1.55} /></span>
-            <span class="settings-row-copy">
-              <strong>Background transparency</strong>
-              <small>Show the desktop behind LoopCode when the desktop environment supports it.</small>
-            </span>
-            <div class="settings-range-control">
-              <output>{linuxShellTransparency}%</output>
-              <Slider.Root
-                class="settings-slider"
-                aria-label="Background transparency"
-                type="single"
-                min={linuxShellTransparencyRange.min}
-                max={linuxShellTransparencyRange.max}
-                step={1}
-                value={linuxShellTransparency}
-                onValueChange={setLinuxShellTransparency}
-              >
-                {#snippet children({ thumbItems })}
-                  <span class="settings-slider-track"><Slider.Range class="settings-slider-range" /></span>
-                  {#each thumbItems as { index } (index)}
-                    <Slider.Thumb class="settings-slider-thumb" {index} />
-                  {/each}
-                {/snippet}
-              </Slider.Root>
-            </div>
-          </div>
-        {/if}
       </div>
     {:else if category === 'conversation'}
       <div class="settings-card">
@@ -582,7 +503,7 @@
           <span class="settings-row-icon" aria-hidden="true"><IconRobot size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Default provider</strong>
-            <small>Use this provider when LoopCode creates or reuses an empty thread.</small>
+            <small>Use this provider when LoopCode creates a new thread.</small>
           </span>
           <select
             class="settings-select"
@@ -598,6 +519,22 @@
             {/each}
           </select>
         </div>
+        <div class="settings-row settings-row-separated">
+          <span class="settings-row-icon" aria-hidden="true"><IconSparkles size={17} stroke={1.55} /></span>
+          <span class="settings-row-copy">
+            <strong>Automatic title generation</strong>
+            <small>Use the first few words of the prompt when this is off.</small>
+          </span>
+          <Switch.Root
+            class="toggle-control"
+            aria-label="Automatic title generation"
+            checked={preferences.automaticTitleGeneration}
+            onCheckedChange={(value) => setPreference('automaticTitleGeneration', value)}
+          >
+            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
+          </Switch.Root>
+        </div>
+        {#if preferences.automaticTitleGeneration}
         <div class="settings-row settings-row-separated">
           <span class="settings-row-icon" aria-hidden="true"><IconSparkles size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
@@ -640,6 +577,7 @@
             {/each}
           </select>
         </div>
+        {/if}
         {#each profiles as profile (profile.id)}
           {@const catalog = catalogs[profile.id]}
           <div class="settings-row settings-row-separated">
@@ -668,19 +606,6 @@
         {@const setting = providerPreference(selectedProvider.id)}
         <div class="settings-card">
           <label class="settings-row">
-            <span class="settings-row-icon" aria-hidden="true"><img class="settings-provider-icon" src={selectedProvider.icon} alt="" /></span>
-            <span class="settings-row-copy">
-              <strong>Provider name</strong>
-              <small>Use this name everywhere the provider appears in LoopCode.</small>
-            </span>
-            <input
-              class="settings-text-input"
-              aria-label="Provider name"
-              value={setting.name ?? selectedBaseProvider.label}
-              onchange={(event) => updateSelectedProvider({ name: inputValue(event) })}
-            />
-          </label>
-          <label class="settings-row settings-row-separated">
             <span class="settings-row-icon" aria-hidden="true"><IconTerminal2 size={17} stroke={1.55} /></span>
             <span class="settings-row-copy">
               <strong>Provider command path</strong>
@@ -784,33 +709,6 @@
     {:else if category === 'terminal'}
       <div class="settings-card">
         <div class="settings-row">
-          <span class="settings-row-icon" aria-hidden="true"><IconTerminal2 size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Terminal drawer height</strong>
-            <small>Set the default terminal height. Dragging the drawer handle also updates it.</small>
-          </span>
-          <div class="settings-range-control">
-            <output>{terminalHeight}px</output>
-            <Slider.Root
-              class="settings-slider"
-              aria-label="Terminal drawer height"
-              type="single"
-              min={TERMINAL_HEIGHT_RANGE.min}
-              max={TERMINAL_HEIGHT_RANGE.max}
-              step={10}
-              value={terminalHeight}
-              onValueChange={setTerminalHeight}
-            >
-              {#snippet children({ thumbItems })}
-                <span class="settings-slider-track"><Slider.Range class="settings-slider-range" /></span>
-                {#each thumbItems as { index } (index)}
-                  <Slider.Thumb class="settings-slider-thumb" {index} />
-                {/each}
-              {/snippet}
-            </Slider.Root>
-          </div>
-        </div>
-        <div class="settings-row settings-row-separated">
           <span class="settings-row-icon" aria-hidden="true"><IconTextSize size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Terminal text size</strong>
