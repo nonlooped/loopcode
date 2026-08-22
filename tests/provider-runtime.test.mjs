@@ -147,6 +147,18 @@ void test("unavailable providers cannot become active and restored providers fal
   assert.equal(restored.threads[0].providers.grok.selectedModelId, undefined);
 });
 
+void test("changing provider arguments disconnects its active harness", () => {
+  const state = thread();
+  const runtime = new ProviderRuntime(catalogs, hooks);
+  const profiles = providerDefinitions.map((profile) =>
+    profile.id === "codex" ? { ...profile, args: [...profile.args, "--changed"] } : profile,
+  );
+
+  runtime.setProfiles(profiles, [state]);
+
+  assert.equal(state.providers.codex.connectionStatus, "disconnected");
+});
+
 void test("unchanged custom models do not disconnect ready providers", () => {
   const state = thread();
   const runtime = new ProviderRuntime(catalogs, hooks);

@@ -88,14 +88,19 @@ export class ProviderRuntime {
   }
 
   setProfiles(profiles: ProviderDefinition[], threads = this.#threads) {
-    const changedCommands = profiles
-      .filter(
-        (profile) =>
-          this.#profiles.find((current) => current.id === profile.id)?.command !== profile.command,
-      )
+    const changedProfiles = profiles
+      .filter((profile) => {
+        const current = this.#profiles.find((candidate) => candidate.id === profile.id);
+        return (
+          !current ||
+          current.command !== profile.command ||
+          current.args.length !== profile.args.length ||
+          current.args.some((arg, index) => arg !== profile.args[index])
+        );
+      })
       .map((profile) => profile.id);
     this.#profiles = profiles;
-    for (const profileId of changedCommands) this.#disconnectProfile(profileId, threads);
+    for (const profileId of changedProfiles) this.#disconnectProfile(profileId, threads);
   }
 
   setCustomModels(
