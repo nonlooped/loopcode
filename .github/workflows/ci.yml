@@ -122,3 +122,32 @@ jobs:
             test "$RUST" = skipped
             test "$WINDOWS_RUST" = skipped
           fi
+
+  tag-release:
+    needs: gate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Tag version bump
+        id: release
+        run: |
+          version="$(jq -r .version package.json)"
+          tag="v$version"
+          test "$(git log -1 --format=%s)" = "chore(release): $tag" || exit 0
+          git rev-parse "$tag" >/dev/null 2>&1 && exit 0
+          git tag -a "$tag" -m "$tag"
+          git push origin "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Start release
+        if: steps.release.outputs.tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh workflow run release.yml --ref master -f tag="$TAG" -f sha="$GITHUB_SHA"

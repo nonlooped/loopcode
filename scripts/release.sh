@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Bump the version everywhere, regenerate CHANGELOG.md, commit and tag.
-# CI builds installers and publishes the GitHub Release when the tag lands.
+# Bump the version everywhere, regenerate CHANGELOG.md, and commit.
+# CI tags the commit and starts the release after the commit passes.
 # Usage: scripts/release.sh X.Y.Z
 set -euo pipefail
 
@@ -37,7 +37,5 @@ npx vp check --fix CHANGELOG.md
 
 git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
 git commit -m "chore(release): v$ver"
-git tag -a "v$ver" -m "v$ver"
-echo "tagged v$ver"
-echo "push the commit first: git push origin master"
-echo "after CI / gate passes: git push origin v$ver"
+echo "push the commit: git push origin master"
+echo "CI will tag v$ver and start the release after the gate passes"
