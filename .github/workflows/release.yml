@@ -124,7 +124,7 @@ jobs:
         run: |
           mapfile -d '' files < <(find artifacts -type f -print0)
           previous_tag="$(git describe --tags --abbrev=0 "$GITHUB_SHA^")"
-          git log --format='- %s' "$previous_tag..$GITHUB_SHA" > release-notes.md
+          git log --format="- %s by @${GITHUB_REPOSITORY_OWNER} in [%h](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/%H)" "$previous_tag..$GITHUB_SHA" > release-notes.md
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
           else
