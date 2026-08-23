@@ -1,3 +1,19 @@
+## [0.4.0] - 2026-08-23
+
+### 🚀 Features
+
+- _(git)_ Add branch and worktree commands
+- _(composer)_ Add Git branch and worktree controls
+- Add Git branch and worktree controls
+- _(settings)_ Add color mode and theme preferences
+- _(theme)_ Add light mode and color palettes
+- Add light mode and color themes
+
+### 🐛 Bug Fixes
+
+- _(git)_ Preserve branch names when refs collide
+- _(git)_ Protect established checkouts and worktrees
+
 ## [0.3.0] - 2026-08-23
 
 ### 🚀 Features
