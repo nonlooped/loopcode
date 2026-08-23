@@ -1,3 +1,9 @@
+## [0.5.0] - 2026-08-23
+
+### 🚀 Features
+
+- _(settings)_ Add visual previews for appearance, conversation, composer, and terminal settings
+
 ## [0.4.0] - 2026-08-23
 
 ### 🚀 Features
