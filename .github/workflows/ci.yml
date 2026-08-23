@@ -142,6 +142,8 @@ jobs:
           tag="v$version"
           test "$(git log -1 --format=%s)" = "chore(release): $tag" || exit 0
           git rev-parse "$tag" >/dev/null 2>&1 && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$tag" -m "$tag"
           git push origin "$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
