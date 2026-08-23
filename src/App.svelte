@@ -80,7 +80,7 @@
     readyProviderId,
   } from './utils/provider-availability';
   import { timelineEntries } from './utils/timeline';
-  import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
+  import { activeProvider, compareSidebarThreads, threadReservesCheckout, threadStatus } from './utils/threads';
 
   const appWindow = getCurrentWindow();
   const appWebview = getCurrentWebview();
@@ -201,14 +201,7 @@
   const selectedThreadEmpty = $derived(Boolean(
     selectedThread && selectedThread.messages.length === 0 && selectedThread.tools.length === 0,
   ));
-  const selectedThreadProject = $derived(
-    selectedThread?.projectId
-      ? projects.find((project) => project.id === selectedThread.projectId)
-      : undefined,
-  );
-  const selectedThreadIsWorktree = $derived(Boolean(
-    selectedThreadProject && selectedThread?.cwd !== selectedThreadProject.path,
-  ));
+  const selectedThreadIsWorktree = $derived(selectedThread?.managedWorktree ?? false);
   const selectedThreadHasTerminal = $derived(Boolean(
     selectedThread && terminalThreadIds.includes(selectedThread.id),
   ));
@@ -441,13 +434,13 @@
     const terminalThread = threads.find((candidate) =>
       candidate.cwd === cwd && terminalThreadIds.includes(candidate.id));
     if (terminalThread) throw new Error(`Exit the terminal for ${terminalThread.title} before changing this checkout`);
-    const activeThread = threads.find((candidate) => {
-      const turnStatus = activeProvider(candidate).turnStatus;
-      return candidate.id !== thread.id
-        && candidate.cwd === cwd
-        && (turnStatus === 'running' || turnStatus === 'blocked');
-    });
-    if (activeThread) throw new Error(`Wait for ${activeThread.title} before changing this checkout`);
+    const establishedThread = threads.find((candidate) =>
+      candidate.id !== thread.id
+      && candidate.cwd === cwd
+      && threadReservesCheckout(candidate));
+    if (establishedThread) {
+      throw new Error(`${establishedThread.title} already uses this checkout`);
+    }
     gitOperationThreadId = thread.id;
     try {
       await switchGitBranch(cwd, branch);
@@ -469,7 +462,7 @@
       if (thread.cwd !== cwd || thread.messages.length > 0 || thread.tools.length > 0) {
         throw new Error(`The thread changed while the worktree was created at ${worktree.path}`);
       }
-      if (!workspace.setThreadWorkingFolder(thread.id, worktree.path)) {
+      if (!workspace.setThreadWorktree(thread.id, worktree.path)) {
         throw new Error(`Could not move the thread to the worktree at ${worktree.path}`);
       }
       if (selectedThread?.id === thread.id) {

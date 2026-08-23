@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createWorkspaceState, Workspace } from "../src/services/workspace.ts";
+import { threadReservesCheckout } from "../src/utils/threads.ts";
 import { restoreWorkspace } from "../src/utils/workspace.ts";
 
 const catalogs = {
@@ -163,18 +164,35 @@ void test("snapshots retain private sessions but exclude transient provider stat
   assert.equal(restarted.state.threads[0].providers.codex.sessionId, "private-session");
 });
 
-void test("changes only empty thread working folders and keeps their project", () => {
-  const { workspace } = setup();
-  const project = workspace.ensureProject("C:\\loopcode");
-  const thread = workspace.addThread("C:\\default", project.id);
+void test("marks and restores managed worktrees for threads without a project", () => {
+  const { state, events, workspace } = setup();
+  const thread = state.threads[0];
 
-  assert.equal(workspace.setThreadWorkingFolder(thread.id, "C:\\worktrees\\feature"), true);
+  assert.equal(workspace.setThreadWorktree(thread.id, "C:\\worktrees\\feature"), true);
   assert.equal(thread.cwd, "C:\\worktrees\\feature");
-  assert.equal(thread.projectId, project.id);
+  assert.equal(thread.projectId, null);
+  assert.equal(thread.managedWorktree, true);
+
+  workspace.queuePersistence();
+  const restarted = setup();
+  assert.equal(restarted.workspace.initialize(events.at(-1), "C:\\default"), true);
+  assert.equal(restarted.state.threads[0].managedWorktree, true);
 
   thread.messages.push({ id: "message", role: "user", text: "started", createdAt: 1 });
-  assert.equal(workspace.setThreadWorkingFolder(thread.id, "C:\\worktrees\\other"), false);
+  assert.equal(workspace.setThreadWorktree(thread.id, "C:\\worktrees\\other"), false);
   assert.equal(thread.cwd, "C:\\worktrees\\feature");
+});
+
+void test("reserves a checkout for conversation history and connected providers", () => {
+  const { state } = setup();
+  const thread = state.threads[0];
+  assert.equal(threadReservesCheckout(thread), false);
+
+  thread.messages.push({ id: "message", role: "user", text: "started", createdAt: 1 });
+  assert.equal(threadReservesCheckout(thread), true);
+  thread.messages = [];
+  thread.providers.codex.connectionStatus = "ready";
+  assert.equal(threadReservesCheckout(thread), true);
 });
 
 void test("keeps project, selection, and deletion invariants behind one interface", () => {

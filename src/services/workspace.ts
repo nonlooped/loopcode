@@ -91,11 +91,12 @@ export class Workspace {
     return true;
   }
 
-  setThreadWorkingFolder(threadId: string, cwd: string) {
+  setThreadWorktree(threadId: string, cwd: string) {
     const thread = this.state.threads.find((item) => item.id === threadId);
     const trimmed = cwd.trim();
     if (!thread || !trimmed || thread.messages.length > 0 || thread.tools.length > 0) return false;
     thread.cwd = trimmed;
+    thread.managedWorktree = true;
     return true;
   }
 

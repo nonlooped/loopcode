@@ -51,11 +51,23 @@ export function createThread(
     updatedAt: now,
     settled: false,
     projectId,
+    managedWorktree: false,
   };
 }
 
 export function activeProvider(thread: ThreadState) {
   return thread.providers[thread.profileId];
+}
+
+export function threadReservesCheckout(thread: ThreadState) {
+  return (
+    thread.messages.length > 0 ||
+    thread.tools.length > 0 ||
+    Object.values(thread.providers).some(
+      (provider) =>
+        provider.connectionStatus === "connecting" || provider.connectionStatus === "ready",
+    )
+  );
 }
 
 export function threadStatus(thread: ThreadState): ThreadStatus {
