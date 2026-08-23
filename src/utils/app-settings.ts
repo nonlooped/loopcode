@@ -15,6 +15,22 @@ export type SettingsCategory =
   | "terminal"
   | "diagnostics";
 export type SendShortcut = "enter" | "modifier-enter";
+export type ColorMode = "system" | "light" | "dark";
+
+export const THEME_OPTIONS = [
+  { id: "graphite", label: "Graphite" },
+  { id: "rose", label: "Rose" },
+  { id: "sand", label: "Sand" },
+  { id: "ember", label: "Ember" },
+  { id: "amber", label: "Amber" },
+  { id: "forest", label: "Forest" },
+  { id: "teal", label: "Teal" },
+  { id: "ocean", label: "Ocean" },
+  { id: "indigo", label: "Indigo" },
+  { id: "violet", label: "Violet" },
+] as const;
+
+export type ThemeId = (typeof THEME_OPTIONS)[number]["id"];
 
 export interface ProviderPreference {
   enabled?: boolean;
@@ -23,6 +39,8 @@ export interface ProviderPreference {
 }
 
 export interface AppPreferences {
+  colorMode: ColorMode;
+  theme: ThemeId;
   compactSessionRows: boolean;
   startupBehavior: "last-thread" | "new-thread";
   newThreadProject: "selected" | "default-folder";
@@ -46,6 +64,8 @@ export interface AppPreferences {
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  colorMode: "system",
+  theme: "graphite",
   compactSessionRows: false,
   startupBehavior: "last-thread",
   newThreadProject: "selected",
@@ -74,6 +94,8 @@ const LEGACY_PREFERENCE_KEYS = [
 ] as const;
 
 const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
+  colorMode: "loopcode.color-mode",
+  theme: "loopcode.theme",
   compactSessionRows: "loopcode.compact-session-rows",
   startupBehavior: "loopcode.startup-behavior",
   newThreadProject: "loopcode.new-thread-project",
@@ -113,6 +135,8 @@ export function loadAppPreferences(
 ): AppPreferences {
   try {
     return {
+      colorMode: storedColorMode(storage.getItem(PREFERENCE_KEYS.colorMode)),
+      theme: storedTheme(storage.getItem(PREFERENCE_KEYS.theme)),
       compactSessionRows:
         storedBoolean(storage.getItem(PREFERENCE_KEYS.compactSessionRows)) ??
         DEFAULT_APP_PREFERENCES.compactSessionRows,
@@ -348,6 +372,14 @@ export function configuredProviderProfiles(
 
 export function providerVersionFromOutput(output: string) {
   return output.match(/\bv?(\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?)\b/)?.[1];
+}
+
+function storedColorMode(value: string | null): ColorMode {
+  return value === "light" || value === "dark" ? value : "system";
+}
+
+function storedTheme(value: string | null): ThemeId {
+  return THEME_OPTIONS.find((theme) => theme.id === value)?.id ?? DEFAULT_APP_PREFERENCES.theme;
 }
 
 function storedScrollback(value: string | null) {

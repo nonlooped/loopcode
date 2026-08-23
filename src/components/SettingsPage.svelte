@@ -10,6 +10,7 @@
     CONTENT_WIDTH_RANGE,
     INTERFACE_ZOOM_RANGE,
     TERMINAL_FONT_SIZE_RANGE,
+    THEME_OPTIONS,
     type AppPreferences,
     type ProviderPreference,
     type SettingsCategory,
@@ -71,7 +72,7 @@
 
   const categoryCopy = {
     general: ['General', 'Choose what LoopCode opens and where new threads start.'],
-    appearance: ['Appearance', 'Adjust density, motion, scale, and content width.'],
+    appearance: ['Appearance', 'Choose the color mode and theme, then adjust interface layout.'],
     conversation: ['Conversation', 'Control how transcript content is displayed.'],
     composer: ['Composer', 'Choose how prompt editing and sending behave.'],
     agents: ['Agents and permissions', 'Control agent access and thread title generation.'],
@@ -101,6 +102,11 @@
 
   function selectValue(event: Event) {
     return event.currentTarget instanceof HTMLSelectElement ? event.currentTarget.value : '';
+  }
+
+  function setTheme(value: string) {
+    const theme = THEME_OPTIONS.find((option) => option.id === value);
+    if (theme) setPreference('theme', theme.id);
   }
 
   function providerModelValue(profileId: string) {
@@ -256,6 +262,39 @@
     {:else if category === 'appearance'}
       <div class="settings-card">
         <div class="settings-row">
+          <span class="settings-row-copy">
+            <strong>Color mode</strong>
+            <small>Follow the system appearance or keep LoopCode light or dark.</small>
+          </span>
+          <RadioGroup.Root
+            class="settings-segmented-control"
+            aria-label="Color mode"
+            orientation="horizontal"
+            value={preferences.colorMode}
+            onValueChange={(value) => setPreference('colorMode', value === 'light' || value === 'dark' ? value : 'system')}
+          >
+            <RadioGroup.Item class="settings-segmented-option" value="system">System</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="light">Light</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="dark">Dark</RadioGroup.Item>
+          </RadioGroup.Root>
+        </div>
+        <div class="settings-row settings-row-separated">
+          <span class="settings-row-copy">
+            <strong>Theme</strong>
+            <small>Apply one palette across both light and dark modes.</small>
+          </span>
+          <select
+            class="settings-select"
+            aria-label="Theme"
+            value={preferences.theme}
+            onchange={(event) => setTheme(selectValue(event))}
+          >
+            {#each THEME_OPTIONS as theme (theme.id)}
+              <option value={theme.id}>{theme.label}</option>
+            {/each}
+          </select>
+        </div>
+        <div class="settings-row settings-row-separated">
           <span class="settings-row-copy">
             <strong>Sidebar thread spacing</strong>
             <small>Show full thread details or fit more threads in the sidebar.</small>

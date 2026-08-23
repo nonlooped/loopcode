@@ -86,7 +86,12 @@
   const appWebview = getCurrentWebview();
   const webPreview = !import.meta.env.TAURI_ENV_PLATFORM;
   const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const colorPreference = window.matchMedia('(prefers-color-scheme: dark)');
   const loadedPreferences = loadAppPreferences();
+  document.documentElement.dataset.theme = loadedPreferences.theme;
+  document.documentElement.dataset.colorMode = loadedPreferences.colorMode === 'system'
+    ? colorPreference.matches ? 'dark' : 'light'
+    : loadedPreferences.colorMode;
   loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId)?.id ?? officialProfiles[0].id;
   loadedPreferences.providerModelDefaults = Object.fromEntries(
     officialProfiles.flatMap((profile) => {
@@ -142,6 +147,7 @@
   let settingsCategory = $state<SettingsCategory>('general');
   let preferences = $state<AppPreferences>(loadedPreferences);
   let systemReducedMotion = $state(motionPreference.matches);
+  let systemDarkMode = $state(colorPreference.matches);
   const initialPermissionMode = loadPermissionMode();
   let permissionMode = $state<PermissionMode>(initialPermissionMode);
   let windowMaximized = $state(false);
@@ -169,6 +175,11 @@
 
   const reducedMotion = $derived(
     systemReducedMotion || preferences.motionMode === 'reduced',
+  );
+  const resolvedColorMode = $derived(
+    preferences.colorMode === 'system'
+      ? systemDarkMode ? 'dark' : 'light'
+      : preferences.colorMode,
   );
   const profiles = $derived(configuredProviderProfiles(officialProfiles, preferences.providerSettings));
   const enabledProfiles = $derived(
@@ -240,6 +251,14 @@
   });
 
   $effect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = preferences.theme;
+    root.dataset.colorMode = resolvedColorMode;
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+      ?.setAttribute('content', getComputedStyle(root).getPropertyValue('--shell-solid').trim());
+  });
+
+  $effect(() => {
     providers.setTitlePreference(preferences.automaticTitleGeneration
       ? { profileId: preferences.titleProviderId, modelId: preferences.titleModelId }
       : undefined);
@@ -302,7 +321,11 @@
     const syncMotionPreference = (event: MediaQueryListEvent) => {
       systemReducedMotion = event.matches;
     };
+    const syncColorPreference = (event: MediaQueryListEvent) => {
+      systemDarkMode = event.matches;
+    };
     motionPreference.addEventListener('change', syncMotionPreference);
+    colorPreference.addEventListener('change', syncColorPreference);
 
     const syncMaximizedState = async () => {
       const maximized = await appWindow.isMaximized();
@@ -332,6 +355,7 @@
       window.clearTimeout(zoomNoticeTimer);
       window.clearTimeout(completionRefreshTimer);
       motionPreference.removeEventListener('change', syncMotionPreference);
+      colorPreference.removeEventListener('change', syncColorPreference);
       unlistenResize?.();
       unlistenClose?.();
     };

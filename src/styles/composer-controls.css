@@ -14,7 +14,7 @@
 .send-button,
 .cancel-button {
   background: var(--accent);
-  color: #1f2023;
+  color: var(--accent-contrast);
 }
 
 .send-button:hover:not(:disabled),
@@ -23,8 +23,8 @@
 }
 
 .send-button:disabled {
-  background: rgba(238, 238, 241, 0.78);
-  color: rgba(28, 29, 32, 0.72);
+  background: color-mix(in srgb, var(--accent) 78%, transparent);
+  color: var(--accent-contrast-soft);
   opacity: 0.9;
 }
 

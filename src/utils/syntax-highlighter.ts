@@ -13,10 +13,14 @@ import toml from "shiki/langs/toml.mjs";
 import tsx from "shiki/langs/tsx.mjs";
 import typescript from "shiki/langs/typescript.mjs";
 import yaml from "shiki/langs/yaml.mjs";
+import { createHighlighterCoreSync } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import githubDark from "shiki/themes/github-dark.mjs";
-import { createShikiHighlighter, escapeHtml } from "@humanspeak/svelte-markdown/extensions/shiki";
+import githubLight from "shiki/themes/github-light.mjs";
+import { escapeHtml, type ShikiHighlighter } from "@humanspeak/svelte-markdown/extensions/shiki";
 
-export const syntaxHighlighter = createShikiHighlighter({
+const highlighter = createHighlighterCoreSync({
+  engine: createJavaScriptRegexEngine(),
   langs: [
     bash,
     css,
@@ -34,8 +38,27 @@ export const syntaxHighlighter = createShikiHighlighter({
     typescript,
     yaml,
   ],
-  themes: [githubDark],
+  themes: [githubDark, githubLight],
 });
+const loadedLanguages = new Set(highlighter.getLoadedLanguages());
+
+export const syntaxHighlighter: ShikiHighlighter = {
+  hasLang: (language) => loadedLanguages.has(language),
+  highlight(code, language) {
+    if (!language || !loadedLanguages.has(language)) {
+      return `<pre class="shiki-fallback"><code>${escapeHtml(code)}</code></pre>`;
+    }
+    try {
+      return highlighter.codeToHtml(code, {
+        lang: language,
+        themes: { light: "github-light", dark: "github-dark" },
+        defaultColor: false,
+      });
+    } catch {
+      return `<pre class="shiki-fallback"><code>${escapeHtml(code)}</code></pre>`;
+    }
+  },
+};
 
 const languages = {
   bash: "bash",
