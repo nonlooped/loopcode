@@ -192,6 +192,10 @@
     padding: 14px;
   }
 
+  .settings-visual-section {
+    padding: 14px;
+  }
+
   .settings-row
     > :is(
       .toggle-control,
@@ -200,15 +204,25 @@
       .settings-text-input,
       .settings-action,
       .settings-range-control,
-      .settings-combined-control
+      .settings-combined-control,
+      .settings-preview-control
     ) {
     grid-column: 1;
     justify-self: start;
   }
 
   .settings-row
-    > :is(.settings-segmented-control, .settings-range-control, .settings-combined-control) {
+    > :is(
+      .settings-segmented-control,
+      .settings-range-control,
+      .settings-combined-control,
+      .settings-preview-control
+    ) {
     width: 100%;
+  }
+
+  .settings-preview-control {
+    justify-content: space-between;
   }
 
   .settings-combined-control {

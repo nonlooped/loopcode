@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { fly } from 'svelte/transition';
-  import { IconArrowLeft, IconPlus, IconTrash } from '@tabler/icons-svelte';
+  import { IconArrowLeft, IconCheck, IconPlus, IconTrash } from '@tabler/icons-svelte';
   import { RadioGroup, Slider, Switch } from 'bits-ui';
 
   import { exportDiagnostics } from '../services/native';
@@ -261,69 +261,100 @@
       </div>
     {:else if category === 'appearance'}
       <div class="settings-card">
-        <div class="settings-row">
+        <div class="settings-visual-section">
           <span class="settings-row-copy">
             <strong>Color mode</strong>
             <small>Follow the system appearance or keep LoopCode light or dark.</small>
           </span>
           <RadioGroup.Root
-            class="settings-segmented-control"
+            class="settings-mode-grid"
             aria-label="Color mode"
             orientation="horizontal"
             value={preferences.colorMode}
             onValueChange={(value) => setPreference('colorMode', value === 'light' || value === 'dark' ? value : 'system')}
           >
-            <RadioGroup.Item class="settings-segmented-option" value="system">System</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="light">Light</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="dark">Dark</RadioGroup.Item>
+            {#each ['system', 'light', 'dark'] as mode (mode)}
+              <RadioGroup.Item class={`settings-choice-card settings-mode-${mode}`} value={mode}>
+                <span class="settings-mode-preview" aria-hidden="true">
+                  <span class="settings-mode-sidebar"></span>
+                  <span class="settings-mode-content">
+                    <i></i><i></i><i></i>
+                    <b></b>
+                  </span>
+                </span>
+                <span class="settings-choice-label">{mode === 'system' ? 'System' : mode === 'light' ? 'Light' : 'Dark'}</span>
+                <span class="settings-choice-check" aria-hidden="true"><IconCheck size={11} stroke={2} /></span>
+              </RadioGroup.Item>
+            {/each}
           </RadioGroup.Root>
         </div>
-        <div class="settings-row settings-row-separated">
+        <div class="settings-visual-section settings-row-separated">
           <span class="settings-row-copy">
             <strong>Theme</strong>
-            <small>Apply one palette across both light and dark modes.</small>
-          </span>
-          <select
-            class="settings-select"
-            aria-label="Theme"
-            value={preferences.theme}
-            onchange={(event) => setTheme(selectValue(event))}
-          >
-            {#each THEME_OPTIONS as theme (theme.id)}
-              <option value={theme.id}>{theme.label}</option>
-            {/each}
-          </select>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-copy">
-            <strong>Sidebar thread spacing</strong>
-            <small>Show full thread details or fit more threads in the sidebar.</small>
+            <small>Preview each palette in light and dark mode.</small>
           </span>
           <RadioGroup.Root
-            class="settings-segmented-control"
+            class="settings-theme-grid"
+            aria-label="Theme"
+            value={preferences.theme}
+            onValueChange={setTheme}
+          >
+            {#each THEME_OPTIONS as theme (theme.id)}
+              <RadioGroup.Item class={`settings-choice-card settings-theme-choice theme-preview-${theme.id}`} value={theme.id}>
+                <span class="settings-theme-preview" aria-hidden="true">
+                  <span class="settings-theme-preview-light"></span>
+                  <span class="settings-theme-preview-dark"></span>
+                </span>
+                <span class="settings-choice-label">{theme.label}</span>
+                <span class="settings-choice-check" aria-hidden="true"><IconCheck size={11} stroke={2} /></span>
+              </RadioGroup.Item>
+            {/each}
+          </RadioGroup.Root>
+        </div>
+        <div class="settings-visual-section settings-row-separated">
+          <span class="settings-row-copy">
+            <strong>Sidebar thread spacing</strong>
+            <small>Preview how much detail each thread shows in the sidebar.</small>
+          </span>
+          <RadioGroup.Root
+            class="settings-density-grid"
             aria-label="Sidebar thread spacing"
             orientation="horizontal"
             value={preferences.compactSessionRows ? 'compact' : 'comfortable'}
             onValueChange={(value) => setPreference('compactSessionRows', value === 'compact')}
           >
-            <RadioGroup.Item class="settings-segmented-option" value="comfortable">Comfortable</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="compact">Compact</RadioGroup.Item>
+            {#each ['comfortable', 'compact'] as density (density)}
+              <RadioGroup.Item class="settings-choice-card settings-density-choice" value={density}>
+                <span class:compact={density === 'compact'} class="settings-density-preview settings-sidebar-density-preview" aria-hidden="true">
+                  <i></i><i></i><i></i><i></i>
+                </span>
+                <span class="settings-choice-label">{density === 'compact' ? 'Compact' : 'Comfortable'}</span>
+                <span class="settings-choice-check" aria-hidden="true"><IconCheck size={11} stroke={2} /></span>
+              </RadioGroup.Item>
+            {/each}
           </RadioGroup.Root>
         </div>
-        <div class="settings-row settings-row-separated">
+        <div class="settings-visual-section settings-row-separated">
           <span class="settings-row-copy">
             <strong>Transcript spacing</strong>
-            <small>Use standard message spacing or fit more transcript entries on screen.</small>
+            <small>Preview the space between transcript entries.</small>
           </span>
           <RadioGroup.Root
-            class="settings-segmented-control"
+            class="settings-density-grid"
             aria-label="Transcript spacing"
             orientation="horizontal"
             value={preferences.transcriptDensity}
             onValueChange={(value) => setPreference('transcriptDensity', value === 'compact' ? 'compact' : 'comfortable')}
           >
-            <RadioGroup.Item class="settings-segmented-option" value="comfortable">Comfortable</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="compact">Compact</RadioGroup.Item>
+            {#each ['comfortable', 'compact'] as density (density)}
+              <RadioGroup.Item class="settings-choice-card settings-density-choice" value={density}>
+                <span class:compact={density === 'compact'} class="settings-density-preview settings-transcript-density-preview" aria-hidden="true">
+                  <i></i><i></i><i></i>
+                </span>
+                <span class="settings-choice-label">{density === 'compact' ? 'Compact' : 'Comfortable'}</span>
+                <span class="settings-choice-check" aria-hidden="true"><IconCheck size={11} stroke={2} /></span>
+              </RadioGroup.Item>
+            {/each}
           </RadioGroup.Root>
         </div>
         <div class="settings-row settings-row-separated">
@@ -402,14 +433,17 @@
             <strong>Wrap message code</strong>
             <small>Wrap long lines in message code blocks instead of scrolling horizontally.</small>
           </span>
-          <Switch.Root
-            class="toggle-control"
-            aria-label="Wrap message code"
-            checked={preferences.wrapCode}
-            onCheckedChange={(value) => setPreference('wrapCode', value)}
-          >
-            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
-          </Switch.Root>
+          <div class="settings-preview-control">
+            <span class:wrap={preferences.wrapCode} class="settings-code-preview" aria-hidden="true"><code>const model = provider.create(options);</code></span>
+            <Switch.Root
+              class="toggle-control"
+              aria-label="Wrap message code"
+              checked={preferences.wrapCode}
+              onCheckedChange={(value) => setPreference('wrapCode', value)}
+            >
+              <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
+            </Switch.Root>
+          </div>
         </div>
         <div class="settings-row settings-row-separated">
           <span class="settings-row-copy">
@@ -448,14 +482,14 @@
             <small>Choose whether Enter sends or inserts a new line in the composer.</small>
           </span>
           <RadioGroup.Root
-            class="settings-segmented-control"
+            class="settings-segmented-control settings-shortcut-control"
             aria-label="Send shortcut"
             orientation="horizontal"
             value={preferences.sendShortcut}
             onValueChange={(value) => setPreference('sendShortcut', value === 'modifier-enter' ? 'modifier-enter' : 'enter')}
           >
-            <RadioGroup.Item class="settings-segmented-option" value="enter">Enter</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="modifier-enter">Modifier + Enter</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option settings-shortcut-option" value="enter"><kbd>Enter</kbd></RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option settings-shortcut-option" value="modifier-enter"><kbd>Ctrl/⌘</kbd><span>+</span><kbd>Enter</kbd></RadioGroup.Item>
           </RadioGroup.Root>
         </div>
       </div>
@@ -664,7 +698,8 @@
             <strong>Terminal text size</strong>
             <small>Change the terminal font without scaling the rest of the app.</small>
           </span>
-          <div class="settings-range-control">
+          <div class="settings-range-control settings-terminal-size-control">
+            <span class="settings-terminal-sample" style:font-size={`${preferences.terminalFontSize}px`} aria-hidden="true">$ loopcode</span>
             <output>{preferences.terminalFontSize}px</output>
             <Slider.Root
               class="settings-slider"
@@ -690,16 +725,17 @@
             <strong>Terminal scrollback</strong>
             <small>Keep this many lines available above the visible terminal.</small>
           </span>
-          <select
-            class="settings-select"
+          <RadioGroup.Root
+            class="settings-segmented-control"
             aria-label="Terminal scrollback"
-            value={preferences.terminalScrollback}
-            onchange={(event) => setPreference('terminalScrollback', Number(selectValue(event)))}
+            orientation="horizontal"
+            value={String(preferences.terminalScrollback)}
+            onValueChange={(value) => setPreference('terminalScrollback', Number(value))}
           >
-            <option value={1000}>1,000 lines</option>
-            <option value={5000}>5,000 lines</option>
-            <option value={10000}>10,000 lines</option>
-          </select>
+            <RadioGroup.Item class="settings-segmented-option" value="1000">1,000</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="5000">5,000</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="10000">10,000</RadioGroup.Item>
+          </RadioGroup.Root>
         </div>
       </div>
     {:else}

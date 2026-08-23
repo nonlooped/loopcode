@@ -1,5 +1,6 @@
 :root,
-:root[data-theme="graphite"] {
+:root[data-theme="graphite"],
+.theme-preview-graphite {
   --theme-dark-shell-rgb: 23 24 27;
   --theme-dark-surface-rgb: 30 31 35;
   --theme-dark-accent-rgb: 236 236 238;
@@ -8,7 +9,8 @@
   --theme-light-accent-rgb: 54 56 62;
 }
 
-:root[data-theme="rose"] {
+:root[data-theme="rose"],
+.theme-preview-rose {
   --theme-dark-shell-rgb: 27 18 22;
   --theme-dark-surface-rgb: 40 27 33;
   --theme-dark-accent-rgb: 239 191 207;
@@ -17,7 +19,8 @@
   --theme-light-accent-rgb: 145 49 82;
 }
 
-:root[data-theme="sand"] {
+:root[data-theme="sand"],
+.theme-preview-sand {
   --theme-dark-shell-rgb: 27 24 18;
   --theme-dark-surface-rgb: 39 35 27;
   --theme-dark-accent-rgb: 229 211 171;
@@ -26,7 +29,8 @@
   --theme-light-accent-rgb: 112 83 27;
 }
 
-:root[data-theme="ember"] {
+:root[data-theme="ember"],
+.theme-preview-ember {
   --theme-dark-shell-rgb: 28 20 17;
   --theme-dark-surface-rgb: 41 29 24;
   --theme-dark-accent-rgb: 239 180 150;
@@ -35,7 +39,8 @@
   --theme-light-accent-rgb: 146 60 29;
 }
 
-:root[data-theme="amber"] {
+:root[data-theme="amber"],
+.theme-preview-amber {
   --theme-dark-shell-rgb: 27 23 14;
   --theme-dark-surface-rgb: 39 33 20;
   --theme-dark-accent-rgb: 236 201 123;
@@ -44,7 +49,8 @@
   --theme-light-accent-rgb: 125 86 13;
 }
 
-:root[data-theme="forest"] {
+:root[data-theme="forest"],
+.theme-preview-forest {
   --theme-dark-shell-rgb: 16 25 20;
   --theme-dark-surface-rgb: 24 37 29;
   --theme-dark-accent-rgb: 164 214 181;
@@ -53,7 +59,8 @@
   --theme-light-accent-rgb: 35 105 62;
 }
 
-:root[data-theme="teal"] {
+:root[data-theme="teal"],
+.theme-preview-teal {
   --theme-dark-shell-rgb: 14 25 25;
   --theme-dark-surface-rgb: 21 38 37;
   --theme-dark-accent-rgb: 142 215 207;
@@ -62,7 +69,8 @@
   --theme-light-accent-rgb: 19 105 99;
 }
 
-:root[data-theme="ocean"] {
+:root[data-theme="ocean"],
+.theme-preview-ocean {
   --theme-dark-shell-rgb: 15 23 29;
   --theme-dark-surface-rgb: 22 34 43;
   --theme-dark-accent-rgb: 155 205 231;
@@ -71,7 +79,8 @@
   --theme-light-accent-rgb: 29 91 127;
 }
 
-:root[data-theme="indigo"] {
+:root[data-theme="indigo"],
+.theme-preview-indigo {
   --theme-dark-shell-rgb: 19 20 31;
   --theme-dark-surface-rgb: 28 30 46;
   --theme-dark-accent-rgb: 182 190 238;
@@ -80,7 +89,8 @@
   --theme-light-accent-rgb: 61 70 143;
 }
 
-:root[data-theme="violet"] {
+:root[data-theme="violet"],
+.theme-preview-violet {
   --theme-dark-shell-rgb: 24 19 31;
   --theme-dark-surface-rgb: 36 28 45;
   --theme-dark-accent-rgb: 208 180 235;
