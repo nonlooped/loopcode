@@ -47,6 +47,8 @@ void test("app preferences use safe defaults and validate persisted values", () 
   };
 
   const defaults = {
+    colorMode: "system",
+    theme: "graphite",
     compactSessionRows: false,
     startupBehavior: "last-thread",
     newThreadProject: "selected",
@@ -70,6 +72,8 @@ void test("app preferences use safe defaults and validate persisted values", () 
   };
   assert.deepEqual(loadAppPreferences(storage), defaults);
 
+  saveAppPreference("colorMode", "light", storage);
+  saveAppPreference("theme", "rose", storage);
   saveAppPreference("compactSessionRows", true, storage);
   saveAppPreference("startupBehavior", "new-thread", storage);
   saveAppPreference("motionMode", "reduced", storage);
@@ -93,6 +97,8 @@ void test("app preferences use safe defaults and validate persisted values", () 
   saveAppPreference("sendShortcut", "modifier-enter", storage);
   assert.deepEqual(loadAppPreferences(storage), {
     ...defaults,
+    colorMode: "light",
+    theme: "rose",
     compactSessionRows: true,
     startupBehavior: "new-thread",
     motionMode: "reduced",
@@ -112,6 +118,8 @@ void test("app preferences use safe defaults and validate persisted values", () 
     sendShortcut: "modifier-enter",
   });
 
+  values.set("loopcode.color-mode", "unexpected");
+  values.set("loopcode.theme", "not-a-theme");
   values.set("loopcode.interface-zoom", "500");
   values.set("loopcode.content-width", "200");
   values.set("loopcode.provider-model-defaults", "invalid");
@@ -124,6 +132,8 @@ void test("app preferences use safe defaults and validate persisted values", () 
   );
   values.set("loopcode.terminal-font-size", "invalid");
   values.set("loopcode.terminal-scrollback", "20");
+  assert.equal(loadAppPreferences(storage).colorMode, "system");
+  assert.equal(loadAppPreferences(storage).theme, "graphite");
   assert.equal(loadAppPreferences(storage).interfaceZoom, 200);
   assert.equal(loadAppPreferences(storage).contentWidth, 600);
   assert.deepEqual(loadAppPreferences(storage).providerModelDefaults, {});
@@ -152,6 +162,8 @@ void test("reset removes preferences without touching workspace history", () => 
   const removed = [];
   resetAppSettings({ removeItem: (key) => removed.push(key) });
 
+  assert.ok(removed.includes("loopcode.color-mode"));
+  assert.ok(removed.includes("loopcode.theme"));
   assert.ok(removed.includes("loopcode.default-provider"));
   assert.ok(removed.includes("loopcode.title-provider"));
   assert.ok(removed.includes("loopcode.auto-follow-output"));
