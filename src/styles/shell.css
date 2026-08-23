@@ -167,7 +167,7 @@
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  filter: invert(1);
+  filter: var(--provider-filter);
   opacity: 0.68;
 }
 
@@ -255,7 +255,7 @@
   padding-top: var(--titlebar-height);
   flex-direction: column;
   overflow: visible;
-  border-right: 1px solid rgba(255, 255, 255, 0.052);
+  border-right: 1px solid var(--line);
   background: var(--sidebar-tint);
   opacity: 1;
   will-change: width, opacity;

@@ -22,8 +22,8 @@
 
 .reasoning-picker-trigger:hover:not(:disabled),
 .reasoning-picker-trigger[aria-expanded="true"] {
-  border-color: rgba(255, 255, 255, 0.04);
-  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--line);
+  background: var(--panel);
   color: var(--text-soft);
 }
 
@@ -103,7 +103,7 @@
 .reasoning-option:hover,
 .reasoning-option:focus-visible,
 .reasoning-option[data-highlighted] {
-  background: rgba(255, 255, 255, 0.075);
+  background: var(--panel-active);
   color: var(--text);
 }
 

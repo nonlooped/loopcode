@@ -33,7 +33,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
   gap: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.095);
+  border: 1px solid var(--line-strong);
   border-radius: 18px;
   box-shadow:
     0 12px 38px rgba(0, 0, 0, 0.18),
@@ -41,14 +41,14 @@
 }
 
 .composer:focus-within {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: var(--focus-ring);
   box-shadow:
     0 12px 38px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .composer.working {
-  border-color: rgba(255, 255, 255, 0.11);
+  border-color: var(--line-strong);
 }
 
 .prompt-editor {
@@ -305,14 +305,14 @@
   height: 17px;
   padding: 0;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: rgba(41, 42, 46, 0.96);
+  background: var(--floating-solid);
   color: var(--text-soft);
 }
 
 .image-attachment .image-attachment-remove:hover {
-  background: rgba(53, 54, 59, 0.96);
+  background: var(--raised-hover);
   color: var(--text);
 }
 
@@ -361,8 +361,8 @@
 
 .model-picker-trigger:hover:not(:disabled),
 .model-picker-trigger[aria-expanded="true"] {
-  border-color: rgba(255, 255, 255, 0.04);
-  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--line);
+  background: var(--panel);
   color: var(--text-soft);
 }
 
@@ -375,7 +375,7 @@
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  filter: invert(1);
+  filter: var(--provider-filter);
   opacity: 0.62;
 }
 
@@ -394,9 +394,9 @@
   width: min(var(--content-width, 720px), 100%);
   margin: 0 auto;
   padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.095);
+  border: 1px solid var(--line-strong);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.018);
+  background: var(--panel);
   box-shadow:
     0 12px 38px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.025);
@@ -439,7 +439,7 @@
   padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--panel);
   color: var(--text-soft);
   text-align: left;
 }
@@ -469,7 +469,7 @@
   padding: 8px;
   overflow: auto;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--recessed-surface);
   color: var(--text-soft);
   font:
     10px/1.45 "Cascadia Mono",
@@ -492,7 +492,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   outline: none;
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--panel);
   color: var(--text);
   font: inherit;
 }
@@ -528,15 +528,15 @@
 }
 
 .question-composer-submit {
-  border-color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.88);
-  color: rgba(12, 12, 14, 0.94);
+  border-color: var(--line-strong);
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-weight: 600;
 }
 
 .question-composer-submit:hover,
 .question-composer-submit:focus-visible {
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--accent-hover);
 }
 
 .question-composer-submit:disabled {

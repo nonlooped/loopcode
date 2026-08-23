@@ -44,7 +44,7 @@
   margin-left: 3px;
   border-radius: 999px;
   background: linear-gradient(to bottom, var(--text-soft), var(--faint));
-  box-shadow: 0 0 7px rgba(235, 236, 239, 0.16);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 16%, transparent);
   vertical-align: -0.12em;
   animation: stream-caret-breathe 1.15s ease-in-out infinite;
   content: "";

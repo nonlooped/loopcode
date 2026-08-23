@@ -10,7 +10,7 @@
   min-height: 0;
   flex-direction: column;
   overflow: visible;
-  border-left: 1px solid rgba(255, 255, 255, 0.052);
+  border-left: 1px solid var(--line);
   background: var(--sidebar-tint);
   opacity: 1;
   transition:

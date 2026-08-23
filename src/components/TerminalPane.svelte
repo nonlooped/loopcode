@@ -58,6 +58,13 @@
     fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(host);
+    const themeObserver = new MutationObserver(() => {
+      if (terminal) terminal.options.theme = terminalTheme();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-color-mode', 'data-theme'],
+    });
 
     const inputSubscription = terminal.onData((data) => {
       const id = terminalId;
@@ -88,6 +95,7 @@
       disposed = true;
       launchGeneration += 1;
       resizeObserver.disconnect();
+      themeObserver.disconnect();
       inputSubscription.dispose();
       resizeSubscription.dispose();
       terminal?.dispose();
@@ -170,7 +178,7 @@
       foreground: color('--text-soft'),
       cursor: color('--text'),
       cursorAccent: color('--shell-solid'),
-      selectionBackground: 'rgba(210, 213, 220, 0.24)',
+      selectionBackground: color('--selection'),
       black: color('--shell-solid'),
       red: color('--danger'),
       green: color('--success'),

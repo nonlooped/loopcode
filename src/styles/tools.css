@@ -8,7 +8,7 @@
 
 .tool-item[data-state="open"] {
   border-color: var(--line);
-  background: rgba(255, 255, 255, 0.014);
+  background: var(--panel);
 }
 
 .tool-item-trigger {
@@ -25,7 +25,7 @@
 }
 
 .tool-item-trigger:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--panel-hover);
   opacity: 1;
 }
 
@@ -79,7 +79,7 @@
   padding: 7px 8px;
   border: 1px solid var(--line);
   border-radius: 5px;
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--recessed-surface);
   color: var(--muted);
   font-size: 9.5px;
   line-height: 1.45;
