@@ -26,6 +26,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       actions: read
+      checks: read
       contents: read
     steps:
       - name: Require successful master CI for this commit
