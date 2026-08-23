@@ -273,7 +273,7 @@ async fn check_git_branch_name(cwd: &Path, branch: &str, label: &str) -> Result<
 async fn list_git_branches_at(cwd: &Path) -> Result<Vec<String>, String> {
     let output = git_output(
         cwd,
-        ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+        ["for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads"],
         4,
         "Could not list Git branches",
     )
@@ -637,6 +637,7 @@ mod tests {
         run_test_git(&repository, &["add", "README.md"]);
         run_test_git(&repository, &["commit", "-m", "Initial commit"]);
         run_test_git(&repository, &["branch", "other"]);
+        run_test_git(&repository, &["tag", "other"]);
 
         tauri::async_runtime::block_on(async {
             let branches = list_git_branches_at(&repository)
@@ -644,6 +645,7 @@ mod tests {
                 .expect("branches should be listed");
             assert!(branches.contains(&"main".to_owned()));
             assert!(branches.contains(&"other".to_owned()));
+            assert!(!branches.contains(&"heads/other".to_owned()));
 
             switch_git_branch_at(&repository, "other")
                 .await
