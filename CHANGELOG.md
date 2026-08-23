@@ -1,3 +1,14 @@
+## [0.3.0] - 2026-08-23
+
+### 🚀 Features
+
+- _(settings)_ Reorganize preferences and controls
+
+### 🐛 Bug Fixes
+
+- _(release)_ List commits in release notes
+- _(release)_ Link listed commits
+
 ## [0.2.0] - 2026-08-22
 
 ### 🚀 Features
@@ -39,6 +50,7 @@
 - _(files)_ Cap active project watchers
 - _(providers)_ Await replaced process shutdown
 - _(workspace)_ Report repaired provider ids
+- _(release)_ Format generated changelog
 
 ## [0.1.0] - 2026-08-21
 
