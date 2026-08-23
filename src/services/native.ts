@@ -52,6 +52,9 @@ const terminalEventSchema = z.discriminatedUnion("event", [
 ]);
 
 const startTerminalResultSchema = z.object({ terminalId: z.string().min(1) });
+const gitBranchSchema = z.string().min(1).max(1024);
+const gitBranchesSchema = z.array(gitBranchSchema).max(10_000);
+const gitWorktreeSchema = z.object({ path: z.string().min(1), branch: gitBranchSchema });
 
 export type TerminalEvent = z.infer<typeof terminalEventSchema>;
 
@@ -164,8 +167,24 @@ export function pickFolder(): Promise<string | null> {
   return invoke<string | null>("pick_folder");
 }
 
-export function getGitBranch(cwd: string): Promise<string | null> {
-  return invoke<string | null>("get_git_branch", { cwd });
+export async function getGitBranch(cwd: string): Promise<string | null> {
+  return gitBranchSchema.nullable().parse(await invoke("get_git_branch", { cwd }));
+}
+
+export async function listGitBranches(cwd: string): Promise<string[]> {
+  return gitBranchesSchema.parse(await invoke("list_git_branches", { cwd }));
+}
+
+export function switchGitBranch(cwd: string, branch: string): Promise<void> {
+  return invoke("switch_git_branch", { cwd, branch });
+}
+
+export async function createGitWorktree(
+  cwd: string,
+  baseBranch: string,
+  branch: string,
+): Promise<{ path: string; branch: string }> {
+  return gitWorktreeSchema.parse(await invoke("create_git_worktree", { cwd, baseBranch, branch }));
 }
 
 export async function getProviderVersion(command: string, args: string[]): Promise<string | null> {
