@@ -4,7 +4,6 @@
   import {
     IconArrowUp,
     IconFolder,
-    IconGitBranch,
     IconPaperclip,
     IconPlayerStop,
     IconPlugConnected,
@@ -13,6 +12,7 @@
   } from '@tabler/icons-svelte';
 
   import ContextMenu from './ContextMenu.svelte';
+  import GitControls from './GitControls.svelte';
   import ImagePreview from './ImagePreview.svelte';
   import ModelPicker from './ModelPicker.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
@@ -57,6 +57,11 @@
     projectName: string;
     completionRevision: number;
     currentBranch: string | null | undefined;
+    gitBranches: string[] | null | undefined;
+    gitWorktree: boolean;
+    gitEditable: boolean;
+    gitLockReason?: string;
+    gitBusy: boolean;
     reducedMotion: boolean;
     sendShortcut: SendShortcut;
     spellcheck: boolean;
@@ -70,6 +75,8 @@
     selectFastMode: (enabled: boolean) => void;
     activateProvider: (profileId: string) => void;
     retryDiscovery: (profileId: string) => void;
+    switchGitBranch: (branch: string) => Promise<void>;
+    createGitWorktree: (baseBranch: string, branch: string) => Promise<void>;
   }
 
   const props: Props = $props();
@@ -671,7 +678,7 @@
       {:else if status === 'error' || status === 'stopped'}
         <button class="reconnect-button" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.7} /></button>
       {:else}
-        <button class="send-button" aria-label="Send prompt" title={hasMissingReferences() ? 'Remove missing references before sending' : 'Send prompt'} disabled={(!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
+        <button class="send-button" aria-label="Send prompt" title={hasMissingReferences() ? 'Remove missing references before sending' : props.gitBusy ? 'Wait for the Git operation to finish' : 'Send prompt'} disabled={props.gitBusy || (!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
           <IconArrowUp size={17} stroke={2} />
         </button>
       {/if}
@@ -680,10 +687,17 @@
   <div class="composer-meta">
     <span class="composer-meta-project" title={props.thread.cwd}><IconFolder size={12} stroke={1.55} /><span>{props.projectName}</span></span>
     <span class="composer-meta-actions">
-      <span title={props.currentBranch ?? 'No Git branch'} class="worktree-path">
-        <IconGitBranch size={12} stroke={1.55} />
-        {props.currentBranch === undefined ? 'Resolving branch…' : props.currentBranch ?? 'No Git branch'}
-      </span>
+      <GitControls
+        cwd={props.thread.cwd}
+        currentBranch={props.currentBranch}
+        branches={props.gitBranches}
+        worktree={props.gitWorktree}
+        editable={props.gitEditable}
+        lockReason={props.gitLockReason}
+        busy={props.gitBusy}
+        switchBranch={props.switchGitBranch}
+        createWorktree={props.createGitWorktree}
+      />
     </span>
   </div>
 </section>

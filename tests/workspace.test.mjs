@@ -163,6 +163,20 @@ void test("snapshots retain private sessions but exclude transient provider stat
   assert.equal(restarted.state.threads[0].providers.codex.sessionId, "private-session");
 });
 
+void test("changes only empty thread working folders and keeps their project", () => {
+  const { workspace } = setup();
+  const project = workspace.ensureProject("C:\\loopcode");
+  const thread = workspace.addThread("C:\\default", project.id);
+
+  assert.equal(workspace.setThreadWorkingFolder(thread.id, "C:\\worktrees\\feature"), true);
+  assert.equal(thread.cwd, "C:\\worktrees\\feature");
+  assert.equal(thread.projectId, project.id);
+
+  thread.messages.push({ id: "message", role: "user", text: "started", createdAt: 1 });
+  assert.equal(workspace.setThreadWorkingFolder(thread.id, "C:\\worktrees\\other"), false);
+  assert.equal(thread.cwd, "C:\\worktrees\\feature");
+});
+
 void test("keeps project, selection, and deletion invariants behind one interface", () => {
   const { state, workspace } = setup();
   const project = workspace.ensureProject("C:\\loopcode");
