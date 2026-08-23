@@ -13,8 +13,10 @@ use project_files::{
     ProjectFileWatchers, list_composer_completions, open_project_path, read_project_directory,
     read_project_file, reveal_project_path, start_project_file_watcher, stop_project_file_watcher,
 };
+use serde::Serialize;
 use serde_json::Value;
 use std::{
+    ffi::OsString,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -207,6 +209,231 @@ async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
     Ok(git_ref(&cwd, &["rev-parse", "--short", "HEAD"]).await)
 }
 
+async fn git_output<I, S>(
+    cwd: &Path,
+    args: I,
+    timeout_seconds: u64,
+    context: &str,
+) -> Result<std::process::Output, String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let mut process = git_command();
+    process
+        .current_dir(cwd)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(timeout_seconds),
+        process.output(),
+    )
+    .await
+    .map_err(|_| format!("{context}: Git timed out"))?
+    .map_err(|error| format!("{context}: {error}"))?;
+    if output.status.success() {
+        return Ok(output);
+    }
+    let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let detail: String = detail.chars().take(2048).collect();
+    Err(if detail.is_empty() {
+        context.to_owned()
+    } else {
+        format!("{context}: {detail}")
+    })
+}
+
+fn validate_git_branch_value<'a>(branch: &'a str, label: &str) -> Result<&'a str, String> {
+    if branch.is_empty()
+        || branch.len() > 1024
+        || branch.trim() != branch
+        || branch.starts_with('-')
+        || branch.chars().any(char::is_control)
+    {
+        return Err(format!("Enter a valid {label}"));
+    }
+    Ok(branch)
+}
+
+async fn check_git_branch_name(cwd: &Path, branch: &str, label: &str) -> Result<(), String> {
+    let branch = validate_git_branch_value(branch, label)?;
+    git_output(
+        cwd,
+        ["check-ref-format", "--branch", branch],
+        4,
+        &format!("Enter a valid {label}"),
+    )
+    .await?;
+    Ok(())
+}
+
+async fn list_git_branches_at(cwd: &Path) -> Result<Vec<String>, String> {
+    let output = git_output(
+        cwd,
+        ["for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads"],
+        4,
+        "Could not list Git branches",
+    )
+    .await?;
+    let branches: Vec<_> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|branch| !branch.is_empty())
+        .map(str::to_owned)
+        .collect();
+    if branches.len() > 10_000 || branches.iter().any(|branch| branch.len() > 1024) {
+        return Err("The repository has too many Git branches to display".to_owned());
+    }
+    Ok(branches)
+}
+
+#[tauri::command]
+async fn list_git_branches(cwd: String) -> Result<Vec<String>, String> {
+    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
+        .await
+        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    list_git_branches_at(&cwd).await
+}
+
+async fn switch_git_branch_at(cwd: &Path, branch: &str) -> Result<(), String> {
+    check_git_branch_name(cwd, branch, "branch name").await?;
+    git_output(
+        cwd,
+        ["switch", "--no-guess", "--", branch],
+        15,
+        "Could not change Git branch",
+    )
+    .await?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn switch_git_branch(cwd: String, branch: String) -> Result<(), String> {
+    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
+        .await
+        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    switch_git_branch_at(&cwd, &branch).await
+}
+
+fn safe_path_component(value: &str) -> String {
+    let component: String = value
+        .chars()
+        .map(|character| {
+            if character.is_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .take(80)
+        .collect();
+    let component = component.trim_matches(['-', '.']);
+    if component.is_empty() {
+        "worktree".to_owned()
+    } else {
+        component.to_owned()
+    }
+}
+
+fn allocate_worktree_destination(
+    worktrees_root: &Path,
+    repository_root: &Path,
+    branch: &str,
+) -> Result<PathBuf, String> {
+    let repository_name = repository_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("repository");
+    let parent = worktrees_root.join(safe_path_component(repository_name));
+    std::fs::create_dir_all(&parent)
+        .map_err(|error| format!("Could not prepare the worktree directory: {error}"))?;
+    let name = format!("wt-{}", safe_path_component(branch));
+    for suffix in 1..=10_000 {
+        let destination = if suffix == 1 {
+            parent.join(&name)
+        } else {
+            parent.join(format!("{name}-{suffix}"))
+        };
+        if !destination
+            .try_exists()
+            .map_err(|error| format!("Could not inspect the worktree directory: {error}"))?
+        {
+            return Ok(destination);
+        }
+    }
+    Err("Could not allocate a worktree directory".to_owned())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitWorktreeResult {
+    path: String,
+    branch: String,
+}
+
+async fn create_git_worktree_at(
+    cwd: &Path,
+    worktrees_root: &Path,
+    base_branch: &str,
+    branch: &str,
+) -> Result<GitWorktreeResult, String> {
+    check_git_branch_name(cwd, base_branch, "base branch").await?;
+    check_git_branch_name(cwd, branch, "new branch name").await?;
+    let root_output = git_output(
+        cwd,
+        ["rev-parse", "--show-toplevel"],
+        4,
+        "Could not resolve the Git repository",
+    )
+    .await?;
+    let repository_root = PathBuf::from(String::from_utf8_lossy(&root_output.stdout).trim());
+    let worktrees_root = worktrees_root.to_owned();
+    let destination_branch = branch.to_owned();
+    let destination = tauri::async_runtime::spawn_blocking(move || {
+        allocate_worktree_destination(&worktrees_root, &repository_root, &destination_branch)
+    })
+    .await
+    .map_err(|error| format!("Could not join worktree path allocation task: {error}"))??;
+    let args = vec![
+        OsString::from("worktree"),
+        OsString::from("add"),
+        OsString::from("-b"),
+        OsString::from(branch),
+        OsString::from("--"),
+        destination.as_os_str().to_owned(),
+        OsString::from(base_branch),
+    ];
+    git_output(cwd, args, 30, "Could not create Git worktree").await?;
+    let destination = tauri::async_runtime::spawn_blocking(move || {
+        destination
+            .canonicalize()
+            .map_err(|error| format!("Could not resolve the new worktree: {error}"))
+    })
+    .await
+    .map_err(|error| format!("Could not join worktree path validation task: {error}"))??;
+    Ok(GitWorktreeResult {
+        path: destination.to_string_lossy().into_owned(),
+        branch: branch.to_owned(),
+    })
+}
+
+#[tauri::command]
+async fn create_git_worktree(
+    app: tauri::AppHandle,
+    cwd: String,
+    base_branch: String,
+    branch: String,
+) -> Result<GitWorktreeResult, String> {
+    let worktrees_root = loopcode_data_directory(&app)?.join("worktrees");
+    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
+        .await
+        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    create_git_worktree_at(&cwd, &worktrees_root, &base_branch, &branch).await
+}
+
 #[tauri::command]
 async fn provider_version(command: String, args: Vec<String>) -> Result<Option<String>, String> {
     validate_provider_command(&command, &args)?;
@@ -316,6 +543,9 @@ pub fn run() {
             export_diagnostics,
             pick_folder,
             get_git_branch,
+            list_git_branches,
+            switch_git_branch,
+            create_git_worktree,
             provider_version,
             provider_auth_status,
             list_composer_completions,
@@ -359,7 +589,26 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_version_line, validate_git_cwd, validate_provider_command};
+    use super::{
+        create_git_worktree_at, first_version_line, list_git_branches_at, switch_git_branch_at,
+        validate_git_cwd, validate_provider_command,
+    };
+    use std::{path::Path, process::Command};
+
+    fn run_test_git(cwd: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .expect("Git should run during tests");
+        assert!(
+            output.status.success(),
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    }
 
     #[test]
     fn git_working_folder_must_be_an_existing_absolute_directory() {
@@ -373,6 +622,53 @@ mod tests {
                 .canonicalize()
                 .expect("path should resolve")
         );
+    }
+
+    #[test]
+    fn git_branches_can_be_switched_and_used_for_managed_worktrees() {
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        let repository = directory.path().join("repository");
+        std::fs::create_dir(&repository).expect("repository directory should be created");
+        run_test_git(&repository, &["init", "--initial-branch=main"]);
+        run_test_git(&repository, &["config", "user.email", "test@example.com"]);
+        run_test_git(&repository, &["config", "user.name", "LoopCode tests"]);
+        std::fs::write(repository.join("README.md"), "test\n")
+            .expect("test file should be written");
+        run_test_git(&repository, &["add", "README.md"]);
+        run_test_git(&repository, &["commit", "-m", "Initial commit"]);
+        run_test_git(&repository, &["branch", "other"]);
+        run_test_git(&repository, &["tag", "other"]);
+
+        tauri::async_runtime::block_on(async {
+            let branches = list_git_branches_at(&repository)
+                .await
+                .expect("branches should be listed");
+            assert!(branches.contains(&"main".to_owned()));
+            assert!(branches.contains(&"other".to_owned()));
+            assert!(!branches.contains(&"heads/other".to_owned()));
+
+            switch_git_branch_at(&repository, "other")
+                .await
+                .expect("branch should switch");
+            assert_eq!(
+                run_test_git(&repository, &["branch", "--show-current"]),
+                "other"
+            );
+
+            let worktree = create_git_worktree_at(
+                &repository,
+                &directory.path().join("worktrees"),
+                "main",
+                "feature/test",
+            )
+            .await
+            .expect("worktree should be created");
+            assert_eq!(worktree.branch, "feature/test");
+            assert_eq!(
+                run_test_git(Path::new(&worktree.path), &["branch", "--show-current"]),
+                "feature/test"
+            );
+        });
     }
 
     #[test]

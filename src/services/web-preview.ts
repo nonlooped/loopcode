@@ -1,6 +1,7 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 
 const WORKSPACE_KEY = "loopcode.web-preview.workspace";
+let previewGitBranch = "web-preview";
 
 export function setupWebPreview() {
   mockWindows("main");
@@ -20,7 +21,19 @@ export function setupWebPreview() {
           );
           return null;
         case "get_git_branch":
-          return "web-preview";
+          return previewGitBranch;
+        case "list_git_branches":
+          return ["main", "web-preview", previewGitBranch];
+        case "switch_git_branch": {
+          const branch = argument(payload, "branch");
+          if (typeof branch === "string") previewGitBranch = branch;
+          return null;
+        }
+        case "create_git_worktree": {
+          const branch = argument(payload, "branch");
+          if (typeof branch === "string") previewGitBranch = branch;
+          return { path: `/workspace/worktrees/${previewGitBranch}`, branch: previewGitBranch };
+        }
         case "provider_version":
           return "0.0.0-preview";
         case "provider_auth_status":

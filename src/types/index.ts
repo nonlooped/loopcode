@@ -76,6 +76,7 @@ export interface ThreadState {
   updatedAt: number;
   settled: boolean;
   projectId?: string | null;
+  managedWorktree: boolean;
 }
 
 export interface PersistedThreadState {
@@ -90,6 +91,7 @@ export interface PersistedThreadState {
   updatedAt: number;
   settled?: boolean;
   projectId?: string | null;
+  managedWorktree?: boolean;
   providerSessionIds?: Record<string, string>;
 }
 

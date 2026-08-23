@@ -49,6 +49,7 @@ export function workspaceSnapshot(
       updatedAt: thread.updatedAt,
       settled: thread.settled,
       projectId: thread.projectId ?? null,
+      managedWorktree: thread.managedWorktree || undefined,
       providerSessionIds: providerSessionIds(thread),
     })),
     projects: projects.map((project) => ({ ...project })),
@@ -166,6 +167,7 @@ function restoreThread(
     updatedAt,
     settled: value.settled === true,
     projectId: stringValue(value.projectId) ?? null,
+    managedWorktree: value.managedWorktree === true,
   };
   if (isObject(value.providerSessionIds)) {
     for (const [profileId, sessionId] of Object.entries(value.providerSessionIds)) {

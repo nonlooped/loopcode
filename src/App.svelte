@@ -19,10 +19,12 @@
   import { profileById, profiles as officialProfiles } from './config/providers';
   import { preferredAllowOptionId } from './services/acp';
   import {
+    createGitWorktree,
     getGitBranch,
     getInitialWorkingDirectory,
     getProviderAuthStatus,
     getProviderVersion,
+    listGitBranches,
     loadWorkspace,
     openProjectPath,
     pickFolder,
@@ -31,6 +33,7 @@
     stopAllHarnesses,
     stopAllTerminals,
     stopTerminalForThread,
+    switchGitBranch,
   } from './services/native';
   import { ProviderRuntime } from './services/provider-runtime';
   import { createWorkspaceState, Workspace } from './services/workspace';
@@ -77,7 +80,7 @@
     readyProviderId,
   } from './utils/provider-availability';
   import { timelineEntries } from './utils/timeline';
-  import { activeProvider, compareSidebarThreads, threadStatus } from './utils/threads';
+  import { activeProvider, compareSidebarThreads, threadReservesCheckout, threadStatus } from './utils/threads';
 
   const appWindow = getCurrentWindow();
   const appWebview = getCurrentWebview();
@@ -145,6 +148,9 @@
   let composerImagesByThread = $state<Record<string, ComposerImage[]>>({});
   let attachmentErrorsByThread = $state<Record<string, string>>({});
   let currentBranch = $state<string | null | undefined>(undefined);
+  let gitBranches = $state<string[] | null | undefined>(undefined);
+  // ponytail: one Git mutation at a time; use per-repository locks if parallel operations matter.
+  let gitOperationThreadId = $state<string>();
   let fileHistory = $state<string[]>([]);
   let fileHistoryIndex = $state(-1);
   let fileRevision = $state(0);
@@ -194,6 +200,14 @@
   const selectedTimelineEntries = $derived(selectedThread ? timelineEntries(selectedThread) : []);
   const selectedThreadEmpty = $derived(Boolean(
     selectedThread && selectedThread.messages.length === 0 && selectedThread.tools.length === 0,
+  ));
+  const selectedThreadIsWorktree = $derived(selectedThread?.managedWorktree ?? false);
+  const selectedThreadHasTerminal = $derived(Boolean(
+    selectedThread && terminalThreadIds.includes(selectedThread.id),
+  ));
+  const selectedThreadHasProvider = $derived(Boolean(
+    selectedThread && Object.values(selectedThread.providers).some((provider) =>
+      provider.connectionStatus === 'connecting' || provider.connectionStatus === 'ready'),
   ));
   const selectedInteraction = $derived(
     selectedThread ? interactions[interactionKey(selectedThread.id, selectedThread.profileId)] : undefined,
@@ -261,16 +275,22 @@
     void status;
     const lookup = ++branchLookup;
     currentBranch = undefined;
+    gitBranches = undefined;
     if (!cwd) {
       currentBranch = null;
+      gitBranches = null;
       return;
     }
-    void getGitBranch(cwd)
-      .then((branch) => {
-        if (lookup === branchLookup) currentBranch = branch;
+    void Promise.all([getGitBranch(cwd), listGitBranches(cwd)])
+      .then(([branch, branches]) => {
+        if (lookup !== branchLookup) return;
+        currentBranch = branch;
+        gitBranches = branches;
       })
       .catch(() => {
-        if (lookup === branchLookup) currentBranch = null;
+        if (lookup !== branchLookup) return;
+        currentBranch = null;
+        gitBranches = null;
       });
   });
 
@@ -392,6 +412,72 @@
     workspace.selectProject(projectId);
   }
 
+  function editableGitThread() {
+    if (gitOperationThreadId) throw new Error('Wait for the current Git operation to finish');
+    const thread = selectedThread;
+    if (!thread || thread.messages.length > 0 || thread.tools.length > 0) {
+      throw new Error('Git can only be changed before the first prompt');
+    }
+    if (terminalThreadIds.includes(thread.id)) {
+      throw new Error('Exit the thread terminal before changing Git');
+    }
+    if (Object.values(thread.providers).some((provider) =>
+      provider.connectionStatus === 'connecting' || provider.connectionStatus === 'ready')) {
+      throw new Error('Git cannot change after the provider connects');
+    }
+    return thread;
+  }
+
+  async function switchThreadGitBranch(branch: string) {
+    const thread = editableGitThread();
+    const cwd = thread.cwd;
+    const terminalThread = threads.find((candidate) =>
+      candidate.cwd === cwd && terminalThreadIds.includes(candidate.id));
+    if (terminalThread) throw new Error(`Exit the terminal for ${terminalThread.title} before changing this checkout`);
+    const establishedThread = threads.find((candidate) =>
+      candidate.id !== thread.id
+      && candidate.cwd === cwd
+      && threadReservesCheckout(candidate));
+    if (establishedThread) {
+      throw new Error(`${establishedThread.title} already uses this checkout`);
+    }
+    gitOperationThreadId = thread.id;
+    try {
+      await switchGitBranch(cwd, branch);
+      if (thread.cwd !== cwd) throw new Error('The thread working folder changed during the Git operation');
+      if (selectedThread?.id === thread.id) currentBranch = branch;
+      composerCompletionRevision += 1;
+      fileRevision += 1;
+    } finally {
+      if (gitOperationThreadId === thread.id) gitOperationThreadId = undefined;
+    }
+  }
+
+  async function createThreadGitWorktree(baseBranch: string, branch: string) {
+    const thread = editableGitThread();
+    const cwd = thread.cwd;
+    gitOperationThreadId = thread.id;
+    try {
+      const worktree = await createGitWorktree(cwd, baseBranch, branch);
+      if (thread.cwd !== cwd || thread.messages.length > 0 || thread.tools.length > 0) {
+        throw new Error(`The thread changed while the worktree was created at ${worktree.path}`);
+      }
+      if (!workspace.setThreadWorktree(thread.id, worktree.path)) {
+        throw new Error(`Could not move the thread to the worktree at ${worktree.path}`);
+      }
+      if (selectedThread?.id === thread.id) {
+        currentBranch = worktree.branch;
+        gitBranches = [...new Set([...(gitBranches ?? []), worktree.branch])].sort();
+        fileHistory = [];
+        fileHistoryIndex = -1;
+        fileRevision = 0;
+        composerCompletionRevision += 1;
+      }
+    } finally {
+      if (gitOperationThreadId === thread.id) gitOperationThreadId = undefined;
+    }
+  }
+
   function renameThread(threadId: string) {
     threadPendingRename = threads.find((thread) => thread.id === threadId);
   }
@@ -475,7 +561,7 @@
   }
 
   function toggleTerminal() {
-    if (!selectedThread || settingsOpen) return;
+    if (!selectedThread || settingsOpen || gitOperationThreadId) return;
     if (terminalOpen) {
       closeTerminal();
       return;
@@ -686,7 +772,7 @@
 
   async function sendPrompt() {
     const thread = selectedThread;
-    if (!thread) return;
+    if (!thread || gitOperationThreadId) return;
     const content = promptParts(thread.draft, thread.draftReferences);
     const text = promptText(content).trim();
     const referencedContent = thread.draftReferences.length > 0 ? content : undefined;
@@ -1081,6 +1167,17 @@
                   projectName={workspace.projectNameForThread(selectedThread)}
                   completionRevision={composerCompletionRevision}
                   {currentBranch}
+                  {gitBranches}
+                  gitWorktree={selectedThreadIsWorktree}
+                  gitEditable={selectedThreadEmpty && !selectedThreadHasTerminal && !selectedThreadHasProvider}
+                  gitLockReason={!selectedThreadEmpty
+                    ? 'Git is fixed after the first prompt'
+                    : selectedThreadHasTerminal
+                      ? 'Exit the terminal before changing Git'
+                      : selectedThreadHasProvider
+                        ? 'Git is fixed after the provider connects'
+                        : undefined}
+                  gitBusy={gitOperationThreadId !== undefined}
                   {reducedMotion}
                   sendShortcut={preferences.sendShortcut}
                   spellcheck={preferences.composerSpellcheck}
@@ -1097,6 +1194,8 @@
                     const profile = profiles.find((candidate) => candidate.id === profileId);
                     if (profile) void providers.discover(profile, defaultWorkingFolder, threads);
                   }}
+                  switchGitBranch={switchThreadGitBranch}
+                  createGitWorktree={createThreadGitWorktree}
                 />
               {/if}
             </div>
