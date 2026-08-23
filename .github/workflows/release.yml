@@ -17,7 +17,7 @@ env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.tag || github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
