@@ -5,10 +5,9 @@ import { threadStatus } from "./threads.ts";
 export function shouldFollowTranscript(
   threadChanged: boolean,
   userMessageChanged: boolean,
-  autoFollowOutput: boolean,
   pinnedToBottom: boolean,
 ) {
-  return threadChanged || userMessageChanged || (autoFollowOutput && pinnedToBottom);
+  return threadChanged || userMessageChanged || pinnedToBottom;
 }
 
 export function timelineEntries(thread: ThreadState): TimelineDisplayEntry[] {

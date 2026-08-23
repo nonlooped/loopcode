@@ -188,7 +188,7 @@
 
   .settings-row {
     display: grid;
-    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     padding: 14px;
   }
 
@@ -199,14 +199,20 @@
       .settings-select,
       .settings-text-input,
       .settings-action,
-      .settings-range-control
+      .settings-range-control,
+      .settings-combined-control
     ) {
-    grid-column: 2;
+    grid-column: 1;
     justify-self: start;
   }
 
-  .settings-row > :is(.settings-segmented-control, .settings-range-control) {
+  .settings-row
+    > :is(.settings-segmented-control, .settings-range-control, .settings-combined-control) {
     width: 100%;
+  }
+
+  .settings-combined-control {
+    justify-content: flex-start;
   }
 
   .settings-row > .settings-text-input {

@@ -83,7 +83,7 @@
 
 .settings-row {
   display: flex;
-  min-height: 65px;
+  min-height: 58px;
   padding: 14px 20px;
   align-items: center;
   gap: 14px;
@@ -97,7 +97,7 @@
   border-top: 1px solid var(--line);
 }
 
-.settings-row-icon {
+.provider-settings-icon {
   display: grid;
   width: 36px;
   height: 36px;
@@ -190,6 +190,16 @@
   width: 180px;
 }
 
+.settings-combined-control {
+  display: flex;
+  max-width: 380px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .settings-text-input {
   width: 180px;
   height: 30px;
@@ -254,7 +264,7 @@
   text-align: left;
 }
 
-.provider-settings-open:hover .settings-row-icon {
+.provider-settings-open:hover .provider-settings-icon {
   border-color: var(--line-strong);
   background: var(--panel-hover);
 }
@@ -307,7 +317,7 @@
 }
 
 .provider-model-editor {
-  padding: 16px 20px 20px 70px;
+  padding: 16px 20px 20px;
 }
 
 .provider-model-heading {

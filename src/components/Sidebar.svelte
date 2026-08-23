@@ -1,7 +1,7 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
   import { fade } from 'svelte/transition';
-  import { Collapsible, DropdownMenu } from 'bits-ui';
+  import { AlertDialog, Collapsible, DropdownMenu } from 'bits-ui';
   import {
     IconArchive,
     IconArrowLeft,
@@ -20,6 +20,7 @@
     IconSettings,
     IconTerminal2,
     IconTrash,
+    IconWriting,
   } from '@tabler/icons-svelte';
 
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
@@ -56,6 +57,7 @@
     revealProjectFolder: (project: ProjectState) => void;
     removeProject: (projectId: string) => void;
     setShowSettled: (show: boolean) => void;
+    clearArchivedThreads: () => void;
     openSettings: () => void;
     closeSettings: () => void;
     setSettingsCategory: (category: SettingsCategory) => void;
@@ -67,11 +69,13 @@
     { category: 'general', label: 'General', icon: IconSettings },
     { category: 'appearance', label: 'Appearance', icon: IconContrast },
     { category: 'conversation', label: 'Conversation', icon: IconMessageCircle },
+    { category: 'composer', label: 'Composer', icon: IconWriting },
     { category: 'agents', label: 'Agents and permissions', icon: IconRobot },
     { category: 'providers', label: 'Providers', icon: IconPlugConnected },
-    { category: 'terminal', label: 'Terminal and editor', icon: IconTerminal2 },
-    { category: 'data', label: 'Data and diagnostics', icon: IconDatabase },
+    { category: 'terminal', label: 'Terminal', icon: IconTerminal2 },
+    { category: 'diagnostics', label: 'Diagnostics', icon: IconDatabase },
   ] satisfies { category: SettingsCategory; label: string; icon: typeof IconSettings }[];
+  let archiveDeletionPending = $state(false);
 
   function profileById(profileId: string) {
     return props.profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId) ?? officialProfiles[0];
@@ -343,6 +347,11 @@
               {/each}
             {/if}
           </nav>
+          {#if props.settledThreads.length > 0}
+            <button class="clear-archived" onclick={() => { archiveDeletionPending = true; }}>
+              <IconTrash size={12} stroke={1.7} /> Delete all archived
+            </button>
+          {/if}
         </Collapsible.Content>
       </Collapsible.Root>
     </div>
@@ -353,3 +362,25 @@
     </button>
   {/if}
 </aside>
+
+<AlertDialog.Root
+  open={archiveDeletionPending}
+  onOpenChange={(open) => { archiveDeletionPending = open; }}
+>
+  <AlertDialog.Portal>
+    <AlertDialog.Overlay class="modal-overlay" />
+    <AlertDialog.Content class="permission-modal confirmation-modal">
+      <AlertDialog.Title>Delete archived threads?</AlertDialog.Title>
+      <AlertDialog.Description>
+        {props.settledThreads.length} archived {props.settledThreads.length === 1 ? 'thread' : 'threads'} and their history will be permanently deleted.
+      </AlertDialog.Description>
+      <footer class="confirmation-actions">
+        <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+        <button class="danger" onclick={() => {
+          archiveDeletionPending = false;
+          props.clearArchivedThreads();
+        }}>Delete</button>
+      </footer>
+    </AlertDialog.Content>
+  </AlertDialog.Portal>
+</AlertDialog.Root>

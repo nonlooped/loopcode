@@ -19,10 +19,9 @@
     entries: TimelineDisplayEntry[];
     profiles: HarnessProfile[];
     reducedMotion: boolean;
-    autoFollowOutput: boolean;
   }
 
-  const { thread, entries, profiles, reducedMotion, autoFollowOutput }: Props = $props();
+  const { thread, entries, profiles, reducedMotion }: Props = $props();
   let transcriptElement = $state<HTMLElement>();
   let canScrollUp = $state(false);
   let canScrollDown = $state(false);
@@ -52,7 +51,6 @@
       const shouldFollow = shouldFollowTranscript(
         threadChanged,
         renderedUserMessageId !== userMessageId,
-        autoFollowOutput,
         pinnedToBottom,
       );
       renderedThreadId = threadId;

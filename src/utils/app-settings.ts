@@ -9,10 +9,11 @@ export type SettingsCategory =
   | "general"
   | "appearance"
   | "conversation"
+  | "composer"
   | "agents"
   | "providers"
   | "terminal"
-  | "data";
+  | "diagnostics";
 export type SendShortcut = "enter" | "modifier-enter";
 
 export interface ProviderPreference {
@@ -31,10 +32,8 @@ export interface AppPreferences {
   transcriptDensity: "comfortable" | "compact";
   contentWidth: number;
   wrapCode: boolean;
-  autoFollowOutput: boolean;
   showMessageTimestamps: boolean;
   composerSpellcheck: boolean;
-  composerAutocomplete: boolean;
   defaultProviderId: string;
   automaticTitleGeneration: boolean;
   providerModelDefaults: Record<string, string>;
@@ -56,10 +55,8 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   transcriptDensity: "comfortable",
   contentWidth: 720,
   wrapCode: true,
-  autoFollowOutput: true,
   showMessageTimestamps: false,
   composerSpellcheck: true,
-  composerAutocomplete: true,
   defaultProviderId: "codex",
   automaticTitleGeneration: true,
   providerModelDefaults: {},
@@ -71,6 +68,11 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   sendShortcut: "enter",
 };
 
+const LEGACY_PREFERENCE_KEYS = [
+  "loopcode.auto-follow-output",
+  "loopcode.composer-autocomplete",
+] as const;
+
 const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
   compactSessionRows: "loopcode.compact-session-rows",
   startupBehavior: "loopcode.startup-behavior",
@@ -81,10 +83,8 @@ const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
   transcriptDensity: "loopcode.transcript-density",
   contentWidth: "loopcode.content-width",
   wrapCode: "loopcode.wrap-code",
-  autoFollowOutput: "loopcode.auto-follow-output",
   showMessageTimestamps: "loopcode.show-message-timestamps",
   composerSpellcheck: "loopcode.composer-spellcheck",
-  composerAutocomplete: "loopcode.composer-autocomplete",
   defaultProviderId: "loopcode.default-provider",
   automaticTitleGeneration: "loopcode.automatic-title-generation",
   providerModelDefaults: "loopcode.provider-model-defaults",
@@ -139,18 +139,12 @@ export function loadAppPreferences(
       wrapCode:
         storedBoolean(storage.getItem(PREFERENCE_KEYS.wrapCode)) ??
         DEFAULT_APP_PREFERENCES.wrapCode,
-      autoFollowOutput:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.autoFollowOutput)) ??
-        DEFAULT_APP_PREFERENCES.autoFollowOutput,
       showMessageTimestamps:
         storedBoolean(storage.getItem(PREFERENCE_KEYS.showMessageTimestamps)) ??
         DEFAULT_APP_PREFERENCES.showMessageTimestamps,
       composerSpellcheck:
         storedBoolean(storage.getItem(PREFERENCE_KEYS.composerSpellcheck)) ??
         DEFAULT_APP_PREFERENCES.composerSpellcheck,
-      composerAutocomplete:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.composerAutocomplete)) ??
-        DEFAULT_APP_PREFERENCES.composerAutocomplete,
       defaultProviderId:
         storage.getItem(PREFERENCE_KEYS.defaultProviderId)?.trim() ||
         DEFAULT_APP_PREFERENCES.defaultProviderId,
@@ -195,6 +189,7 @@ export function resetAppSettings(storage: Pick<Storage, "removeItem"> = localSto
   try {
     for (const key of [
       ...Object.values(PREFERENCE_KEYS),
+      ...LEGACY_PREFERENCE_KEYS,
       PERMISSION_MODE_KEY,
       LEFT_SIDEBAR_WIDTH_KEY,
       RIGHT_SIDEBAR_WIDTH_KEY,

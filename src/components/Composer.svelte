@@ -60,7 +60,6 @@
     reducedMotion: boolean;
     sendShortcut: SendShortcut;
     spellcheck: boolean;
-    autocomplete: boolean;
     attachImages: (files: File[]) => void;
     removeImage: (imageId: string) => void;
     send: () => void;
@@ -138,13 +137,6 @@
 
   $effect(() => {
     void props.completionRevision;
-    if (!props.autocomplete) {
-      completionLoadToken += 1;
-      completionEntries = [];
-      completionStatus = 'ready';
-      closeCompletion();
-      return;
-    }
     void loadCompletionEntries(props.thread.cwd);
   });
 
@@ -278,10 +270,6 @@
   }
 
   function detectCompletion() {
-    if (!props.autocomplete) {
-      closeCompletion();
-      return;
-    }
     const selection = window.getSelection();
     const node = selection?.anchorNode;
     if (!promptEditor || !node || node.nodeType !== Node.TEXT_NODE || !promptEditor.contains(node)) {
@@ -584,9 +572,9 @@
       class="prompt-editor"
       role="combobox"
       aria-label="Prompt"
-      aria-autocomplete={props.autocomplete ? 'list' : 'none'}
-      aria-haspopup={props.autocomplete ? 'listbox' : undefined}
-      aria-expanded={props.autocomplete ? Boolean(completionPrefix) : undefined}
+      aria-autocomplete="list"
+      aria-haspopup="listbox"
+      aria-expanded={Boolean(completionPrefix)}
       aria-controls={completionPrefix ? 'composer-autocomplete' : undefined}
       aria-activedescendant={completionPrefix && completionResults[completionIndex] ? `composer-completion-${completionIndex}` : undefined}
       aria-disabled={!canEdit()}

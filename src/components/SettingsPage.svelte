@@ -1,32 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { fly } from 'svelte/transition';
-  import {
-    IconActivity,
-    IconArchive,
-    IconArrowLeft,
-    IconArrowsHorizontal,
-    IconAt,
-    IconClock,
-    IconCode,
-    IconDownload,
-    IconFolder,
-    IconHistory,
-    IconKeyboard,
-    IconListDetails,
-    IconPlayerPlay,
-    IconPlus,
-    IconRestore,
-    IconRobot,
-    IconShieldLock,
-    IconSparkles,
-    IconTerminal2,
-    IconTextSize,
-    IconTrash,
-    IconWriting,
-    IconZoomIn,
-  } from '@tabler/icons-svelte';
-  import { AlertDialog, RadioGroup, Slider, Switch } from 'bits-ui';
+  import { IconArrowLeft, IconPlus, IconTrash } from '@tabler/icons-svelte';
+  import { RadioGroup, Slider, Switch } from 'bits-ui';
 
   import { exportDiagnostics } from '../services/native';
   import type { HarnessProfile, PermissionMode, ProviderModelCatalog } from '../types';
@@ -58,10 +34,6 @@
     setPermissionMode: (value: PermissionMode) => void;
     defaultWorkingFolder: string;
     chooseDefaultWorkingFolder: () => void;
-    archivedThreadCount: number;
-    draftThreadCount: number;
-    clearArchivedThreads: () => void;
-    clearComposerDrafts: () => void;
     resetSettings: () => void;
   }
 
@@ -80,34 +52,32 @@
     setPermissionMode,
     defaultWorkingFolder,
     chooseDefaultWorkingFolder,
-    archivedThreadCount,
-    draftThreadCount,
-    clearArchivedThreads,
-    clearComposerDrafts,
     resetSettings,
   }: Props = $props();
   let exportState = $state<'idle' | 'exporting' | 'exported' | 'error'>('idle');
-  let pendingDataAction = $state<'archived' | 'drafts'>();
   let selectedProviderId = $state('');
   const selectedProvider = $derived(profiles.find((profile) => profile.id === selectedProviderId));
   const selectedBaseProvider = $derived(baseProfiles.find((profile) => profile.id === selectedProviderId));
   const titleProfiles = $derived(
     profiles.filter((profile) =>
       profile.titleGeneration
-      && preferences.providerSettings[profile.id]?.enabled !== false
-      && (catalogs[profile.id]?.status === 'ready' || profile.id === preferences.titleProviderId)
+      && (
+        profile.id === preferences.titleProviderId
+        || (preferences.providerSettings[profile.id]?.enabled !== false && catalogs[profile.id]?.status === 'ready')
+      )
     ),
   );
   const titleCatalog = $derived(catalogs[preferences.titleProviderId]);
 
   const categoryCopy = {
-    general: ['General', 'Set defaults for thread navigation and the sidebar.'],
-    appearance: ['Appearance', 'Adjust motion, scale, and the desktop surface.'],
-    conversation: ['Conversation', 'Control transcript layout and composer behavior.'],
-    agents: ['Agents and permissions', 'Choose how new threads start and what agents may run.'],
-    providers: ['Providers', 'Manage the agents available to new and existing threads.'],
+    general: ['General', 'Choose what LoopCode opens and where new threads start.'],
+    appearance: ['Appearance', 'Adjust density, motion, scale, and content width.'],
+    conversation: ['Conversation', 'Control how transcript content is displayed.'],
+    composer: ['Composer', 'Choose how prompt editing and sending behave.'],
+    agents: ['Agents and permissions', 'Control agent access and thread title generation.'],
+    providers: ['Providers', 'Manage provider availability, defaults, connections, and models.'],
     terminal: ['Terminal', 'Tune the terminal drawer and its retained output.'],
-    data: ['Data and diagnostics', 'Export troubleshooting data or restore interface defaults.'],
+    diagnostics: ['Diagnostics', 'Export troubleshooting data or restore interface defaults.'],
   } satisfies Record<SettingsCategory, [string, string]>;
   const pageCopy = $derived(
     category === 'providers' && selectedProvider
@@ -148,6 +118,15 @@
   function setTitleProvider(profileId: string) {
     setPreference('titleProviderId', profileId);
     setPreference('titleModelId', '');
+  }
+
+  function setTitleMode(value: string) {
+    if (value === 'local') {
+      setPreference('automaticTitleGeneration', false);
+      return;
+    }
+    setPreference('automaticTitleGeneration', true);
+    setTitleProvider(value);
   }
 
   function providerPreference(profileId: string) {
@@ -211,10 +190,10 @@
     });
   }
 
-  function confirmDataAction() {
-    if (pendingDataAction === 'archived') clearArchivedThreads();
-    else if (pendingDataAction === 'drafts') clearComposerDrafts();
-    pendingDataAction = undefined;
+  function resetSelectedProvider() {
+    if (!selectedProvider) return;
+    setProviderPreference(selectedProvider.id, {});
+    setProviderModelDefault(selectedProvider.id, '');
   }
 </script>
 
@@ -237,22 +216,6 @@
     {#if category === 'general'}
       <div class="settings-card">
         <div class="settings-row">
-          <span class="settings-row-icon" aria-hidden="true"><IconListDetails size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Compact thread rows</strong>
-            <small>Show more threads in the sidebar by reducing row spacing.</small>
-          </span>
-          <Switch.Root
-            class="toggle-control"
-            aria-label="Compact thread rows"
-            checked={preferences.compactSessionRows}
-            onCheckedChange={(value) => setPreference('compactSessionRows', value)}
-          >
-            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
-          </Switch.Root>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconPlayerPlay size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>On startup</strong>
             <small>Return to the last thread or open an empty thread when LoopCode starts.</small>
@@ -269,35 +232,88 @@
           </RadioGroup.Root>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconFolder size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
-            <strong>New thread location</strong>
-            <small>Start toolbar-created threads in the selected project or the default working folder.</small>
+            <strong>New threads</strong>
+            <small title={defaultWorkingFolder}>Use the selected project or {defaultWorkingFolder || 'the system folder'}.</small>
           </span>
-          <RadioGroup.Root
-            class="settings-segmented-control"
-            aria-label="New thread location"
-            orientation="horizontal"
-            value={preferences.newThreadProject}
-            onValueChange={(value) => setPreference('newThreadProject', value === 'default-folder' ? 'default-folder' : 'selected')}
-          >
-            <RadioGroup.Item class="settings-segmented-option" value="selected">Selected project</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="default-folder">Default folder</RadioGroup.Item>
-          </RadioGroup.Root>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconFolder size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Default working folder</strong>
-            <small title={defaultWorkingFolder}>New non-project threads start in {defaultWorkingFolder || 'the system folder'}.</small>
-          </span>
-          <button class="settings-action" onclick={chooseDefaultWorkingFolder}>Choose folder…</button>
+          <div class="settings-combined-control">
+            <RadioGroup.Root
+              class="settings-segmented-control"
+              aria-label="New thread location"
+              orientation="horizontal"
+              value={preferences.newThreadProject}
+              onValueChange={(value) => setPreference('newThreadProject', value === 'default-folder' ? 'default-folder' : 'selected')}
+            >
+              <RadioGroup.Item class="settings-segmented-option" value="selected">Selected project</RadioGroup.Item>
+              <RadioGroup.Item class="settings-segmented-option" value="default-folder">Default folder</RadioGroup.Item>
+            </RadioGroup.Root>
+            {#if preferences.newThreadProject === 'default-folder'}
+              <button class="settings-action" onclick={chooseDefaultWorkingFolder}>Choose folder…</button>
+            {/if}
+          </div>
         </div>
       </div>
     {:else if category === 'appearance'}
       <div class="settings-card">
         <div class="settings-row">
-          <span class="settings-row-icon" aria-hidden="true"><IconActivity size={17} stroke={1.55} /></span>
+          <span class="settings-row-copy">
+            <strong>Sidebar thread spacing</strong>
+            <small>Show full thread details or fit more threads in the sidebar.</small>
+          </span>
+          <RadioGroup.Root
+            class="settings-segmented-control"
+            aria-label="Sidebar thread spacing"
+            orientation="horizontal"
+            value={preferences.compactSessionRows ? 'compact' : 'comfortable'}
+            onValueChange={(value) => setPreference('compactSessionRows', value === 'compact')}
+          >
+            <RadioGroup.Item class="settings-segmented-option" value="comfortable">Comfortable</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="compact">Compact</RadioGroup.Item>
+          </RadioGroup.Root>
+        </div>
+        <div class="settings-row settings-row-separated">
+          <span class="settings-row-copy">
+            <strong>Transcript spacing</strong>
+            <small>Use standard message spacing or fit more transcript entries on screen.</small>
+          </span>
+          <RadioGroup.Root
+            class="settings-segmented-control"
+            aria-label="Transcript spacing"
+            orientation="horizontal"
+            value={preferences.transcriptDensity}
+            onValueChange={(value) => setPreference('transcriptDensity', value === 'compact' ? 'compact' : 'comfortable')}
+          >
+            <RadioGroup.Item class="settings-segmented-option" value="comfortable">Comfortable</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="compact">Compact</RadioGroup.Item>
+          </RadioGroup.Root>
+        </div>
+        <div class="settings-row settings-row-separated">
+          <span class="settings-row-copy">
+            <strong>Content width</strong>
+            <small>Set the shared maximum width for messages, questions, and the composer.</small>
+          </span>
+          <div class="settings-range-control">
+            <output>{preferences.contentWidth}px</output>
+            <Slider.Root
+              class="settings-slider"
+              aria-label="Content width"
+              type="single"
+              min={CONTENT_WIDTH_RANGE.min}
+              max={CONTENT_WIDTH_RANGE.max}
+              step={20}
+              value={preferences.contentWidth}
+              onValueChange={(value) => setPreference('contentWidth', value)}
+            >
+              {#snippet children({ thumbItems })}
+                <span class="settings-slider-track"><Slider.Range class="settings-slider-range" /></span>
+                {#each thumbItems as { index } (index)}
+                  <Slider.Thumb class="settings-slider-thumb" {index} />
+                {/each}
+              {/snippet}
+            </Slider.Root>
+          </div>
+        </div>
+        <div class="settings-row settings-row-separated">
           <span class="settings-row-copy">
             <strong>Interface motion</strong>
             <small>Follow the system preference or remove interface animation.</small>
@@ -314,7 +330,6 @@
           </RadioGroup.Root>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconZoomIn size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Interface zoom</strong>
             <small>Scale the entire app without changing the window size.</small>
@@ -344,51 +359,6 @@
     {:else if category === 'conversation'}
       <div class="settings-card">
         <div class="settings-row">
-          <span class="settings-row-icon" aria-hidden="true"><IconListDetails size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Transcript spacing</strong>
-            <small>Use the standard message spacing or fit more transcript entries on screen.</small>
-          </span>
-          <RadioGroup.Root
-            class="settings-segmented-control"
-            aria-label="Transcript spacing"
-            orientation="horizontal"
-            value={preferences.transcriptDensity}
-            onValueChange={(value) => setPreference('transcriptDensity', value === 'compact' ? 'compact' : 'comfortable')}
-          >
-            <RadioGroup.Item class="settings-segmented-option" value="comfortable">Comfortable</RadioGroup.Item>
-            <RadioGroup.Item class="settings-segmented-option" value="compact">Compact</RadioGroup.Item>
-          </RadioGroup.Root>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconArrowsHorizontal size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Content width</strong>
-            <small>Set the shared maximum width for messages, questions, and the composer.</small>
-          </span>
-          <div class="settings-range-control">
-            <output>{preferences.contentWidth}px</output>
-            <Slider.Root
-              class="settings-slider"
-              aria-label="Content width"
-              type="single"
-              min={CONTENT_WIDTH_RANGE.min}
-              max={CONTENT_WIDTH_RANGE.max}
-              step={20}
-              value={preferences.contentWidth}
-              onValueChange={(value) => setPreference('contentWidth', value)}
-            >
-              {#snippet children({ thumbItems })}
-                <span class="settings-slider-track"><Slider.Range class="settings-slider-range" /></span>
-                {#each thumbItems as { index } (index)}
-                  <Slider.Thumb class="settings-slider-thumb" {index} />
-                {/each}
-              {/snippet}
-            </Slider.Root>
-          </div>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconCode size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Wrap message code</strong>
             <small>Wrap long lines in message code blocks instead of scrolling horizontally.</small>
@@ -403,22 +373,6 @@
           </Switch.Root>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconActivity size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Follow new output</strong>
-            <small>Keep the transcript pinned to the bottom while an agent is responding.</small>
-          </span>
-          <Switch.Root
-            class="toggle-control"
-            aria-label="Follow new output"
-            checked={preferences.autoFollowOutput}
-            onCheckedChange={(value) => setPreference('autoFollowOutput', value)}
-          >
-            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
-          </Switch.Root>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconClock size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Message timestamps</strong>
             <small>Show the sender and local time above each user and agent message.</small>
@@ -432,10 +386,12 @@
             <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
           </Switch.Root>
         </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconWriting size={17} stroke={1.55} /></span>
+      </div>
+    {:else if category === 'composer'}
+      <div class="settings-card">
+        <div class="settings-row">
           <span class="settings-row-copy">
-            <strong>Composer spellcheck</strong>
+            <strong>Spellcheck</strong>
             <small>Use the operating system spellchecker while writing prompts.</small>
           </span>
           <Switch.Root
@@ -448,22 +404,6 @@
           </Switch.Root>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconAt size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Composer autocomplete</strong>
-            <small>Suggest project files, folders, and skills after @ or $.</small>
-          </span>
-          <Switch.Root
-            class="toggle-control"
-            aria-label="Composer autocomplete"
-            checked={preferences.composerAutocomplete}
-            onCheckedChange={(value) => setPreference('composerAutocomplete', value)}
-          >
-            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
-          </Switch.Root>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconKeyboard size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Send shortcut</strong>
             <small>Choose whether Enter sends or inserts a new line in the composer.</small>
@@ -483,7 +423,6 @@
     {:else if category === 'agents'}
       <div class="settings-card">
         <div class="settings-row">
-          <span class="settings-row-icon" aria-hidden="true"><IconShieldLock size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Agent permissions</strong>
             <small>Restricted asks before commands. Full access automatically approves permission requests.</small>
@@ -500,98 +439,58 @@
           </RadioGroup.Root>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconRobot size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
-            <strong>Default provider</strong>
-            <small>Use this provider when LoopCode creates a new thread.</small>
+            <strong>Thread titles</strong>
+            <small>{preferences.automaticTitleGeneration ? 'Use a separate provider connection to name new threads.' : 'Use the first few words of the prompt.'}</small>
           </span>
-          <select
-            class="settings-select"
-            aria-label="Default provider"
-            value={preferences.defaultProviderId}
-            onchange={(event) => setPreference('defaultProviderId', selectValue(event))}
-          >
-            {#each profiles as profile (profile.id)}
-              <option
-                value={profile.id}
-                disabled={catalogs[profile.id]?.status !== 'ready' || providerPreference(profile.id).enabled === false}
-              >{profile.label}</option>
-            {/each}
-          </select>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconSparkles size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Automatic title generation</strong>
-            <small>Use the first few words of the prompt when this is off.</small>
-          </span>
-          <Switch.Root
-            class="toggle-control"
-            aria-label="Automatic title generation"
-            checked={preferences.automaticTitleGeneration}
-            onCheckedChange={(value) => setPreference('automaticTitleGeneration', value)}
-          >
-            <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
-          </Switch.Root>
-        </div>
-        {#if preferences.automaticTitleGeneration}
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconSparkles size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Title provider</strong>
-            <small>Use a separate provider connection to name new threads.</small>
-          </span>
-          <select
-            class="settings-select"
-            aria-label="Title provider"
-            value={preferences.titleProviderId}
-            onchange={(event) => setTitleProvider(selectValue(event))}
-          >
-            {#each titleProfiles as profile (profile.id)}
-              <option
-                value={profile.id}
-                disabled={catalogs[profile.id]?.status !== 'ready'}
-              >{profile.label}</option>
-            {/each}
-          </select>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconSparkles size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Title model</strong>
-            <small>{titleCatalog?.status === 'ready' ? 'Use this model only for naming new threads.' : 'The saved title provider is unavailable. LoopCode will use a local title.'}</small>
-          </span>
-          <select
-            class="settings-select settings-model-select"
-            aria-label="Title model"
-            disabled={titleCatalog?.status !== 'ready' || providerPreference(preferences.titleProviderId).enabled === false}
-            value={preferences.titleModelId}
-            onchange={(event) => setPreference('titleModelId', selectValue(event))}
-          >
-            <option value="">Provider default</option>
-            {#if preferences.titleModelId && !titleCatalog?.models.some((model) => model.id === preferences.titleModelId)}
-              <option value={preferences.titleModelId} disabled>{preferences.titleModelId} (unavailable)</option>
+          <div class="settings-combined-control">
+            <select
+              class="settings-select"
+              aria-label="Thread title source"
+              value={preferences.automaticTitleGeneration ? preferences.titleProviderId : 'local'}
+              onchange={(event) => setTitleMode(selectValue(event))}
+            >
+              <option value="local">Local from prompt</option>
+              {#each titleProfiles as profile (profile.id)}
+                <option value={profile.id} disabled={catalogs[profile.id]?.status !== 'ready'}>{profile.label}</option>
+              {/each}
+            </select>
+            {#if preferences.automaticTitleGeneration}
+              <select
+                class="settings-select settings-model-select"
+                aria-label="Title model"
+                disabled={titleCatalog?.status !== 'ready' || providerPreference(preferences.titleProviderId).enabled === false}
+                value={preferences.titleModelId}
+                onchange={(event) => setPreference('titleModelId', selectValue(event))}
+              >
+                <option value="">Provider default</option>
+                {#if preferences.titleModelId && !titleCatalog?.models.some((model) => model.id === preferences.titleModelId)}
+                  <option value={preferences.titleModelId} disabled>{preferences.titleModelId} (unavailable)</option>
+                {/if}
+                {#each titleCatalog?.models ?? [] as model (model.id)}
+                  <option value={model.id}>{model.name}</option>
+                {/each}
+              </select>
             {/if}
-            {#each titleCatalog?.models ?? [] as model (model.id)}
-              <option value={model.id}>{model.name}</option>
-            {/each}
-          </select>
+          </div>
         </div>
-        {/if}
-        {#each profiles as profile (profile.id)}
-          {@const catalog = catalogs[profile.id]}
-          <div class="settings-row settings-row-separated">
-            <span class="settings-row-icon" aria-hidden="true"><img class="settings-provider-icon" src={profile.icon} alt="" /></span>
+      </div>
+    {:else if category === 'providers'}
+      {#if selectedProvider && selectedBaseProvider}
+        {@const setting = providerPreference(selectedProvider.id)}
+        {@const catalog = catalogs[selectedProvider.id]}
+        <div class="settings-card">
+          <div class="settings-row">
             <span class="settings-row-copy">
-              <strong>{profile.label} model</strong>
-              <small>{catalog?.status === 'ready' ? `Use this model when a new ${profile.label} thread starts.` : catalog?.status === 'unavailable' ? catalog.error : `Loading ${profile.label} models…`}</small>
+              <strong>Default model</strong>
+              <small>{catalog?.status === 'ready' ? `Use this model when a new ${selectedProvider.label} thread starts.` : catalog?.status === 'unavailable' ? catalog.error : `Loading ${selectedProvider.label} models…`}</small>
             </span>
             <select
               class="settings-select settings-model-select"
-              aria-label={`${profile.label} model`}
-              disabled={catalog?.status !== 'ready' || providerPreference(profile.id).enabled === false}
-              value={providerModelValue(profile.id)}
-              onchange={(event) => setProviderModelDefault(profile.id, selectValue(event))}
+              aria-label={`${selectedProvider.label} default model`}
+              disabled={catalog?.status !== 'ready' || setting.enabled === false}
+              value={providerModelValue(selectedProvider.id)}
+              onchange={(event) => setProviderModelDefault(selectedProvider.id, selectValue(event))}
             >
               <option value="">Provider default</option>
               {#each catalog?.models ?? [] as model (model.id)}
@@ -599,15 +498,8 @@
               {/each}
             </select>
           </div>
-        {/each}
-      </div>
-    {:else if category === 'providers'}
-      {#if selectedProvider && selectedBaseProvider}
-        {@const setting = providerPreference(selectedProvider.id)}
-        <div class="settings-card">
-          <label class="settings-row">
-            <span class="settings-row-icon" aria-hidden="true"><IconTerminal2 size={17} stroke={1.55} /></span>
-            <span class="settings-row-copy">
+          <label class="settings-row settings-row-separated">
+              <span class="settings-row-copy">
               <strong>Provider command path</strong>
               <small>Override the provider executable while keeping its required ACP arguments.</small>
             </span>
@@ -663,24 +555,44 @@
               </div>
             {/if}
           </div>
-          <div class="settings-row settings-row-separated">
-            <span class="settings-row-icon" aria-hidden="true"><IconRestore size={17} stroke={1.55} /></span>
-            <span class="settings-row-copy">
-              <strong>Restore provider defaults</strong>
-              <small>Reset the name, ACP binary path, models, and enabled state.</small>
-            </span>
-            <button class="settings-action" onclick={() => setProviderPreference(selectedProvider.id, {})}>Reset</button>
-          </div>
+          {#if Object.keys(setting).length > 0 || preferences.providerModelDefaults[selectedProvider.id]}
+            <div class="settings-row settings-row-separated">
+              <span class="settings-row-copy">
+                <strong>Restore provider defaults</strong>
+                <small>Reset the command path, custom models, enabled state, and default model.</small>
+              </span>
+              <button class="settings-action" onclick={resetSelectedProvider}>Reset</button>
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="settings-card">
-          {#each profiles as profile, index (profile.id)}
+          <div class="settings-row">
+            <span class="settings-row-copy">
+              <strong>Default provider</strong>
+              <small>Use this provider when LoopCode creates a new thread.</small>
+            </span>
+            <select
+              class="settings-select"
+              aria-label="Default provider"
+              value={preferences.defaultProviderId}
+              onchange={(event) => setPreference('defaultProviderId', selectValue(event))}
+            >
+              {#each profiles as profile (profile.id)}
+                <option
+                  value={profile.id}
+                  disabled={catalogs[profile.id]?.status !== 'ready' || providerPreference(profile.id).enabled === false}
+                >{profile.label}</option>
+              {/each}
+            </select>
+          </div>
+          {#each profiles as profile (profile.id)}
             {@const enabled = providerPreference(profile.id).enabled !== false}
             {@const version = providerVersion(profile.id)}
             {@const status = providerStatus(profile.id)}
-            <div class:settings-row-separated={index > 0} class="settings-row provider-settings-row">
+            <div class="settings-row settings-row-separated provider-settings-row">
               <button id={`provider-setting-${profile.id}`} class="provider-settings-open" onclick={() => showProvider(profile.id)}>
-                <span class="settings-row-icon" aria-hidden="true"><img class="settings-provider-icon" src={profile.icon} alt="" /></span>
+                <span class="provider-settings-icon" aria-hidden="true"><img class="settings-provider-icon" src={profile.icon} alt="" /></span>
                 <span class="settings-row-copy">
                   <strong>{profile.label}{#if version} <span class="provider-version">{version}</span>{/if}</strong>
                   <small
@@ -709,7 +621,6 @@
     {:else if category === 'terminal'}
       <div class="settings-card">
         <div class="settings-row">
-          <span class="settings-row-icon" aria-hidden="true"><IconTextSize size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Terminal text size</strong>
             <small>Change the terminal font without scaling the rest of the app.</small>
@@ -736,7 +647,6 @@
           </div>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconHistory size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Terminal scrollback</strong>
             <small>Keep this many lines available above the visible terminal.</small>
@@ -756,7 +666,6 @@
     {:else}
       <div class="settings-card">
         <div class="settings-row">
-          <span class="settings-row-icon" aria-hidden="true"><IconDownload size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>ACP diagnostics</strong>
             <small>Export redacted provider lifecycle, RPC envelope, error, and stderr logs.</small>
@@ -766,31 +675,6 @@
           </button>
         </div>
         <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconArchive size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Delete archived threads</strong>
-            <small>Permanently delete {archivedThreadCount} archived {archivedThreadCount === 1 ? 'thread' : 'threads'} and their history.</small>
-          </span>
-          <button
-            class="settings-action danger"
-            disabled={archivedThreadCount === 0}
-            onclick={() => { pendingDataAction = 'archived'; }}
-          >Delete</button>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconTrash size={17} stroke={1.55} /></span>
-          <span class="settings-row-copy">
-            <strong>Clear composer drafts</strong>
-            <small>Discard unsent text, references, and images from {draftThreadCount} {draftThreadCount === 1 ? 'thread' : 'threads'}.</small>
-          </span>
-          <button
-            class="settings-action danger"
-            disabled={draftThreadCount === 0}
-            onclick={() => { pendingDataAction = 'drafts'; }}
-          >Clear</button>
-        </div>
-        <div class="settings-row settings-row-separated">
-          <span class="settings-row-icon" aria-hidden="true"><IconRestore size={17} stroke={1.55} /></span>
           <span class="settings-row-copy">
             <strong>Reset interface settings</strong>
             <small>Restore settings, panel sizes, terminal size, and zoom without deleting projects or threads.</small>
@@ -801,26 +685,3 @@
     {/if}
   </div>
 </section>
-
-<AlertDialog.Root
-  open={Boolean(pendingDataAction)}
-  onOpenChange={(open) => { if (!open) pendingDataAction = undefined; }}
->
-  <AlertDialog.Portal>
-    <AlertDialog.Overlay class="modal-overlay" />
-    <AlertDialog.Content class="permission-modal confirmation-modal">
-      <AlertDialog.Title>{pendingDataAction === 'archived' ? 'Delete archived threads?' : 'Clear composer drafts?'}</AlertDialog.Title>
-      <AlertDialog.Description>
-        {pendingDataAction === 'archived'
-          ? `${archivedThreadCount} archived ${archivedThreadCount === 1 ? 'thread' : 'threads'} and their history will be permanently deleted.`
-          : `Unsent content from ${draftThreadCount} ${draftThreadCount === 1 ? 'thread' : 'threads'} will be permanently discarded.`}
-      </AlertDialog.Description>
-      <footer class="confirmation-actions">
-        <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-        <button class="danger" onclick={confirmDataAction}>
-          {pendingDataAction === 'archived' ? 'Delete' : 'Clear'}
-        </button>
-      </footer>
-    </AlertDialog.Content>
-  </AlertDialog.Portal>
-</AlertDialog.Root>

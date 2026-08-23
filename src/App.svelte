@@ -70,7 +70,7 @@
     type SettingsCategory,
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
-  import { hasPromptContent, promptParts, promptText } from './utils/prompt-content';
+  import { promptParts, promptText } from './utils/prompt-content';
   import {
     initialProviderCatalog,
     previewProviderCatalog,
@@ -204,19 +204,13 @@
   const settledThreads = $derived(
     threads.filter((thread) => thread.settled).sort((left, right) => right.updatedAt - left.updatedAt),
   );
-  const threadsWithDrafts = $derived(
-    threads.filter((thread) =>
-      hasPromptContent(thread.draft, thread.draftReferences)
-      || composerImages(thread.id).length > 0
-    ).length,
-  );
   const activeProject = $derived(workspace.activeProject);
   const explorerRoot = $derived(selectedThread?.cwd ?? '');
   const explorerProjectName = $derived(
     selectedThread ? workspace.projectNameForThread(selectedThread) : 'Project',
   );
   const projectExplorerVisible = $derived(
-    compactLayout ? projectExplorerOpen : !projectExplorerCollapsed,
+    !settingsOpen && (compactLayout ? projectExplorerOpen : !projectExplorerCollapsed),
   );
   const activeFilePath = $derived(fileHistoryIndex >= 0 ? fileHistory[fileHistoryIndex] ?? null : null);
   const terminalVisible = $derived(terminalOpen && !settingsOpen && Boolean(selectedThread));
@@ -464,15 +458,6 @@
     for (const threadId of settledThreads.map((thread) => thread.id)) {
       await removeThread(threadId);
     }
-  }
-
-  function clearComposerDrafts() {
-    for (const thread of threads) {
-      thread.draft = '';
-      thread.draftReferences = [];
-    }
-    composerImagesByThread = {};
-    attachmentErrorsByThread = {};
   }
 
   function selectThread(threadId: string) {
@@ -961,7 +946,7 @@
 <div
   class:maximized={windowMaximized}
   class:sidebar-collapsed={sidebarCollapsed}
-  class:project-explorer-collapsed={!explorerRoot || (!compactLayout && projectExplorerCollapsed)}
+  class:project-explorer-collapsed={!explorerRoot || settingsOpen || (!compactLayout && projectExplorerCollapsed)}
   class:compact-session-rows={preferences.compactSessionRows}
   class:compact-transcript={preferences.transcriptDensity === 'compact'}
   class:wrap-message-code={preferences.wrapCode}
@@ -1015,6 +1000,7 @@
       {revealProjectFolder}
       {removeProject}
       setShowSettled={(show) => { showSettled = show; }}
+      clearArchivedThreads={() => { void clearArchivedThreads(); }}
       {openSettings}
       {closeSettings}
       {setSettingsCategory}
@@ -1039,10 +1025,6 @@
             {setPermissionMode}
             {defaultWorkingFolder}
             chooseDefaultWorkingFolder={() => { void chooseDefaultWorkingFolder(); }}
-            archivedThreadCount={settledThreads.length}
-            draftThreadCount={threadsWithDrafts}
-            clearArchivedThreads={() => { void clearArchivedThreads(); }}
-            {clearComposerDrafts}
             {resetSettings}
           />
         {:else if selectedThread}
@@ -1076,7 +1058,6 @@
                     entries={selectedTimelineEntries}
                     {profiles}
                     {reducedMotion}
-                    autoFollowOutput={preferences.autoFollowOutput}
                   />
                 {/key}
               {/if}
@@ -1103,7 +1084,6 @@
                   {reducedMotion}
                   sendShortcut={preferences.sendShortcut}
                   spellcheck={preferences.composerSpellcheck}
-                  autocomplete={preferences.composerAutocomplete}
                   attachImages={(files) => { void attachImages(files, selectedThread.id); }}
                   removeImage={(imageId) => removeComposerImage(selectedThread.id, imageId)}
                   send={() => { void sendPrompt(); }}
@@ -1142,7 +1122,7 @@
     {#if explorerRoot}
       {#key explorerRoot}
         <ProjectExplorer
-          open={projectExplorerOpen}
+          open={projectExplorerOpen && !settingsOpen}
           visible={projectExplorerVisible}
           projectRoot={explorerRoot}
           projectName={explorerProjectName}

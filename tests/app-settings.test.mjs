@@ -56,10 +56,8 @@ void test("app preferences use safe defaults and validate persisted values", () 
     transcriptDensity: "comfortable",
     contentWidth: 720,
     wrapCode: true,
-    autoFollowOutput: true,
     showMessageTimestamps: false,
     composerSpellcheck: true,
-    composerAutocomplete: true,
     defaultProviderId: "codex",
     automaticTitleGeneration: true,
     providerModelDefaults: {},
@@ -156,6 +154,8 @@ void test("reset removes preferences without touching workspace history", () => 
 
   assert.ok(removed.includes("loopcode.default-provider"));
   assert.ok(removed.includes("loopcode.title-provider"));
+  assert.ok(removed.includes("loopcode.auto-follow-output"));
+  assert.ok(removed.includes("loopcode.composer-autocomplete"));
   assert.ok(removed.includes("loopcode.permission-mode"));
   assert.ok(removed.includes("loopcode.terminal-height"));
   assert.ok(!removed.includes("loopcode.workspace"));

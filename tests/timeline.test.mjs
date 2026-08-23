@@ -77,9 +77,10 @@ void test("keeps the substantive response visible when a completed turn ends wit
   assert.ok(entries.some((entry) => entry.type === "message" && entry.message.id === "final"));
 });
 
-void test("keeps submitted prompts visible when automatic output following is off", () => {
-  assert.equal(shouldFollowTranscript(false, true, false, true), true);
-  assert.equal(shouldFollowTranscript(false, false, false, true), false);
+void test("follows new output only while the transcript is pinned", () => {
+  assert.equal(shouldFollowTranscript(false, false, true), true);
+  assert.equal(shouldFollowTranscript(false, false, false), false);
+  assert.equal(shouldFollowTranscript(false, true, false), true);
 });
 
 void test("does not mark the previous turn's response as streaming while the next turn starts", () => {
