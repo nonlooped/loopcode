@@ -1211,7 +1211,6 @@
                   {selectableProfiles}
                   images={composerImages(selectedThread.id)}
                   attachmentError={attachmentErrorsByThread[selectedThread.id]}
-                  projectName={workspace.projectNameForThread(selectedThread)}
                   completionRevision={composerCompletionRevision}
                   {currentBranch}
                   {gitBranches}
@@ -1273,6 +1272,9 @@
           projectRoot={explorerRoot}
           projectName={explorerProjectName}
           {activeFilePath}
+          {currentBranch}
+          branches={gitBranches}
+          colorMode={resolvedColorMode}
           toggle={toggleProjectExplorer}
           {openFile}
           filesChanged={projectFilesChanged}

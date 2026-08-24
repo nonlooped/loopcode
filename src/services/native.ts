@@ -55,7 +55,31 @@ const startTerminalResultSchema = z.object({ terminalId: z.string().min(1) });
 const gitBranchSchema = z.string().min(1).max(1024);
 const gitBranchesSchema = z.array(gitBranchSchema).max(10_000);
 const gitWorktreeSchema = z.object({ path: z.string().min(1), branch: gitBranchSchema });
+const gitChangeSchema = z.object({
+  path: z.string().min(1).max(4096),
+  oldPath: z.string().min(1).max(4096).nullable(),
+  status: z.enum([
+    "added",
+    "modified",
+    "deleted",
+    "renamed",
+    "copied",
+    "untracked",
+    "conflicted",
+    "typeChanged",
+  ]),
+  staged: z.boolean(),
+  unstaged: z.boolean(),
+});
+const gitChangesSchema = z.array(gitChangeSchema).max(10_000);
+const gitFileDiffSchema = z.object({
+  hunks: z.array(z.string().max(2 * 1024 * 1024)).max(10_000),
+  binary: z.boolean(),
+  tooLarge: z.boolean(),
+});
 
+export type GitChange = z.infer<typeof gitChangeSchema>;
+export type GitFileDiff = z.infer<typeof gitFileDiffSchema>;
 export type TerminalEvent = z.infer<typeof terminalEventSchema>;
 
 export interface ComposerCompletionEntry {
@@ -173,6 +197,26 @@ export async function getGitBranch(cwd: string): Promise<string | null> {
 
 export async function listGitBranches(cwd: string): Promise<string[]> {
   return gitBranchesSchema.parse(await invoke("list_git_branches", { cwd }));
+}
+
+export async function listGitChanges(cwd: string, baseBranch: string | null): Promise<GitChange[]> {
+  return gitChangesSchema.parse(await invoke("list_git_changes", { cwd, baseBranch }));
+}
+
+export async function getGitFileDiff(
+  cwd: string,
+  baseBranch: string | null,
+  path: string,
+  oldPath: string | null,
+): Promise<GitFileDiff> {
+  return gitFileDiffSchema.parse(
+    await invoke("get_git_file_diff", {
+      cwd,
+      baseBranch,
+      path,
+      oldPath,
+    }),
+  );
 }
 
 export function switchGitBranch(cwd: string, branch: string): Promise<void> {

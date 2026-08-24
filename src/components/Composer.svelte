@@ -3,7 +3,6 @@
   import { fly } from 'svelte/transition';
   import {
     IconArrowUp,
-    IconFolder,
     IconPaperclip,
     IconPlayerStop,
     IconPlugConnected,
@@ -54,7 +53,6 @@
     selectableProfiles: HarnessProfile[];
     images: ComposerImage[];
     attachmentError?: string;
-    projectName: string;
     completionRevision: number;
     currentBranch: string | null | undefined;
     gitBranches: string[] | null | undefined;
@@ -685,8 +683,7 @@
     </div>
   </div>
   <div class="composer-meta">
-    <span class="composer-meta-project" title={props.thread.cwd}><IconFolder size={12} stroke={1.55} /><span>{props.projectName}</span></span>
-    <span class="composer-meta-actions">
+    <div class="composer-meta-actions">
       <GitControls
         cwd={props.thread.cwd}
         currentBranch={props.currentBranch}
@@ -698,7 +695,7 @@
         switchBranch={props.switchGitBranch}
         createWorktree={props.createGitWorktree}
       />
-    </span>
+    </div>
   </div>
 </section>
 

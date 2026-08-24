@@ -41,6 +41,42 @@ fn git_command() -> tokio::process::Command {
     command
 }
 
+const MAX_GIT_CHANGES: usize = 10_000;
+const MAX_GIT_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_GIT_DIFF_BYTES: usize = 2 * 1024 * 1024;
+const MAX_GIT_PATH_BYTES: usize = 4096;
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GitChangeStatus {
+    Added,
+    Modified,
+    Deleted,
+    Renamed,
+    Copied,
+    Untracked,
+    Conflicted,
+    TypeChanged,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitChange {
+    path: String,
+    old_path: Option<String>,
+    status: GitChangeStatus,
+    staged: bool,
+    unstaged: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitFileDiff {
+    hunks: Vec<String>,
+    binary: bool,
+    too_large: bool,
+}
+
 #[cfg(windows)]
 fn configure_native_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     use windows::Win32::Graphics::Dwm::{
@@ -178,6 +214,151 @@ fn validate_git_cwd(cwd: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+fn validate_git_relative_path(path: &str) -> Result<&str, String> {
+    if path.is_empty()
+        || path.len() > MAX_GIT_PATH_BYTES
+        || Path::new(path).is_absolute()
+        || Path::new(path)
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err("Git returned an invalid changed-file path".to_owned());
+    }
+    Ok(path)
+}
+
+fn git_path(bytes: &[u8]) -> Result<String, String> {
+    if bytes.len() > MAX_GIT_PATH_BYTES {
+        return Err("A changed-file path is too long to display".to_owned());
+    }
+    let path = String::from_utf8_lossy(bytes).into_owned();
+    validate_git_relative_path(&path)?;
+    Ok(path)
+}
+
+fn ensure_git_output_size(output: &[u8]) -> Result<(), String> {
+    if output.len() > MAX_GIT_OUTPUT_BYTES {
+        Err("The Git change list is too large to display".to_owned())
+    } else {
+        Ok(())
+    }
+}
+
+fn working_change_status(index: char, worktree: char) -> GitChangeStatus {
+    if index == '?' && worktree == '?' {
+        return GitChangeStatus::Untracked;
+    }
+    if index == 'U' || worktree == 'U' || matches!((index, worktree), ('A', 'A') | ('D', 'D')) {
+        return GitChangeStatus::Conflicted;
+    }
+    if index == 'R' || worktree == 'R' {
+        return GitChangeStatus::Renamed;
+    }
+    if index == 'C' || worktree == 'C' {
+        return GitChangeStatus::Copied;
+    }
+    if index == 'A' || worktree == 'A' {
+        return GitChangeStatus::Added;
+    }
+    if index == 'D' || worktree == 'D' {
+        return GitChangeStatus::Deleted;
+    }
+    if index == 'T' || worktree == 'T' {
+        return GitChangeStatus::TypeChanged;
+    }
+    GitChangeStatus::Modified
+}
+
+fn parse_working_tree_changes(output: &[u8]) -> Result<Vec<GitChange>, String> {
+    ensure_git_output_size(output)?;
+    let mut fields = output
+        .split(|byte| *byte == 0)
+        .filter(|field| !field.is_empty());
+    let mut changes = Vec::new();
+    while let Some(record) = fields.next() {
+        if record.len() < 4 || record[2] != b' ' {
+            return Err("Git returned an invalid working-tree status".to_owned());
+        }
+        let index = char::from(record[0]);
+        let worktree = char::from(record[1]);
+        let status = working_change_status(index, worktree);
+        let path = git_path(&record[3..])?;
+        let old_path = if matches!(status, GitChangeStatus::Renamed | GitChangeStatus::Copied) {
+            Some(git_path(fields.next().ok_or_else(|| {
+                "Git returned an incomplete renamed-file status".to_owned()
+            })?)?)
+        } else {
+            None
+        };
+        changes.push(GitChange {
+            path,
+            old_path,
+            status,
+            staged: index != ' ' && index != '?',
+            unstaged: worktree != ' ',
+        });
+        if changes.len() > MAX_GIT_CHANGES {
+            return Err("The repository has too many changed files to display".to_owned());
+        }
+    }
+    Ok(changes)
+}
+
+fn branch_change_status(value: u8) -> Result<GitChangeStatus, String> {
+    match value {
+        b'A' => Ok(GitChangeStatus::Added),
+        b'M' => Ok(GitChangeStatus::Modified),
+        b'D' => Ok(GitChangeStatus::Deleted),
+        b'R' => Ok(GitChangeStatus::Renamed),
+        b'C' => Ok(GitChangeStatus::Copied),
+        b'T' => Ok(GitChangeStatus::TypeChanged),
+        b'U' => Ok(GitChangeStatus::Conflicted),
+        _ => Err("Git returned an unknown branch-change status".to_owned()),
+    }
+}
+
+fn parse_branch_changes(output: &[u8]) -> Result<Vec<GitChange>, String> {
+    ensure_git_output_size(output)?;
+    let mut fields = output
+        .split(|byte| *byte == 0)
+        .filter(|field| !field.is_empty());
+    let mut changes = Vec::new();
+    while let Some(raw_status) = fields.next() {
+        let status = branch_change_status(
+            *raw_status
+                .first()
+                .ok_or_else(|| "Git returned an empty branch-change status".to_owned())?,
+        )?;
+        let first_path = git_path(
+            fields
+                .next()
+                .ok_or_else(|| "Git returned an incomplete branch-change status".to_owned())?,
+        )?;
+        let (path, old_path) =
+            if matches!(status, GitChangeStatus::Renamed | GitChangeStatus::Copied) {
+                (
+                    git_path(fields.next().ok_or_else(|| {
+                        "Git returned an incomplete renamed-file status".to_owned()
+                    })?)?,
+                    Some(first_path),
+                )
+            } else {
+                (first_path, None)
+            };
+        changes.push(GitChange {
+            path,
+            old_path,
+            status,
+            staged: false,
+            unstaged: false,
+        });
+        if changes.len() > MAX_GIT_CHANGES {
+            return Err("The branch comparison has too many changed files to display".to_owned());
+        }
+    }
+    Ok(changes)
+}
+
 async fn git_ref(cwd: &Path, args: &[&str]) -> Option<String> {
     let mut process = git_command();
     process
@@ -268,6 +449,240 @@ async fn check_git_branch_name(cwd: &Path, branch: &str, label: &str) -> Result<
     )
     .await?;
     Ok(())
+}
+
+async fn git_branch_comparison_ref(cwd: &Path, branch: &str) -> Result<String, String> {
+    check_git_branch_name(cwd, branch, "base branch").await?;
+    let reference = format!("refs/heads/{branch}");
+    git_output(
+        cwd,
+        ["rev-parse", "--verify", "--quiet", reference.as_str()],
+        4,
+        "Could not resolve the base branch",
+    )
+    .await?;
+    Ok(format!("{reference}...HEAD"))
+}
+
+async fn list_git_changes_at(
+    cwd: &Path,
+    base_branch: Option<&str>,
+) -> Result<Vec<GitChange>, String> {
+    if let Some(base_branch) = base_branch {
+        let comparison = git_branch_comparison_ref(cwd, base_branch).await?;
+        let args = vec![
+            OsString::from("diff"),
+            OsString::from("--no-ext-diff"),
+            OsString::from("--no-textconv"),
+            OsString::from("--no-color"),
+            OsString::from("--name-status"),
+            OsString::from("-z"),
+            OsString::from("--find-renames"),
+            OsString::from("--relative"),
+            OsString::from(comparison),
+            OsString::from("--"),
+            OsString::from("."),
+        ];
+        let output = git_output(cwd, args, 10, "Could not compare Git branches").await?;
+        return parse_branch_changes(&output.stdout);
+    }
+
+    let output = git_output(
+        cwd,
+        [
+            "-c",
+            "status.relativePaths=true",
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--",
+            ".",
+        ],
+        10,
+        "Could not read Git changes",
+    )
+    .await?;
+    parse_working_tree_changes(&output.stdout)
+}
+
+#[tauri::command]
+async fn list_git_changes(
+    cwd: String,
+    base_branch: Option<String>,
+) -> Result<Vec<GitChange>, String> {
+    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
+        .await
+        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    list_git_changes_at(&cwd, base_branch.as_deref()).await
+}
+
+fn extract_git_hunks(patch: &[u8]) -> GitFileDiff {
+    if patch.len() > MAX_GIT_DIFF_BYTES {
+        return GitFileDiff {
+            hunks: Vec::new(),
+            binary: false,
+            too_large: true,
+        };
+    }
+    let patch = String::from_utf8_lossy(patch);
+    let binary = patch
+        .lines()
+        .any(|line| line.starts_with("Binary files ") || line == "GIT binary patch");
+    let mut hunks = Vec::new();
+    let mut current = String::new();
+    for line in patch.split_inclusive('\n') {
+        if line.starts_with("@@ ") {
+            if !current.is_empty() {
+                hunks.push(std::mem::take(&mut current));
+            }
+            current.push_str(line);
+        } else if line.starts_with("diff --git ") {
+            if !current.is_empty() {
+                hunks.push(std::mem::take(&mut current));
+            }
+        } else if !current.is_empty() {
+            current.push_str(line);
+        }
+    }
+    if !current.is_empty() {
+        hunks.push(current);
+    }
+    GitFileDiff {
+        hunks,
+        binary,
+        too_large: false,
+    }
+}
+
+fn untracked_file_diff(cwd: &Path, path: &str) -> Result<GitFileDiff, String> {
+    validate_git_relative_path(path)?;
+    let candidate = cwd.join(path);
+    let symlink_metadata = candidate
+        .symlink_metadata()
+        .map_err(|error| format!("Could not inspect changed file: {error}"))?;
+    if symlink_metadata.file_type().is_symlink() {
+        return Ok(GitFileDiff {
+            hunks: Vec::new(),
+            binary: true,
+            too_large: false,
+        });
+    }
+    let resolved = candidate
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve changed file: {error}"))?;
+    if !resolved.starts_with(cwd) || !resolved.is_file() {
+        return Err("The changed file is outside the working folder".to_owned());
+    }
+    if symlink_metadata.len() > MAX_GIT_DIFF_BYTES as u64 {
+        return Ok(GitFileDiff {
+            hunks: Vec::new(),
+            binary: false,
+            too_large: true,
+        });
+    }
+    let bytes =
+        std::fs::read(resolved).map_err(|error| format!("Could not read changed file: {error}"))?;
+    if bytes.len() > MAX_GIT_DIFF_BYTES {
+        return Ok(GitFileDiff {
+            hunks: Vec::new(),
+            binary: false,
+            too_large: true,
+        });
+    }
+    if bytes.contains(&0) {
+        return Ok(GitFileDiff {
+            hunks: Vec::new(),
+            binary: true,
+            too_large: false,
+        });
+    }
+    let Ok(text) = std::str::from_utf8(&bytes) else {
+        return Ok(GitFileDiff {
+            hunks: Vec::new(),
+            binary: true,
+            too_large: false,
+        });
+    };
+    if text.is_empty() {
+        return Ok(GitFileDiff {
+            hunks: Vec::new(),
+            binary: false,
+            too_large: false,
+        });
+    }
+    let line_count = text.split_inclusive('\n').count();
+    let mut hunk = format!("@@ -0,0 +1,{line_count} @@\n");
+    for line in text.split_inclusive('\n') {
+        hunk.push('+');
+        hunk.push_str(line);
+        if !line.ends_with('\n') {
+            hunk.push_str("\n\\ No newline at end of file\n");
+        }
+    }
+    Ok(GitFileDiff {
+        hunks: vec![hunk],
+        binary: false,
+        too_large: false,
+    })
+}
+
+async fn git_file_diff_at(
+    cwd: &Path,
+    base_branch: Option<&str>,
+    path: &str,
+    old_path: Option<&str>,
+) -> Result<GitFileDiff, String> {
+    validate_git_relative_path(path)?;
+    if let Some(old_path) = old_path {
+        validate_git_relative_path(old_path)?;
+    }
+
+    let comparison = if let Some(base_branch) = base_branch {
+        git_branch_comparison_ref(cwd, base_branch).await?
+    } else {
+        let head = git_ref(cwd, &["rev-parse", "--verify", "HEAD"]).await;
+        let tracked = git_ref(cwd, &["ls-files", "--error-unmatch", "--", path]).await;
+        if head.is_none() || tracked.is_none() {
+            let cwd = cwd.to_owned();
+            let path = path.to_owned();
+            return tauri::async_runtime::spawn_blocking(move || untracked_file_diff(&cwd, &path))
+                .await
+                .map_err(|error| format!("Could not join changed-file task: {error}"))?;
+        }
+        "HEAD".to_owned()
+    };
+
+    let mut args = vec![
+        OsString::from("diff"),
+        OsString::from("--no-ext-diff"),
+        OsString::from("--no-textconv"),
+        OsString::from("--no-color"),
+        OsString::from("--find-renames"),
+        OsString::from("--relative"),
+        OsString::from("--unified=3"),
+        OsString::from(comparison),
+        OsString::from("--"),
+    ];
+    if let Some(old_path) = old_path {
+        args.push(OsString::from(old_path));
+    }
+    args.push(OsString::from(path));
+    let output = git_output(cwd, args, 15, "Could not read the file diff").await?;
+    Ok(extract_git_hunks(&output.stdout))
+}
+
+#[tauri::command]
+async fn get_git_file_diff(
+    cwd: String,
+    base_branch: Option<String>,
+    path: String,
+    old_path: Option<String>,
+) -> Result<GitFileDiff, String> {
+    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
+        .await
+        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    git_file_diff_at(&cwd, base_branch.as_deref(), &path, old_path.as_deref()).await
 }
 
 async fn list_git_branches_at(cwd: &Path) -> Result<Vec<String>, String> {
@@ -544,6 +959,8 @@ pub fn run() {
             pick_folder,
             get_git_branch,
             list_git_branches,
+            list_git_changes,
+            get_git_file_diff,
             switch_git_branch,
             create_git_worktree,
             provider_version,
@@ -590,8 +1007,9 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        create_git_worktree_at, first_version_line, list_git_branches_at, switch_git_branch_at,
-        validate_git_cwd, validate_provider_command,
+        GitChangeStatus, create_git_worktree_at, first_version_line, git_file_diff_at,
+        list_git_branches_at, list_git_changes_at, switch_git_branch_at, validate_git_cwd,
+        validate_provider_command,
     };
     use std::{path::Path, process::Command};
 
@@ -668,6 +1086,60 @@ mod tests {
                 run_test_git(Path::new(&worktree.path), &["branch", "--show-current"]),
                 "feature/test"
             );
+        });
+    }
+
+    #[test]
+    fn working_tree_and_branch_changes_include_renderable_diffs() {
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        let repository = directory.path().join("repository");
+        std::fs::create_dir(&repository).expect("repository directory should be created");
+        run_test_git(&repository, &["init", "--initial-branch=main"]);
+        run_test_git(&repository, &["config", "user.email", "test@example.com"]);
+        run_test_git(&repository, &["config", "user.name", "LoopCode tests"]);
+        std::fs::write(repository.join("README.md"), "before\n")
+            .expect("test file should be written");
+        run_test_git(&repository, &["add", "README.md"]);
+        run_test_git(&repository, &["commit", "-m", "Initial commit"]);
+        run_test_git(&repository, &["switch", "-c", "feature"]);
+        std::fs::write(repository.join("README.md"), "after\n")
+            .expect("tracked file should change");
+        std::fs::write(repository.join("new.txt"), "new file\n")
+            .expect("untracked file should be written");
+
+        tauri::async_runtime::block_on(async {
+            let changes = list_git_changes_at(&repository, None)
+                .await
+                .expect("working tree changes should load");
+            assert!(changes.iter().any(|change| {
+                change.path == "README.md" && change.status == GitChangeStatus::Modified
+            }));
+            assert!(changes.iter().any(|change| {
+                change.path == "new.txt" && change.status == GitChangeStatus::Untracked
+            }));
+            let tracked_diff = git_file_diff_at(&repository, None, "README.md", None)
+                .await
+                .expect("tracked diff should load");
+            assert!(tracked_diff.hunks[0].contains("-before\n+after"));
+            let untracked_diff = git_file_diff_at(&repository, None, "new.txt", None)
+                .await
+                .expect("untracked diff should load");
+            assert!(untracked_diff.hunks[0].contains("+new file"));
+
+            run_test_git(&repository, &["add", "."]);
+            run_test_git(&repository, &["commit", "-m", "Feature change"]);
+            let branch_changes = list_git_changes_at(&repository, Some("main"))
+                .await
+                .expect("branch changes should load");
+            assert!(
+                branch_changes
+                    .iter()
+                    .any(|change| change.path == "README.md")
+            );
+            let branch_diff = git_file_diff_at(&repository, Some("main"), "README.md", None)
+                .await
+                .expect("branch diff should load");
+            assert!(branch_diff.hunks[0].contains("-before\n+after"));
         });
     }
 

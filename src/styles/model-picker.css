@@ -297,13 +297,6 @@
   justify-content: flex-end;
 }
 
-.composer-meta-project {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
 .composer-meta-actions {
   display: flex;
   align-items: center;

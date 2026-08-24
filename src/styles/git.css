@@ -1,3 +1,12 @@
+.git-controls {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
 .git-picker-trigger {
   display: flex;
   min-width: 0;
@@ -55,14 +64,12 @@
   color: var(--text);
 }
 
-.git-create-worktree {
-  margin-top: 5px;
-  border-top: 1px solid var(--line);
-  border-radius: 0 0 6px 6px;
+.git-workspace-trigger {
+  max-width: 180px;
 }
 
-.git-create-worktree:disabled {
-  color: var(--faint);
+.git-workspace-picker {
+  width: min(260px, calc(100vw - 42px));
 }
 
 .git-error {

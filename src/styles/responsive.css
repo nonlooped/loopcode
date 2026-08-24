@@ -72,6 +72,7 @@
   }
 
   .project-explorer:not(.open) .project-explorer-scroll,
+  .project-explorer:not(.open) .project-explorer-tab-list,
   .project-explorer:not(.open) .project-explorer-notice {
     opacity: 0;
     pointer-events: none;

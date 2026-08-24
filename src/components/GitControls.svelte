@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Combobox, Dialog, Popover } from 'bits-ui';
+  import { Combobox, Dialog, DropdownMenu, Popover } from 'bits-ui';
   import {
     IconCheck,
     IconChevronDown,
+    IconFolder,
     IconGitBranch,
     IconGitFork,
     IconSearch,
@@ -21,6 +22,7 @@
   }
 
   const props: Props = $props();
+  let workspaceOpen = $state(false);
   let pickerOpen = $state(false);
   let branchListOpen = $state(false);
   let branchSearch = $state('');
@@ -38,6 +40,7 @@
   $effect(() => {
     if (contextCwd === props.cwd) return;
     contextCwd = props.cwd;
+    workspaceOpen = false;
     pickerOpen = false;
     worktreeOpen = false;
     actionError = '';
@@ -51,9 +54,15 @@
       : branches;
   }
 
+  function setWorkspaceOpen(open: boolean) {
+    workspaceOpen = open;
+    if (open) pickerOpen = false;
+  }
+
   function setPickerOpen(open: boolean) {
     pickerOpen = open;
     if (!open) return;
+    workspaceOpen = false;
     branchSearch = '';
     branchListOpen = true;
     actionError = '';
@@ -79,6 +88,7 @@
       : (props.branches?.[0] ?? '');
     newBranch = '';
     worktreeError = '';
+    workspaceOpen = false;
     pickerOpen = false;
     worktreeOpen = true;
   }
@@ -98,11 +108,15 @@
     }
   }
 
-  function triggerTitle() {
+  function branchTitle() {
     if (props.lockReason) return props.lockReason;
     if (props.currentBranch === undefined) return 'Resolving Git branches…';
     if (props.currentBranch === null) return 'No Git repository';
     return `${props.currentBranch}${props.worktree ? ' · worktree' : ''}\n${props.cwd}`;
+  }
+
+  function workspaceTitle() {
+    return `${props.worktree ? 'New worktree' : 'Current checkout'}\n${props.cwd}`;
   }
 
   function errorMessage(cause: unknown) {
@@ -110,10 +124,61 @@
   }
 </script>
 
-<Popover.Root open={pickerOpen} onOpenChange={setPickerOpen}>
+<div class="git-controls">
+  {#if props.editable && props.currentBranch !== null}
+    <DropdownMenu.Root open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
+      <DropdownMenu.Trigger
+        class="git-picker-trigger git-workspace-trigger"
+        title={workspaceTitle()}
+        disabled={props.worktree || props.currentBranch === undefined || !props.branches?.length || busy}
+      >
+        {#if props.worktree}<IconGitFork size={12} stroke={1.55} />{:else}<IconFolder size={12} stroke={1.55} />{/if}
+        <span>{props.worktree ? 'New worktree' : 'Current checkout'}</span>
+        {#if !props.worktree}<IconChevronDown size={10} stroke={1.7} />{/if}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          class="workspace-dropdown git-workspace-picker"
+          side="top"
+          align="end"
+          sideOffset={6}
+          collisionPadding={12}
+          aria-label="Choose workspace"
+        >
+          <DropdownMenu.RadioGroup
+            value={props.worktree ? 'worktree' : 'checkout'}
+            onValueChange={(value) => { if (value === 'worktree') openWorktreeDialog(); }}
+          >
+            <DropdownMenu.RadioItem class="workspace-option" value="checkout">
+              {#snippet children({ checked })}
+                <IconFolder size={13} stroke={1.6} />
+                <span class="workspace-option-main">
+                  <strong>Current checkout</strong>
+                  <small>Use this folder directly</small>
+                </span>
+                {#if checked}<IconCheck size={13} stroke={2} />{/if}
+              {/snippet}
+            </DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem class="workspace-option" value="worktree">
+              {#snippet children({ checked })}
+                <IconGitFork size={13} stroke={1.6} />
+                <span class="workspace-option-main">
+                  <strong>New worktree</strong>
+                  <small>Create a separate branch and folder</small>
+                </span>
+                {#if checked}<IconCheck size={13} stroke={2} />{/if}
+              {/snippet}
+            </DropdownMenu.RadioItem>
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  {/if}
+
+  <Popover.Root open={pickerOpen} onOpenChange={setPickerOpen}>
   <Popover.Trigger
     class="git-picker-trigger"
-    title={triggerTitle()}
+    title={branchTitle()}
     disabled={!props.editable || props.currentBranch == null || !props.branches?.length || busy}
   >
     <IconGitBranch size={12} stroke={1.55} />
@@ -171,14 +236,10 @@
         </Combobox.ContentStatic>
       </Combobox.Root>
       {#if actionError}<div class="git-error" role="alert">{actionError}</div>{/if}
-      {#if !props.worktree}
-        <button class="workspace-add-folder git-create-worktree" disabled={busy} onclick={openWorktreeDialog}>
-          <IconGitFork size={13} stroke={1.65} /> Create worktree…
-        </button>
-      {/if}
     </Popover.Content>
   </Popover.Portal>
-</Popover.Root>
+  </Popover.Root>
+</div>
 
 <Dialog.Root open={worktreeOpen} onOpenChange={(open) => { if (!busy) worktreeOpen = open; }}>
   <Dialog.Portal>

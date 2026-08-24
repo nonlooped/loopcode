@@ -24,6 +24,31 @@ export function setupWebPreview() {
           return previewGitBranch;
         case "list_git_branches":
           return ["main", "web-preview", previewGitBranch];
+        case "list_git_changes":
+          return [
+            {
+              path: "src/App.svelte",
+              oldPath: null,
+              status: "modified",
+              staged: false,
+              unstaged: true,
+            },
+            {
+              path: "src/components/ChangesPanel.svelte",
+              oldPath: null,
+              status: "untracked",
+              staged: false,
+              unstaged: true,
+            },
+          ];
+        case "get_git_file_diff":
+          return {
+            hunks: [
+              "@@ -12,3 +12,3 @@\n import Sidebar from './components/Sidebar.svelte';\n-import Transcript from './components/Transcript.svelte';\n+import ChangesPanel from './components/ChangesPanel.svelte';\n import Titlebar from './components/Titlebar.svelte';\n",
+            ],
+            binary: false,
+            tooLarge: false,
+          };
         case "switch_git_branch": {
           const branch = argument(payload, "branch");
           if (typeof branch === "string") previewGitBranch = branch;
