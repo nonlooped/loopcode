@@ -283,9 +283,29 @@
 }
 
 .git-change-summary {
-  padding: 8px 11px 4px;
+  display: flex;
+  min-height: 29px;
+  padding: 6px 11px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
   color: var(--faint);
   font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.git-change-summary strong {
+  margin-right: auto;
+  color: var(--text-soft);
+  font-weight: 560;
+}
+
+.git-change-summary .additions {
+  color: var(--success);
+}
+
+.git-change-summary .deletions {
+  color: var(--danger);
 }
 
 .git-change-list {

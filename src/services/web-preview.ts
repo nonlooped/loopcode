@@ -25,22 +25,26 @@ export function setupWebPreview() {
         case "list_git_branches":
           return ["main", "web-preview", previewGitBranch];
         case "list_git_changes":
-          return [
-            {
-              path: "src/App.svelte",
-              oldPath: null,
-              status: "modified",
-              staged: false,
-              unstaged: true,
-            },
-            {
-              path: "src/components/ChangesPanel.svelte",
-              oldPath: null,
-              status: "untracked",
-              staged: false,
-              unstaged: true,
-            },
-          ];
+          return {
+            changes: [
+              {
+                path: "src/App.svelte",
+                oldPath: null,
+                status: "modified",
+                staged: false,
+                unstaged: true,
+              },
+              {
+                path: "src/components/ChangesPanel.svelte",
+                oldPath: null,
+                status: "untracked",
+                staged: false,
+                unstaged: true,
+              },
+            ],
+            additions: 114,
+            deletions: 7,
+          };
         case "get_git_file_diff":
           return {
             hunks: [

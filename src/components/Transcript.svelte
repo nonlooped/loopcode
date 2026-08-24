@@ -37,6 +37,13 @@
   // ponytail: DOM nodes kept out of deep reactivity; read at action time, not render time
   let messageBodies = $state.raw<Record<string, HTMLElement | undefined>>({});
   const entryMotion = $derived(animateEntries && !reducedMotion);
+  const latestUserMessage = $derived(
+    thread.messages.filter((message) => message.role === 'user').at(-1),
+  );
+  const transcriptStatus = $derived(threadStatus(thread));
+  const awaitingAnswer = $derived(
+    transcriptStatus === 'connecting' || transcriptStatus === 'running',
+  );
   const activeWorkStartedAt = $derived.by(() => {
     for (const entry of entries) {
       if (entry.type === 'work' && entry.active) return entry.startedAt;
@@ -61,19 +68,26 @@
     const updatedAt = thread.updatedAt;
     const threadId = thread.id;
     const transcript = transcriptElement;
-    const userMessageId = thread.messages.filter((message) => message.role === 'user').at(-1)?.id;
+    const userMessageId = latestUserMessage?.id;
     if (updatedAt >= 0 && transcript) {
       const threadChanged = renderedThreadId !== threadId;
-      const shouldFollow = shouldFollowTranscript(
-        threadChanged,
-        renderedUserMessageId !== userMessageId,
-        pinnedToBottom,
-      );
+      const userMessageChanged = renderedUserMessageId !== userMessageId;
+      let latestActivityAt = 0;
+      for (const message of thread.messages) latestActivityAt = Math.max(latestActivityAt, message.createdAt);
+      for (const tool of thread.tools) latestActivityAt = Math.max(latestActivityAt, tool.createdAt);
+      const promptAnchorId = userMessageChanged
+        && userMessageId
+        && (awaitingAnswer || latestUserMessage.createdAt === latestActivityAt)
+        ? userMessageId
+        : undefined;
+      if (promptAnchorId) pinnedToBottom = false;
+      const shouldFollow = !promptAnchorId && shouldFollowTranscript(threadChanged, pinnedToBottom);
       renderedThreadId = threadId;
       renderedUserMessageId = userMessageId;
       void tick().then(() => {
         if (!transcriptElement) return;
-        if (shouldFollow) scrollToBottom('auto');
+        if (promptAnchorId) anchorPromptNearTop(promptAnchorId);
+        else if (shouldFollow) scrollToBottom('auto');
         else updateScrollState();
       });
     }
@@ -98,6 +112,20 @@
       behavior: reducedMotion ? 'auto' : behavior,
     });
     if (behavior === 'auto' || reducedMotion) updateScrollState();
+  }
+
+  function anchorPromptNearTop(messageId: string) {
+    if (!transcriptElement) return;
+    const prompt = messageBodies[messageId];
+    if (!prompt) return;
+    const top = prompt.getBoundingClientRect().top
+      - transcriptElement.getBoundingClientRect().top
+      + transcriptElement.scrollTop
+      - 13;
+    pinnedToBottom = false;
+    transcriptElement.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+    updateScrollState();
+    pinnedToBottom = false;
   }
 
   function imageUrl(image: { mimeType: string; data: string }) {
@@ -149,7 +177,11 @@
     aria-live="polite"
     onscroll={updateScrollState}
   >
-    <div class="message-stack" class:empty={thread.messages.length === 0 && thread.tools.length === 0}>
+    <div
+      class="message-stack"
+      class:empty={thread.messages.length === 0 && thread.tools.length === 0}
+      class:awaiting-answer={awaitingAnswer}
+    >
     {#each entries as entry (entry.type === 'message' ? `message-${entry.message.id}` : entry.id)}
       {#if entry.type === 'work'}
         {@const workGroupExpanded = entry.active || workGroupOpen[entry.id] === true}

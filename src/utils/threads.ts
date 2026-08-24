@@ -39,7 +39,7 @@ export function createThread(
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
-    title: newThreadTitle(now),
+    title: newThreadTitle(),
     profileId: providerDefinitions[0].id,
     cwd,
     messages: [],

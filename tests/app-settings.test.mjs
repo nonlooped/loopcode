@@ -50,7 +50,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
 
   const defaults = {
     colorMode: "system",
-    theme: "graphite",
+    theme: "violet",
     compactSessionRows: false,
     startupBehavior: "last-thread",
     newThreadProject: "selected",
@@ -135,7 +135,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
   values.set("loopcode.terminal-font-size", "invalid");
   values.set("loopcode.terminal-scrollback", "20");
   assert.equal(loadAppPreferences(storage).colorMode, "system");
-  assert.equal(loadAppPreferences(storage).theme, "graphite");
+  assert.equal(loadAppPreferences(storage).theme, "violet");
   assert.equal(loadAppPreferences(storage).interfaceZoom, 200);
   assert.equal(loadAppPreferences(storage).contentWidth, 600);
   assert.deepEqual(loadAppPreferences(storage).providerModelDefaults, {});
