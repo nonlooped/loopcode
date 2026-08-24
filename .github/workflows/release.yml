@@ -1,27 +1,18 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      tag:
-        required: true
-        type: string
-      sha:
-        required: true
-        type: string
 
 env:
-  RELEASE_SHA: ${{ inputs.sha || github.sha }}
-  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  RELEASE_SHA: ${{ github.sha }}
+  RELEASE_TAG: ${{ github.ref_name }}
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  provenance:
+  preflight:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
@@ -29,6 +20,8 @@ jobs:
       checks: read
       contents: read
     steps:
+      - name: Require release tag
+        run: test "$GITHUB_REF_TYPE" = tag
       - name: Require successful master CI for this commit
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,9 +46,10 @@ jobs:
           package-manager-cache: false
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
       - run: node scripts/check-versions.mjs "$RELEASE_TAG"
+      - run: node scripts/release-notes.mjs "$RELEASE_TAG" > /dev/null
 
   bundle:
-    needs: provenance
+    needs: preflight
     permissions:
       contents: read
     strategy:
@@ -123,7 +117,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.sig
           if-no-files-found: error
 
-  publish:
+  draft:
     needs: bundle
     runs-on: ubuntu-22.04
     timeout-minutes: 10
@@ -140,22 +134,33 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - name: Publish release
+      - name: Create checksums
+        run: |
+          cd artifacts
+          find . -mindepth 2 -type f -exec mv {} . \;
+          find . -type d -empty -delete 2>/dev/null || true
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 -r sha256sum > SHA256SUMS.txt
+          test -s SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mapfile -d '' files < <(find artifacts -type f -print0)
           previous_tag="$(git describe --tags --abbrev=0 "$RELEASE_SHA^")"
-          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-            -f tag_name="$RELEASE_TAG" \
-            -f target_commitish="$RELEASE_SHA" \
-            -f previous_tag_name="$previous_tag" \
-            --jq .body > generated-notes.md
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$RELEASE_TAG" "${files[@]}" --draft --notes-file generated-notes.md \
-              --title "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          node scripts/release-notes.mjs "$RELEASE_TAG" > release-notes.md
+          printf '\n> Windows and Linux packages are currently unsigned.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
+            "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$previous_tag" "$RELEASE_TAG" >> release-notes.md
+          release="$(gh release view "$RELEASE_TAG" --json isDraft --repo "$GITHUB_REPOSITORY" 2> /dev/null || true)"
+          if [[ -n "$release" && "$(jq -r .isDraft <<< "$release")" != true ]]; then
+            echo "release is already published: $RELEASE_TAG" >&2
+            exit 1
           fi
-          gh release edit "$RELEASE_TAG" --draft=false --title "$RELEASE_TAG" \
-            --notes-file generated-notes.md --repo "$GITHUB_REPOSITORY"
+          if [[ -n "$release" ]]; then
+            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            gh release edit "$RELEASE_TAG" --title "LoopCode $RELEASE_TAG" \
+              --notes-file release-notes.md --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "${files[@]}" --draft --notes-file release-notes.md \
+              --title "LoopCode $RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+          fi

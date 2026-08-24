@@ -43,5 +43,5 @@ npx vp check --fix CHANGELOG.md
 git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
 git commit -m "chore(release): v$ver"
 echo "push the branch: git push -u origin $release_branch"
-echo "open a PR titled chore(release): v$ver and add the skip-release-notes label"
-echo "squash-merge it after CI passes; master CI will tag and publish v$ver"
+echo "open a PR titled chore(release): v$ver"
+echo "squash-merge it after CI passes; master CI will tag v$ver and draft the release"
