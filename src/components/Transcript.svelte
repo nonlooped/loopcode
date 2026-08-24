@@ -125,6 +125,7 @@
     pinnedToBottom = false;
     transcriptElement.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
     updateScrollState();
+    pinnedToBottom = false;
   }
 
   function imageUrl(image: { mimeType: string; data: string }) {

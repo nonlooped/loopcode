@@ -595,8 +595,9 @@ async fn list_git_changes_at(cwd: &Path, base_branch: Option<&str>) -> Result<Gi
     let untracked_paths = changes
         .iter()
         .filter(|change| {
-            change.status == GitChangeStatus::Untracked
-                || (!has_head && change.status == GitChangeStatus::Added)
+            (change.status == GitChangeStatus::Untracked
+                || (!has_head && change.status == GitChangeStatus::Added))
+                && !change.path.ends_with('/')
         })
         .map(|change| change.path.clone())
         .collect();
@@ -733,13 +734,39 @@ async fn untracked_additions_at(cwd: &Path, paths: Vec<String>) -> Result<usize,
     tauri::async_runtime::spawn_blocking(move || {
         let mut additions = 0usize;
         for path in paths {
-            let diff = untracked_file_diff(&cwd, &path)?;
-            let lines = diff
-                .hunks
-                .iter()
-                .flat_map(|hunk| hunk.lines())
-                .filter(|line| line.starts_with('+'))
-                .count();
+            if path.ends_with('/') {
+                continue;
+            }
+            let diff = match untracked_file_diff(&cwd, &path) {
+                Ok(diff) => diff,
+                Err(_) => continue,
+            };
+            let lines = if diff.too_large {
+                // Count lines directly for large files; binary or unreadable counts as 0
+                let candidate = cwd.join(&path);
+                let Ok(bytes) = std::fs::read(&candidate) else {
+                    continue;
+                };
+                if bytes.contains(&0) {
+                    0
+                } else if let Ok(text) = std::str::from_utf8(&bytes) {
+                    if text.is_empty() {
+                        0
+                    } else {
+                        text.split_inclusive('\n').count()
+                    }
+                } else {
+                    0
+                }
+            } else if diff.binary {
+                0
+            } else {
+                diff.hunks
+                    .iter()
+                    .flat_map(|hunk| hunk.lines())
+                    .filter(|line| line.starts_with('+'))
+                    .count()
+            };
             additions = additions
                 .checked_add(lines)
                 .ok_or_else(|| "Git returned too many additions".to_owned())?;
