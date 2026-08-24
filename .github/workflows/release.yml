@@ -137,7 +137,9 @@ jobs:
       - name: Create checksums
         run: |
           cd artifacts
-          find . -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 -r sha256sum > SHA256SUMS.txt
+          find . -mindepth 2 -type f -exec mv {} . \;
+          find . -type d -empty -delete 2>/dev/null || true
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 -r sha256sum > SHA256SUMS.txt
           test -s SHA256SUMS.txt
           sha256sum --check SHA256SUMS.txt
       - name: Create draft release
