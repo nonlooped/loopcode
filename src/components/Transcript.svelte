@@ -11,7 +11,7 @@
   import type { TimelineDisplayEntry } from '../types/timeline';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
-  import { isStreamingMessage, shouldFollowTranscript, workGroupMeta } from '../utils/timeline';
+  import { formatElapsedDuration, isStreamingMessage, shouldFollowTranscript } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -19,9 +19,10 @@
     entries: TimelineDisplayEntry[];
     profiles: HarnessProfile[];
     reducedMotion: boolean;
+    openFile: (path: string) => void;
   }
 
-  const { thread, entries, profiles, reducedMotion }: Props = $props();
+  const { thread, entries, profiles, reducedMotion, openFile }: Props = $props();
   let transcriptElement = $state<HTMLElement>();
   let canScrollUp = $state(false);
   let canScrollDown = $state(false);
@@ -30,15 +31,30 @@
   let renderedUserMessageId: string | undefined;
   let animateEntries = $state(false);
   let imagePreview = $state<{ src: string; name: string }>();
+  let workDurationNow = $state(Date.now());
+  let workGroupOpen = $state<Record<string, boolean>>({});
   let toolOpen = $state<Record<string, boolean>>({});
   // ponytail: DOM nodes kept out of deep reactivity; read at action time, not render time
   let messageBodies = $state.raw<Record<string, HTMLElement | undefined>>({});
   const entryMotion = $derived(animateEntries && !reducedMotion);
+  const activeWorkStartedAt = $derived.by(() => {
+    for (const entry of entries) {
+      if (entry.type === 'work' && entry.active) return entry.startedAt;
+    }
+    return undefined;
+  });
   const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
   onMount(() => {
     const frame = requestAnimationFrame(() => { animateEntries = true; });
     return () => cancelAnimationFrame(frame);
+  });
+
+  $effect(() => {
+    if (activeWorkStartedAt === undefined) return;
+    workDurationNow = Date.now();
+    const interval = window.setInterval(() => { workDurationNow = Date.now(); }, 1_000);
+    return () => window.clearInterval(interval);
   });
 
   $effect(() => {
@@ -136,19 +152,37 @@
     <div class="message-stack" class:empty={thread.messages.length === 0 && thread.tools.length === 0}>
     {#each entries as entry (entry.type === 'message' ? `message-${entry.message.id}` : entry.id)}
       {#if entry.type === 'work'}
+        {@const workGroupExpanded = entry.active || workGroupOpen[entry.id] === true}
         <div
           class:active={entry.active}
           class="work-group"
           in:fly={{ y: entryMotion ? 4 : 0, duration: entryMotion ? 180 : 0 }}
         >
-          <Collapsible.Root class="work-group-root">
-          <Collapsible.Trigger class="work-group-trigger">
-            <span class="work-chevron"><IconChevronRight size={14} stroke={1.8} /></span>
-            <span class="activity-spark"></span>
-            <strong>{entry.active ? 'Working…' : 'Working'}</strong>
-            <small>{workGroupMeta(entry.entries)}</small>
-          </Collapsible.Trigger>
-          <Collapsible.Content class="work-group-content">
+          <div class="work-group-header">
+            {#if entry.active}
+              <div class="work-group-status">
+                Working for {formatElapsedDuration(workDurationNow - entry.startedAt)}
+              </div>
+            {:else}
+              <button
+                type="button"
+                class="work-group-trigger"
+                aria-expanded={workGroupExpanded}
+                onclick={() => { workGroupOpen[entry.id] = !workGroupExpanded; }}
+              >
+                <span>Worked for {formatElapsedDuration(entry.durationMs ?? 0)}</span>
+                <span class="work-chevron">
+                  {#if workGroupExpanded}
+                    <IconChevronDown size={14} stroke={1.8} />
+                  {:else}
+                    <IconChevronRight size={14} stroke={1.8} />
+                  {/if}
+                </span>
+              </button>
+            {/if}
+          </div>
+          {#if workGroupExpanded}
+            <div class="work-group-content">
             {#each entry.entries as workEntry (workEntry.type === 'tool' ? `tool-${workEntry.tool.id}` : `message-${workEntry.message.id}`)}
               {#if workEntry.type === 'tool'}
                 {@const tool = workEntry.tool}
@@ -164,7 +198,7 @@
                     >
                       <div in:fly={{ y: entryMotion ? 3 : 0, duration: entryMotion ? 160 : 0 }}>
                         <Collapsible.Trigger class="tool-item-trigger">
-                          <span class="tool-icon"><IconTool size={14} stroke={1.8} /></span>
+                          <span class="tool-icon"><IconTool size={16} stroke={1.8} /></span>
                           <span class="tool-title"><strong>{tool.title}</strong><small>{toolStatus(tool.status)}</small></span>
                         </Collapsible.Trigger>
                         <Collapsible.Content>
@@ -196,14 +230,19 @@
                       class="work-message"
                       in:fly={{ y: entryMotion ? 3 : 0, duration: entryMotion ? 160 : 0 }}
                     >
-                      <MarkdownMessage id={workEntry.message.id} source={workEntry.message.text.trim()} streaming={entry.active} />
+                      <MarkdownMessage
+                        id={workEntry.message.id}
+                        source={workEntry.message.text.trim()}
+                        streaming={entry.active}
+                        fileLinks={{ projectRoot: thread.cwd, open: openFile }}
+                      />
                     </div>
                   {/snippet}
                 </ContextMenu>
               {/if}
             {/each}
-          </Collapsible.Content>
-          </Collapsible.Root>
+            </div>
+          {/if}
         </div>
       {:else}
         {@const message = entry.message}
@@ -255,7 +294,14 @@
                   {/each}
                 </div>
               {:else}
-                <MarkdownMessage id={message.id} source={message.text} {streaming} />
+                <MarkdownMessage
+                  id={message.id}
+                  source={message.text}
+                  {streaming}
+                  fileLinks={message.role === 'agent'
+                    ? { projectRoot: thread.cwd, open: openFile }
+                    : undefined}
+                />
               {/if}
               {#if message.images && message.images.length > 0}
                 <div class="message-images" aria-label="Attached images">

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatElapsedDuration,
   isStreamingMessage,
   shouldFollowTranscript,
   timelineEntries,
@@ -50,6 +51,8 @@ void test("collapses turn work while leaving the terminal agent response visible
   assert.equal(entries[0].type, "message");
   assert.equal(entries[0].message.id, "user");
   assert.equal(entries[1].type, "work");
+  assert.equal(entries[1].startedAt, 1);
+  assert.equal(entries[1].durationMs, 5);
   assert.deepEqual(
     entries[1].entries.map((entry) => (entry.type === "tool" ? entry.tool.id : entry.message.id)),
     ["thought", "tool", "intermediate"],
@@ -62,6 +65,8 @@ void test("keeps all agent output in the active work group while running", () =>
   const entries = timelineEntries(thread("running"));
   const work = entries.find((entry) => entry.type === "work");
   assert.equal(work.active, true);
+  assert.equal(work.startedAt, 1);
+  assert.equal(work.durationMs, null);
   assert.equal(work.entries.at(-1).message.id, "final");
 });
 
@@ -75,6 +80,12 @@ void test("keeps the substantive response visible when a completed turn ends wit
 
   const entries = timelineEntries(value);
   assert.ok(entries.some((entry) => entry.type === "message" && entry.message.id === "final"));
+});
+
+void test("formats work duration labels", () => {
+  assert.equal(formatElapsedDuration(8_000), "8s");
+  assert.equal(formatElapsedDuration(62_000), "1m 2s");
+  assert.equal(formatElapsedDuration(120_000), "2m");
 });
 
 void test("follows new output only while the transcript is pinned", () => {

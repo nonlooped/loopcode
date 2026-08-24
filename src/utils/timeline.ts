@@ -96,19 +96,26 @@ export function collapseTurnActivity(
       entries: workEntries,
       active,
       createdAt: entry.createdAt,
+      startedAt: entries[0]?.createdAt ?? entry.createdAt,
+      durationMs: active
+        ? null
+        : Math.max(
+            0,
+            (entries.at(-1)?.createdAt ?? entry.createdAt) -
+              (entries[0]?.createdAt ?? entry.createdAt),
+          ),
     });
   }
 
   return collapsed;
 }
 
-export function workGroupMeta(entries: TimelineActivityEntry[]) {
-  const toolCount = entries.filter((entry) => entry.type === "tool").length;
-  const updateCount = entries.length - toolCount;
-  const labels = [];
-  if (updateCount > 0) labels.push(`${updateCount} ${updateCount === 1 ? "update" : "updates"}`);
-  if (toolCount > 0) labels.push(`${toolCount} ${toolCount === 1 ? "tool call" : "tool calls"}`);
-  return labels.join(" · ");
+export function formatElapsedDuration(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1_000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
 
 export function isStreamingMessage(thread: ThreadState, message: TimelineMessage) {

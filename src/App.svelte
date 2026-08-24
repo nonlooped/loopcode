@@ -1175,6 +1175,7 @@
                     entries={selectedTimelineEntries}
                     {profiles}
                     {reducedMotion}
+                    {openFile}
                   />
                 {/key}
               {/if}

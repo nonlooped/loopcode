@@ -94,6 +94,24 @@
   object-fit: contain;
 }
 
+.file-viewer-markdown {
+  width: min(100%, 816px);
+  padding: 32px clamp(15px, 5.8vw, 48px) 56px;
+  margin: 0 auto;
+}
+
+.file-viewer-markdown img {
+  max-width: 100%;
+}
+
+.file-viewer-html {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: white;
+}
+
 .file-viewer-code :where(pre.shiki, pre.shiki-fallback) {
   width: 100%;
   min-height: 100%;

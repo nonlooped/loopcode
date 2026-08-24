@@ -14,10 +14,10 @@
 .tool-item-trigger {
   display: flex;
   width: 100%;
-  min-height: 26px;
-  padding: 1px 4px;
+  min-height: 30px;
+  padding: 1px 2px;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -31,8 +31,8 @@
 
 .tool-icon {
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
   place-items: center;
   border: 0;
@@ -43,7 +43,7 @@
   display: flex;
   min-width: 0;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
 }
 
 .tool-title strong,
@@ -57,14 +57,14 @@
   min-width: 0;
   flex: 1 1 auto;
   color: var(--muted);
-  font-size: 10.5px;
-  font-weight: 540;
+  font-size: 12.5px;
+  font-weight: 520;
 }
 
 .tool-title small {
   flex: 0 0 auto;
   color: var(--faint);
-  font-size: 9px;
+  font-size: 10px;
   text-transform: capitalize;
 }
 

@@ -12,4 +12,6 @@ export type TimelineDisplayEntry =
       entries: TimelineActivityEntry[];
       active: boolean;
       createdAt: number;
+      startedAt: number;
+      durationMs: number | null;
     };

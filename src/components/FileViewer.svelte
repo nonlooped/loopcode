@@ -3,7 +3,9 @@
   import { IconArrowLeft, IconArrowRight, IconX } from '@tabler/icons-svelte';
 
   import { readProjectFile } from '../services/native';
+  import { documentTypeForPath } from '../utils/file-preview';
   import { highlightFile, languageForPath } from '../utils/syntax-highlighter';
+  import MarkdownMessage from './markdown/MarkdownMessage.svelte';
 
   interface Props {
     path: string;
@@ -18,6 +20,7 @@
   const { path, projectRoot, revision, canGoForward, back, forward, close }: Props = $props();
   let loading = $state(true);
   let error = $state('');
+  let content = $state('');
   let highlighted = $state('');
   let imageUrl = $state('');
   let loadToken = 0;
@@ -25,6 +28,7 @@
   const name = $derived(path.split(/[\\/]/).pop() || path);
   const mediaType = $derived(imageMediaType(path));
   const language = $derived(languageForPath(path) || 'Plain text');
+  const documentType = $derived(documentTypeForPath(path));
 
   $effect(() => {
     void loadFile(projectRoot, path, revision);
@@ -37,6 +41,7 @@
     void requestedRevision;
     loading = true;
     error = '';
+    content = '';
     highlighted = '';
     clearImage();
     try {
@@ -46,13 +51,17 @@
       if (requestedMediaType) {
         imageUrl = URL.createObjectURL(new Blob([Uint8Array.from(bytes)], { type: requestedMediaType }));
       } else {
-        let content: string;
+        let decodedContent: string;
         try {
-          content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+          decodedContent = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
         } catch {
           throw new Error('Binary files cannot be previewed.');
         }
-        highlighted = highlightFile(content, requestedPath);
+        if (documentTypeForPath(requestedPath)) {
+          content = decodedContent;
+        } else {
+          highlighted = highlightFile(decodedContent, requestedPath);
+        }
       }
     } catch (cause) {
       if (token === loadToken) error = cause instanceof Error ? cause.message : String(cause);
@@ -109,6 +118,12 @@
       <p class="file-viewer-state error">{error}</p>
     {:else if imageUrl}
       <div class="file-viewer-image"><img src={imageUrl} alt={name} /></div>
+    {:else if documentType === 'markdown'}
+      <article class="file-viewer-markdown message-body">
+        <MarkdownMessage id={`file:${path}`} source={content} />
+      </article>
+    {:else if documentType === 'html'}
+      <iframe class="file-viewer-html" title={`Preview of ${name}`} sandbox="" srcdoc={content}></iframe>
     {:else}
       <div class="file-viewer-code">{@html highlighted}</div>
     {/if}

@@ -71,6 +71,7 @@ const languages = {
   js: "javascript",
   json: "json",
   jsonc: "json",
+  markdown: "markdown",
   md: "markdown",
   mjs: "javascript",
   mts: "typescript",

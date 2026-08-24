@@ -8,20 +8,24 @@
 <script lang="ts">
   import SvelteMarkdown from '@humanspeak/svelte-markdown';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { openExternalLinkFromClick } from '../../utils/external-links';
+  import { openMarkdownLinkFromClick } from '../../utils/external-links';
   import MarkdownCode from './MarkdownCode.svelte';
 
   interface Props {
     id: string;
     source: string;
     streaming?: boolean;
+    fileLinks?: {
+      projectRoot: string;
+      open: (path: string) => void;
+    };
   }
 
-  const { id, source, streaming = false }: Props = $props();
+  const { id, source, streaming = false, fileLinks }: Props = $props();
   const renderers = { code: MarkdownCode };
 
   function handleClick(event: MouseEvent): void {
-    void openExternalLinkFromClick(event, openUrl);
+    void openMarkdownLinkFromClick(event, { openUrl, fileLinks });
   }
 </script>
 
