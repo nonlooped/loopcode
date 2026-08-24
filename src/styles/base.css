@@ -236,7 +236,7 @@ body {
 }
 
 body img.brand-color-icon {
-  filter: none;
+  filter: none !important;
 }
 
 :root[data-color-mode="light"] .shiki,
