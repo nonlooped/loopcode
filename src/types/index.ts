@@ -166,6 +166,7 @@ export interface HarnessProfile {
   id: string;
   label: string;
   icon: string;
+  iconMode: "brand" | "theme";
   command: string;
   args: string[];
   versionCommand: string;

@@ -1,6 +1,6 @@
 import type { DesktopPlatform, HarnessProfile } from "../types/index.ts";
 
-export type ProviderDefinition = Omit<HarnessProfile, "icon">;
+export type ProviderDefinition = Omit<HarnessProfile, "icon" | "iconMode">;
 
 export const GROK_VERSION = "1.0.5";
 export const PI_VERSION = "0.84.2";

@@ -656,7 +656,7 @@
               />
             {:else}
               <button class="model-picker-trigger" title="No authenticated providers" disabled>
-                <img src={profile.icon} alt="" />
+                <img class:brand-color-icon={profile.iconMode === 'brand'} src={profile.icon} alt="" />
                 <span>No providers</span>
               </button>
             {/if}

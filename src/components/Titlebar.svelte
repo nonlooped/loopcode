@@ -73,7 +73,7 @@
             {:else if selectedThread}
               {@const selectedProfile = profileById(selectedThread.profileId)}
               <span class="title-thread-context" data-tauri-drag-region>
-                <img class="title-provider-icon" src={selectedProfile.icon} alt="" />
+                <img class:brand-color-icon={selectedProfile.iconMode === 'brand'} class="title-provider-icon" src={selectedProfile.icon} alt="" />
                 <span class="title-copy" data-tauri-drag-region>
                   <strong title={selectedThread.title}>{selectedThread.title}</strong>
                   <small title={selectedThread.cwd}>{#if selectedThread.cwd}{folderName(selectedThread.cwd)}{/if}</small>
