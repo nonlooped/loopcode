@@ -1,3 +1,13 @@
+## [0.7.0] - 2026-08-24
+
+### 🚀 Features
+
+- _(ui)_ Improve workspace feedback (#66)
+
+### 🐛 Bug Fixes
+
+- _(providers)_ Preserve Claude brand icon (#65)
+
 ## [0.6.0] - 2026-08-24
 
 ### 🚀 Features
