@@ -183,6 +183,10 @@
 
   providers.setPermissionMode(initialPermissionMode);
 
+  $effect(() => {
+    workspace.queuePersistence();
+  });
+
   const selectedThread = $derived(threads.find((thread) => thread.id === selectedThreadId));
   const selectedInteraction = $derived(
     selectedThread ? interactions[interactionKey(selectedThread.id, selectedThread.profileId)] : undefined,
