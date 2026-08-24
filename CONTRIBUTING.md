@@ -37,10 +37,9 @@ SemVer chooses the number. It does not require publishing every time `master` ch
 
 ### Prepare a release
 
-1. Start from an up-to-date `master` with no changes except the release note you are about to write.
-2. Rewrite `RELEASE_NOTES.md` for the target version. The first line must be `# LoopCode vX.Y.Z: <user-facing title>`, followed by a short summary and at least one bullet under `## Highlights`. Describe outcomes, not commit names. Add screenshots or recordings when they make a visible change easier to understand.
-3. Run `scripts/release.sh X.Y.Z`. The script validates the note, creates `release/vX.Y.Z`, updates every version, regenerates the technical changelog, and commits the release.
-4. Push the branch and open a pull request titled exactly `chore(release): vX.Y.Z`. Add the `skip-release-notes` label.
-5. Review the generated changelog and version diff, then squash-merge after `CI / gate` passes.
+1. Start from an up-to-date `master` with a clean working tree.
+2. Run `scripts/release.sh X.Y.Z`. The script creates `release/vX.Y.Z`, updates every version, regenerates the changelog, and commits the release.
+3. Push the branch and open a pull request titled exactly `chore(release): vX.Y.Z`. Add the `skip-release-notes` label.
+4. Review the generated changelog and version diff, then squash-merge after `CI / gate` passes.
 
-Master CI creates the protected tag only after the merged release commit passes again. The release workflow verifies the tag, version, release note, preceding release, and source commit. It then builds the Windows and Linux installers, puts the curated note first, appends GitHub's categorized pull request list, and publishes the release.
+Master CI creates the protected tag only after the merged release commit passes again. The release workflow verifies the tag, version, preceding release, and source commit. It then builds the Windows and Linux installers and publishes the release with GitHub's categorized pull request list.
