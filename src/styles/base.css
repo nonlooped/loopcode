@@ -235,6 +235,10 @@ body {
   font-size: 14px;
 }
 
+body img.brand-color-icon {
+  filter: none;
+}
+
 :root[data-color-mode="light"] .shiki,
 :root[data-color-mode="light"] .shiki span {
   color: var(--shiki-light) !important;

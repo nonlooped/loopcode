@@ -271,7 +271,7 @@
                           {/key}
                         </span>
                         <span class="thread-details">
-                          <img src={threadProfile.icon} alt="" />
+                          <img class:brand-color-icon={threadProfile.iconMode === 'brand'} src={threadProfile.icon} alt="" />
                           <span class="thread-provider">{threadHarness(thread, props.profiles)}</span>
                           {#if attention.kind !== 'recent'}
                             <span class="thread-reason">· {attention.reason}</span>
@@ -342,7 +342,7 @@
                       onclick={() => props.selectThread(thread.id)}
                     >
                     <span class="slim-copy">
-                      <img src={threadProfile.icon} alt="" />
+                      <img class:brand-color-icon={threadProfile.iconMode === 'brand'} src={threadProfile.icon} alt="" />
                       <span class="thread-title-motion">
                         {#key thread.title}
                           <strong transition:fade={{ duration: props.compactMotion ? 0 : 120 }}>{thread.title}</strong>

@@ -26,6 +26,9 @@
       ?? officialProfileById(props.thread.profileId)
       ?? officialProfiles[0],
   );
+  const selectedProfile = $derived(
+    props.profiles.find((profile) => profile.id === props.thread.profileId) ?? pickerProfile,
+  );
   const pickerProvider = $derived(props.thread.providers[pickerProfile.id]);
   const pickerCatalog = $derived(props.catalogs[pickerProfile.id]);
   const visibleModels = $derived(matchingModels(pickerCatalog.models));
@@ -81,7 +84,7 @@
     class="model-picker-trigger"
     title="Choose provider and model"
   >
-    <img src={(props.profiles.find((profile) => profile.id === props.thread.profileId) ?? pickerProfile).icon} alt="" />
+    <img class:brand-color-icon={selectedProfile.iconMode === 'brand'} src={selectedProfile.icon} alt="" />
     <span>{props.label}</span>
     <IconChevronDown size={11} stroke={1.7} />
   </Popover.Trigger>
@@ -109,7 +112,7 @@
               aria-label={`${profile.label}, ${providerStatusLabel(profile.id)}`}
               title={`${profile.label}, ${providerStatusLabel(profile.id)}`}
             >
-              <span class="provider-icon"><img src={profile.icon} alt="" /></span>
+              <span class="provider-icon"><img class:brand-color-icon={profile.iconMode === 'brand'} src={profile.icon} alt="" /></span>
               <span
                 class:ready={state.connectionStatus === 'ready'}
                 class:error={state.connectionStatus === 'error' || props.catalogs[profile.id].status === 'unavailable'}
