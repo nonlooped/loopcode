@@ -4,11 +4,6 @@
 
 The [README](README.md) covers prerequisites, setup, and the development commands (`npm run dev`, checks, tests).
 
-## Code conventions
-
-- Read [AGENTS.md](AGENTS.md) before changing code. It defines the ownership boundaries between the Svelte 5 frontend and the Rust shell, and where new code belongs.
-- UI changes must satisfy [DESIGN_GUIDELINES.md](DESIGN_GUIDELINES.md), including its release checklist.
-
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `perf:`, with an optional scope, such as `feat(provider): add retry`. Pull request titles follow the same format because LoopCode squash-merges pull requests and generates `CHANGELOG.md` from those commits.
@@ -17,7 +12,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`
 
 Name branches `<type>/<short-description>` using a Conventional Commit type such as `feat/`, `fix/`, `chore/`, or `ci/`. Never use an agent or tool name as the branch prefix.
 
-All changes to `master`, including version bumps, go through a pull request. Keep one user-visible change in each pull request when practical. Use the pull request template to record why the change matters, its release note, visual proof for UI work, and the checks run.
+All changes to `master`, go through a pull request. Keep one user-visible change in each pull request when practical. Use the pull request template to record why the change matters, its release note, visual proof for UI work, and the checks run.
 
 Apply one of the existing `enhancement`, `bug`, `documentation`, or `dependencies` labels so GitHub can group the change in release notes. Use `skip-release-notes` for internal work and release pull requests.
 

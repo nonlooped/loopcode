@@ -571,15 +571,13 @@
     >
       <IconPaperclip size={16} stroke={1.7} />
     </button>
-    <!-- svelte-ignore a11y_role_supports_aria_props -->
     <div
       bind:this={promptEditor}
       class="prompt-editor"
-      role="combobox"
+      role="textbox"
       aria-label="Prompt"
       aria-autocomplete="list"
       aria-haspopup="listbox"
-      aria-expanded={Boolean(completionPrefix)}
       aria-controls={completionPrefix ? 'composer-autocomplete' : undefined}
       aria-activedescendant={completionPrefix && completionResults[completionIndex] ? `composer-completion-${completionIndex}` : undefined}
       aria-disabled={!canEdit()}

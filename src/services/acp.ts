@@ -1,6 +1,7 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { z } from "zod";
 
+import { compatibilityFor, type AcpCompatibility } from "./acp-compatibility.ts";
 import { launchHarness, sendRpc, stopHarness, type BrokerEvent } from "./native.ts";
 import type {
   AcpErrorDetails,
@@ -14,11 +15,7 @@ import type {
   TurnStatus,
 } from "../types/index.ts";
 import type { JsonValue } from "../utils/json.ts";
-import {
-  readCursorAvailableModels,
-  readModelState,
-  type AcpModelState,
-} from "../utils/model-state.ts";
+import { readModelState, type AcpModelState } from "../utils/model-state.ts";
 
 type RpcId = acp.JsonRpcId;
 
@@ -45,25 +42,6 @@ interface PendingQuestions {
   resolve: (answers?: QuestionAnswer[]) => void;
 }
 
-interface CursorAskQuestionRequest {
-  title?: string;
-  questions: Array<{
-    id: string;
-    prompt: string;
-    options: Array<{ id: string; label: string }>;
-    allowMultiple?: boolean;
-  }>;
-}
-
-type CursorAskQuestionResponse = {
-  outcome:
-    | {
-        outcome: "answered";
-        answers: Array<{ questionId: string; selectedOptionIds: string[] }>;
-      }
-    | { outcome: "cancelled" };
-};
-
 export interface AcpTransport {
   launch: (request: ConnectRequest, onEvent: (event: BrokerEvent) => void) => Promise<string>;
   send: (harnessId: string, message: acp.AnyMessage) => Promise<void>;
@@ -75,15 +53,6 @@ const nativeTransport: AcpTransport = {
   send: sendRpc,
   stop: stopHarness,
 };
-
-function cursorCapabilities(profileId: string | undefined): acp.ClientCapabilities {
-  const capabilities: acp.ClientCapabilities = {
-    session: { configOptions: { boolean: {} } },
-    elicitation: { form: {} },
-  };
-  if (profileId === "cursor") capabilities._meta = { parameterizedModelPicker: true };
-  return capabilities;
-}
 
 function isTextPrompt(value: string | PromptContent[]): value is string {
   return typeof value === "string";
@@ -120,7 +89,7 @@ export class AcpConnection {
   #transport: AcpTransport;
   #harnessId?: string;
   #sessionId?: string;
-  #profileId?: string;
+  #compatibility: AcpCompatibility = compatibilityFor(undefined);
   #modelState: AcpModelState = { models: [], reasoningOptions: [] };
   #context?: acp.ClientContext;
   #connection?: acp.ClientConnection;
@@ -150,7 +119,7 @@ export class AcpConnection {
     }
     this.#connecting = true;
     this.#emitConnectionStatus("connecting");
-    this.#profileId = request.profileId;
+    this.#compatibility = compatibilityFor(request.profileId);
     this.#modelState = { models: [], reasoningOptions: [] };
     let method = "launch";
     try {
@@ -189,24 +158,17 @@ export class AcpConnection {
         )
         .onRequest(acp.methods.client.elicitation.create, ({ params, requestId }) =>
           this.#requestElicitation(requestId, params),
-        )
-        .onRequest("cursor/ask_question", cursorAskQuestionSchema, ({ params, requestId }) =>
-          this.#requestCursorQuestion(requestId, params),
-        )
-        .onRequest<unknown, { outcome: { outcome: "rejected"; reason: string } }>(
-          "cursor/create_plan",
-          (params) => params,
-          () => ({
-            outcome: { outcome: "rejected", reason: "LoopCode does not support plan approval." },
-          }),
         );
+      this.#compatibility.registerClientHandlers(client, {
+        requestQuestions: (requestId, pending) => this.#requestQuestions(requestId, pending),
+      });
 
       this.#connection = client.connect({ readable, writable });
       this.#context = this.#connection.agent;
       method = "initialize";
       const initialized = await this.#context.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
-        clientCapabilities: cursorCapabilities(request.profileId),
+        clientCapabilities: this.#compatibility.clientCapabilities,
         clientInfo: {
           name: "loopcode",
           title: "LoopCode",
@@ -215,21 +177,8 @@ export class AcpConnection {
       });
       this.#callbacks.initialized?.(initialized.agentInfo);
 
-      if (request.profileId === "grok") {
-        const authMethod = initialized.authMethods?.find(
-          (candidate) => candidate.id === "cached_token" || candidate.id === "xai.api_key",
-        );
-        if (authMethod) {
-          method = "authenticate";
-          await this.#context.request(acp.methods.agent.authenticate, {
-            methodId: authMethod.id,
-          });
-        }
-      } else if (initialized.authMethods?.length) {
-        this.#callbacks.stderr(
-          "This harness advertises an authentication flow. LoopCode expects its CLI to be signed in already.",
-        );
-      }
+      method = "authenticate";
+      await this.#compatibility.authenticate(this.#context, initialized, this.#callbacks.stderr);
 
       let sessionId: string;
       let sessionState:
@@ -288,13 +237,8 @@ export class AcpConnection {
     }
   }
 
-  async listCursorModels() {
-    // TODO: Unsafe undocumented Cursor extension; replace it when stable ACP discovery is sufficient.
-    const response = await this.#requireContext().request<JsonValue>(
-      "cursor/list_available_models",
-      {},
-    );
-    return readCursorAvailableModels(response);
+  listProviderModels() {
+    return this.#compatibility.listModels(this.#requireContext());
   }
 
   async prompt(prompt: string | PromptContent[], images: PromptImage[] = []) {
@@ -346,13 +290,15 @@ export class AcpConnection {
   }
 
   async setModel(configId: string, modelId: string) {
-    if (this.#profileId !== "grok") return this.setConfigOption(configId, modelId);
-    await this.#requireContext().request<unknown>("session/set_model", {
-      sessionId: this.#requireSessionId(),
+    const state = await this.#compatibility.setModel(
+      this.#requireContext(),
+      this.#requireSessionId(),
       modelId,
-    });
-    this.#modelState = { ...this.#modelState, selectedModelId: modelId };
-    return this.#modelState;
+      this.#modelState,
+    );
+    if (!state) return this.setConfigOption(configId, modelId);
+    this.#modelState = state;
+    return state;
   }
 
   async setConfigOption(configId: string, value: string | boolean) {
@@ -442,7 +388,7 @@ export class AcpConnection {
     const harnessId = this.#harnessId;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
-    this.#profileId = undefined;
+    this.#compatibility = compatibilityFor(undefined);
     this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#loadingSession = false;
@@ -504,7 +450,7 @@ export class AcpConnection {
     this.#stopping = false;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
-    this.#profileId = undefined;
+    this.#compatibility = compatibilityFor(undefined);
     this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#connection = undefined;
@@ -592,38 +538,6 @@ export class AcpConnection {
             answers
               ? { action: "accept", content: elicitationContent(questions, answers) }
               : { action: "cancel" },
-          ),
-      });
-    });
-  }
-
-  #requestCursorQuestion(requestId: RpcId, params: CursorAskQuestionRequest) {
-    return new Promise<CursorAskQuestionResponse>((resolve) => {
-      const questions = params.questions.map((question) => ({
-        id: question.id,
-        title: params.title ?? "Agent question",
-        prompt: question.prompt,
-        options: question.options.map((option) => ({ optionId: option.id, name: option.label })),
-        allowMultiple: question.allowMultiple === true,
-        allowCustomAnswer: false,
-        required: true,
-      }));
-      this.#requestQuestions(requestId, {
-        questions,
-        answers: [],
-        resolve: (answers) =>
-          resolve(
-            answers
-              ? {
-                  outcome: {
-                    outcome: "answered",
-                    answers: answers.map((answer, index) => ({
-                      questionId: questions[index].id,
-                      selectedOptionIds: answer.selectedOptionIds,
-                    })),
-                  },
-                }
-              : { outcome: { outcome: "cancelled" } },
           ),
       });
     });
@@ -904,20 +818,6 @@ function questionFromInput(rawInput: JsonValue) {
     options,
   };
 }
-
-const cursorAskQuestionSchema = z.object({
-  title: z.string().optional(),
-  questions: z
-    .array(
-      z.object({
-        id: z.string(),
-        prompt: z.string(),
-        options: z.array(z.object({ id: z.string(), label: z.string() })),
-        allowMultiple: z.boolean().optional(),
-      }),
-    )
-    .min(1),
-});
 
 export { readModelState } from "../utils/model-state.ts";
 export type { AcpModelState } from "../utils/model-state.ts";

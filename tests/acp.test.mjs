@@ -522,7 +522,7 @@ void test("enables Cursor's parameterized model picker", async () => {
     { parameterizedModelPicker: true },
   );
   assert.deepEqual(
-    (await connection.listCursorModels()).map(({ model }) => model),
+    (await connection.listProviderModels()).map(({ model }) => model),
     [{ id: "claude-opus-5", name: "Claude Opus 5" }],
   );
   await connection.setFastModeConfigOption("fast", true, "string");
@@ -970,7 +970,12 @@ void test("presents every Cursor question and declines Cursor plans", async () =
     fake.transport,
   );
 
-  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  await connection.connect({
+    cwd: "C:\\workspace",
+    command: "agent",
+    args: [],
+    profileId: "cursor",
+  });
   fake.requestCursorQuestion();
   fake.requestCursorPlan();
   await new Promise((resolve) => setTimeout(resolve, 0));
