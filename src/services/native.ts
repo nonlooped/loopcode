@@ -71,7 +71,11 @@ const gitChangeSchema = z.object({
   staged: z.boolean(),
   unstaged: z.boolean(),
 });
-const gitChangesSchema = z.array(gitChangeSchema).max(10_000);
+const gitChangesSchema = z.object({
+  changes: z.array(gitChangeSchema).max(10_000),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+});
 const gitFileDiffSchema = z.object({
   hunks: z.array(z.string().max(2 * 1024 * 1024)).max(10_000),
   binary: z.boolean(),
@@ -79,6 +83,7 @@ const gitFileDiffSchema = z.object({
 });
 
 export type GitChange = z.infer<typeof gitChangeSchema>;
+export type GitChanges = z.infer<typeof gitChangesSchema>;
 export type GitFileDiff = z.infer<typeof gitFileDiffSchema>;
 export type TerminalEvent = z.infer<typeof terminalEventSchema>;
 
@@ -199,7 +204,7 @@ export async function listGitBranches(cwd: string): Promise<string[]> {
   return gitBranchesSchema.parse(await invoke("list_git_branches", { cwd }));
 }
 
-export async function listGitChanges(cwd: string, baseBranch: string | null): Promise<GitChange[]> {
+export async function listGitChanges(cwd: string, baseBranch: string | null): Promise<GitChanges> {
   return gitChangesSchema.parse(await invoke("list_git_changes", { cwd, baseBranch }));
 }
 

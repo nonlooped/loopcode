@@ -88,10 +88,10 @@ void test("formats work duration labels", () => {
   assert.equal(formatElapsedDuration(120_000), "2m");
 });
 
-void test("follows new output only while the transcript is pinned", () => {
-  assert.equal(shouldFollowTranscript(false, false, true), true);
-  assert.equal(shouldFollowTranscript(false, false, false), false);
-  assert.equal(shouldFollowTranscript(false, true, false), true);
+void test("follows output only for a newly opened thread or while pinned", () => {
+  assert.equal(shouldFollowTranscript(false, true), true);
+  assert.equal(shouldFollowTranscript(false, false), false);
+  assert.equal(shouldFollowTranscript(true, false), true);
 });
 
 void test("does not mark the previous turn's response as streaming while the next turn starts", () => {

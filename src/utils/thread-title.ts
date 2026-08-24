@@ -3,9 +3,8 @@ const TITLE_INSTRUCTION =
 const MAX_REQUEST_LENGTH = 800;
 const MAX_TITLE_LENGTH = 60;
 
-export function newThreadTitle(createdAt: number = Date.now()): string {
-  const isoMinute = new Date(createdAt).toISOString().slice(0, 16);
-  return `New Thread · ${isoMinute}Z`;
+export function newThreadTitle(): string {
+  return "New Thread";
 }
 
 export function buildThreadTitlePrompt(request: string): string {

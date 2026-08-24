@@ -337,9 +337,7 @@ body.reduced-motion *::after {
 @media (prefers-reduced-motion: reduce) {
   .model-spinner,
   .message.streaming .message-body::after,
-  .message.streaming
-    .message-body
-    :where(p, ul, ol, blockquote, pre, table, h1, h2, h3, h4, h5, h6),
+  .stream-chunk,
   .running-indicator .activity-spark {
     animation: none !important;
   }

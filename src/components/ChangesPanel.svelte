@@ -34,6 +34,7 @@
   let diffs = $state<Record<string, DiffState>>({});
   let loading = $state(true);
   let loadError = $state('');
+  let summary = $state({ additions: 0, deletions: 0 });
   let generation = 0;
   let loadedComparison = '';
   let hasLoaded = false;
@@ -58,12 +59,14 @@
       loadedComparison = comparison;
       hasLoaded = false;
       changes = [];
+      summary = { additions: 0, deletions: 0 };
       expanded = [];
       diffs = {};
     }
     const token = ++generation;
     if (props.currentBranch === undefined || (mode === 'branch' && !activeBase)) {
       changes = [];
+      summary = { additions: 0, deletions: 0 };
       diffs = {};
       loading = props.currentBranch === undefined;
       loadError = '';
@@ -80,20 +83,22 @@
     loading = initialLoad;
     loadError = '';
     try {
-      const nextChanges = await listGitChanges(props.cwd, activeBase);
+      const result = await listGitChanges(props.cwd, activeBase);
       if (token !== generation) return;
-      changes = nextChanges;
-      const available = new Set(nextChanges.map(changeKey));
+      changes = result.changes;
+      summary = { additions: result.additions, deletions: result.deletions };
+      const available = new Set(result.changes.map(changeKey));
       expanded = expanded.filter((key) => available.has(key));
       diffs = Object.fromEntries(
         Object.entries(diffs).filter(([key]) => available.has(key)),
       );
-      for (const change of nextChanges) {
+      for (const change of result.changes) {
         if (expanded.includes(changeKey(change))) void loadDiff(change, activeBase, token, false);
       }
     } catch (error) {
       if (token !== generation || !initialLoad) return;
       changes = [];
+      summary = { additions: 0, deletions: 0 };
       diffs = {};
       loadError = errorMessage(error);
     } finally {
@@ -173,6 +178,17 @@
   }
 </script>
 
+{#if !loading && !loadError}
+  <div
+    class="git-change-summary"
+    aria-label={`${changes.length} changed ${changes.length === 1 ? 'file' : 'files'}, ${summary.additions} additions, ${summary.deletions} deletions`}
+  >
+    <strong>{changes.length} {changes.length === 1 ? 'file' : 'files'}</strong>
+    <span class="additions">+{summary.additions}</span>
+    <span class="deletions">-{summary.deletions}</span>
+  </div>
+{/if}
+
 <div class="git-changes-controls">
   <div class="git-comparison-switch" role="group" aria-label="Diff comparison">
     <button class:active={mode === 'working'} aria-pressed={mode === 'working'} onclick={() => { mode = 'working'; }}>
@@ -211,7 +227,6 @@
     {mode === 'working' ? 'No working-tree changes.' : `No changes since ${baseBranch}.`}
   </p>
 {:else}
-  <div class="git-change-summary">{changes.length} changed {changes.length === 1 ? 'file' : 'files'}</div>
   <div class="git-change-list">
     {#each changes as change, index (changeKey(change))}
       {@const key = changeKey(change)}

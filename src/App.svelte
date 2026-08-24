@@ -135,7 +135,7 @@
   let sidebarCollapsed = $state(false);
   let showSettled = $state(false);
   let projectExplorerOpen = $state(false);
-  let projectExplorerCollapsed = $state(false);
+  let projectExplorerCollapsed = $state(true);
   let terminalOpen = $state(false);
   let terminalThreadIds = $state<string[]>([]);
   let terminalHeight = $state(loadTerminalHeight());
@@ -989,7 +989,7 @@
       titleModelId: '',
     };
     defaultWorkingFolder = initialWorkingFolder;
-    projectExplorerCollapsed = false;
+    projectExplorerCollapsed = true;
     terminalHeight = DEFAULT_TERMINAL_HEIGHT;
     leftSidebarWidth = null;
     rightSidebarWidth = null;

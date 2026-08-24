@@ -71,6 +71,14 @@ struct GitChange {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct GitChanges {
+    changes: Vec<GitChange>,
+    additions: usize,
+    deletions: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct GitFileDiff {
     hunks: Vec<String>,
     binary: bool,
@@ -242,6 +250,53 @@ fn ensure_git_output_size(output: &[u8]) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+fn git_numstat_count(value: &[u8]) -> Result<usize, String> {
+    if value == b"-" {
+        return Ok(0);
+    }
+    std::str::from_utf8(value)
+        .ok()
+        .and_then(|count| count.parse().ok())
+        .ok_or_else(|| "Git returned an invalid line count".to_owned())
+}
+
+fn parse_git_numstat(output: &[u8]) -> Result<(usize, usize), String> {
+    ensure_git_output_size(output)?;
+    let mut fields = output.split(|byte| *byte == 0);
+    let mut additions = 0usize;
+    let mut deletions = 0usize;
+    while let Some(record) = fields.next() {
+        if record.is_empty() {
+            continue;
+        }
+        let mut parts = record.splitn(3, |byte| *byte == b'\t');
+        additions = additions
+            .checked_add(git_numstat_count(parts.next().unwrap_or_default())?)
+            .ok_or_else(|| "Git returned too many additions".to_owned())?;
+        deletions = deletions
+            .checked_add(git_numstat_count(parts.next().unwrap_or_default())?)
+            .ok_or_else(|| "Git returned too many deletions".to_owned())?;
+        let raw_path = parts
+            .next()
+            .ok_or_else(|| "Git returned incomplete line statistics".to_owned())?;
+        if raw_path.is_empty() {
+            git_path(
+                fields
+                    .next()
+                    .ok_or_else(|| "Git returned an incomplete renamed-file path".to_owned())?,
+            )?;
+            git_path(
+                fields
+                    .next()
+                    .ok_or_else(|| "Git returned an incomplete renamed-file path".to_owned())?,
+            )?;
+        } else {
+            git_path(raw_path)?;
+        }
+    }
+    Ok((additions, deletions))
 }
 
 fn working_change_status(index: char, worktree: char) -> GitChangeStatus {
@@ -427,6 +482,28 @@ where
     })
 }
 
+async fn git_numstat_at(
+    cwd: &Path,
+    comparison: &str,
+    context: &str,
+) -> Result<(usize, usize), String> {
+    let args = vec![
+        OsString::from("diff"),
+        OsString::from("--no-ext-diff"),
+        OsString::from("--no-textconv"),
+        OsString::from("--no-color"),
+        OsString::from("--numstat"),
+        OsString::from("-z"),
+        OsString::from("--find-renames"),
+        OsString::from("--relative"),
+        OsString::from(comparison),
+        OsString::from("--"),
+        OsString::from("."),
+    ];
+    let output = git_output(cwd, args, 10, context).await?;
+    parse_git_numstat(&output.stdout)
+}
+
 fn validate_git_branch_value<'a>(branch: &'a str, label: &str) -> Result<&'a str, String> {
     if branch.is_empty()
         || branch.len() > 1024
@@ -464,10 +541,7 @@ async fn git_branch_comparison_ref(cwd: &Path, branch: &str) -> Result<String, S
     Ok(format!("{reference}...HEAD"))
 }
 
-async fn list_git_changes_at(
-    cwd: &Path,
-    base_branch: Option<&str>,
-) -> Result<Vec<GitChange>, String> {
+async fn list_git_changes_at(cwd: &Path, base_branch: Option<&str>) -> Result<GitChanges, String> {
     if let Some(base_branch) = base_branch {
         let comparison = git_branch_comparison_ref(cwd, base_branch).await?;
         let args = vec![
@@ -479,12 +553,18 @@ async fn list_git_changes_at(
             OsString::from("-z"),
             OsString::from("--find-renames"),
             OsString::from("--relative"),
-            OsString::from(comparison),
+            OsString::from(comparison.clone()),
             OsString::from("--"),
             OsString::from("."),
         ];
         let output = git_output(cwd, args, 10, "Could not compare Git branches").await?;
-        return parse_branch_changes(&output.stdout);
+        let (additions, deletions) =
+            git_numstat_at(cwd, &comparison, "Could not read branch line statistics").await?;
+        return Ok(GitChanges {
+            changes: parse_branch_changes(&output.stdout)?,
+            additions,
+            deletions,
+        });
     }
 
     let output = git_output(
@@ -503,14 +583,35 @@ async fn list_git_changes_at(
         "Could not read Git changes",
     )
     .await?;
-    parse_working_tree_changes(&output.stdout)
+    let changes = parse_working_tree_changes(&output.stdout)?;
+    let has_head = git_ref(cwd, &["rev-parse", "--verify", "HEAD"])
+        .await
+        .is_some();
+    let (mut additions, deletions) = if has_head {
+        git_numstat_at(cwd, "HEAD", "Could not read Git line statistics").await?
+    } else {
+        (0, 0)
+    };
+    let untracked_paths = changes
+        .iter()
+        .filter(|change| {
+            change.status == GitChangeStatus::Untracked
+                || (!has_head && change.status == GitChangeStatus::Added)
+        })
+        .map(|change| change.path.clone())
+        .collect();
+    additions = additions
+        .checked_add(untracked_additions_at(cwd, untracked_paths).await?)
+        .ok_or_else(|| "Git returned too many additions".to_owned())?;
+    Ok(GitChanges {
+        changes,
+        additions,
+        deletions,
+    })
 }
 
 #[tauri::command]
-async fn list_git_changes(
-    cwd: String,
-    base_branch: Option<String>,
-) -> Result<Vec<GitChange>, String> {
+async fn list_git_changes(cwd: String, base_branch: Option<String>) -> Result<GitChanges, String> {
     let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
         .await
         .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
@@ -625,6 +726,28 @@ fn untracked_file_diff(cwd: &Path, path: &str) -> Result<GitFileDiff, String> {
         binary: false,
         too_large: false,
     })
+}
+
+async fn untracked_additions_at(cwd: &Path, paths: Vec<String>) -> Result<usize, String> {
+    let cwd = cwd.to_owned();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut additions = 0usize;
+        for path in paths {
+            let diff = untracked_file_diff(&cwd, &path)?;
+            let lines = diff
+                .hunks
+                .iter()
+                .flat_map(|hunk| hunk.lines())
+                .filter(|line| line.starts_with('+'))
+                .count();
+            additions = additions
+                .checked_add(lines)
+                .ok_or_else(|| "Git returned too many additions".to_owned())?;
+        }
+        Ok(additions)
+    })
+    .await
+    .map_err(|error| format!("Could not join untracked-file statistics task: {error}"))?
 }
 
 async fn git_file_diff_at(
@@ -1008,8 +1131,8 @@ pub fn run() {
 mod tests {
     use super::{
         GitChangeStatus, create_git_worktree_at, first_version_line, git_file_diff_at,
-        list_git_branches_at, list_git_changes_at, switch_git_branch_at, validate_git_cwd,
-        validate_provider_command,
+        list_git_branches_at, list_git_changes_at, parse_git_numstat, switch_git_branch_at,
+        validate_git_cwd, validate_provider_command,
     };
     use std::{path::Path, process::Command};
 
@@ -1040,6 +1163,14 @@ mod tests {
                 .canonicalize()
                 .expect("path should resolve")
         );
+    }
+
+    #[test]
+    fn git_numstat_accepts_renames_and_binary_files() {
+        let stats =
+            parse_git_numstat(b"3\t2\tsrc/main.rs\0-\t-\tasset.png\0\x34\t1\t\0old.rs\0new.rs\0")
+                .expect("line statistics should parse");
+        assert_eq!(stats, (7, 3));
     }
 
     #[test]
@@ -1111,10 +1242,11 @@ mod tests {
             let changes = list_git_changes_at(&repository, None)
                 .await
                 .expect("working tree changes should load");
-            assert!(changes.iter().any(|change| {
+            assert_eq!((changes.additions, changes.deletions), (2, 1));
+            assert!(changes.changes.iter().any(|change| {
                 change.path == "README.md" && change.status == GitChangeStatus::Modified
             }));
-            assert!(changes.iter().any(|change| {
+            assert!(changes.changes.iter().any(|change| {
                 change.path == "new.txt" && change.status == GitChangeStatus::Untracked
             }));
             let tracked_diff = git_file_diff_at(&repository, None, "README.md", None)
@@ -1131,8 +1263,10 @@ mod tests {
             let branch_changes = list_git_changes_at(&repository, Some("main"))
                 .await
                 .expect("branch changes should load");
+            assert_eq!((branch_changes.additions, branch_changes.deletions), (2, 1));
             assert!(
                 branch_changes
+                    .changes
                     .iter()
                     .any(|change| change.path == "README.md")
             );
