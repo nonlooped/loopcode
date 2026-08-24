@@ -25,10 +25,10 @@
 
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
-  import type { HarnessProfile, ProjectState, ThreadState } from '../types';
+  import type { HarnessProfile, PermissionRequest, ProjectState, ThreadState } from '../types';
   import type { SettingsCategory } from '../utils/app-settings';
   import { copyText } from '../utils/clipboard';
-  import { folderName, relativeTime, threadHarness, threadStatus } from '../utils/threads';
+  import { folderName, relativeTime, threadAttention, threadHarness } from '../utils/threads';
 
   interface Props {
     open: boolean;
@@ -41,6 +41,7 @@
     selectedProjectId: string | null;
     activeProject: ProjectState | null;
     inboxThreads: ThreadState[];
+    interactionRequestsByThread: Record<string, PermissionRequest>;
     settledThreads: ThreadState[];
     selectedThreadId: string;
     showSettled: boolean;
@@ -76,6 +77,23 @@
     { category: 'diagnostics', label: 'Diagnostics', icon: IconDatabase },
   ] satisfies { category: SettingsCategory; label: string; icon: typeof IconSettings }[];
   let archiveDeletionPending = $state(false);
+  const inboxGroups = $derived.by(() => {
+    const groups: { kind: 'needs-you' | 'working' | 'recent'; label: string; threads: ThreadState[] }[] = [
+      { kind: 'needs-you', label: 'Needs you', threads: [] },
+      { kind: 'working', label: 'Working', threads: [] },
+      { kind: 'recent', label: 'Recent', threads: [] },
+    ];
+    for (const thread of props.inboxThreads) {
+      const attention = threadAttention(thread, props.interactionRequestsByThread[thread.id]);
+      const group = attention.kind === 'working'
+        ? groups[1]
+        : attention.kind === 'recent'
+          ? groups[2]
+          : groups[0];
+      group.threads.push(thread);
+    }
+    return groups.filter((group) => group.threads.length > 0);
+  });
 
   function profileById(profileId: string) {
     return props.profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId) ?? officialProfiles[0];
@@ -196,87 +214,96 @@
     </div>
     <div class="sidebar-scroll">
       <section class="sidebar-section inbox-section">
-        <nav class="thread-list" aria-label="Inbox threads">
-          {#if props.inboxThreads.length === 0}
-            <div class="empty-hint">No threads yet</div>
-          {:else}
-            {#each props.inboxThreads as thread (thread.id)}
-              {@const threadProfile = profileById(thread.profileId)}
-              {@const status = threadStatus(thread)}
-              <div class="thread-motion" animate:flip={{ duration: props.compactMotion ? 0 : 260 }}>
-                <ContextMenu items={threadMenuItems(thread)}>
-                  {#snippet children({ props: triggerProps })}
-                    <div
-                      {...triggerProps}
-                      class:active={thread.id === props.selectedThreadId}
-                      class="thread-item"
-                      role="group"
-                      aria-label={thread.title}
-                      transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
-                    >
-                  <button
-                    type="button"
-                    class="thread-select"
-                    aria-current={thread.id === props.selectedThreadId ? 'page' : undefined}
-                    onclick={() => props.selectThread(thread.id)}
-                  >
-                  <span class="thread-copy">
-                    <small class="thread-topline">
-                      <span class="thread-location">
-                        {#if thread.projectId}
-                          {@const project = props.projects.find((item) => item.id === thread.projectId)}
-                          {project ? project.name : folderName(thread.cwd)}
-                        {:else}
-                          {thread.cwd ? folderName(thread.cwd) : '~'}
-                        {/if}
-                      </span>
-                      <span class="thread-status-motion">
-                        {#key status}
-                          <span
-                            class:live={status === 'running'}
-                            class:error={status === 'error'}
-                            class="thread-updated"
-                            transition:fade={{ duration: props.compactMotion ? 0 : 120 }}
-                          >
-                            {status === 'running' ? 'Working' : status === 'error' ? 'Failed' : relativeTime(thread.updatedAt)}
+        {#if props.inboxThreads.length === 0}
+          <div class="empty-hint">No threads yet</div>
+        {:else}
+          {#each inboxGroups as group (group.kind)}
+            <div class="thread-group">
+              <div class="thread-group-label">{group.label} · {group.threads.length}</div>
+              <nav class="thread-list" aria-label={`${group.label} threads`}>
+                {#each group.threads as thread (thread.id)}
+                  {@const threadProfile = profileById(thread.profileId)}
+                  {@const attention = threadAttention(thread, props.interactionRequestsByThread[thread.id])}
+                  <div class="thread-motion" animate:flip={{ duration: props.compactMotion ? 0 : 260 }}>
+                    <ContextMenu items={threadMenuItems(thread)}>
+                      {#snippet children({ props: triggerProps })}
+                        <div
+                          {...triggerProps}
+                          class:active={thread.id === props.selectedThreadId}
+                          class="thread-item"
+                          role="group"
+                          aria-label={thread.title}
+                          transition:fade={{ duration: props.compactMotion ? 0 : 150 }}
+                        >
+                      <button
+                        type="button"
+                        class="thread-select"
+                        aria-current={thread.id === props.selectedThreadId ? 'page' : undefined}
+                        onclick={() => props.selectThread(thread.id)}
+                      >
+                      <span class="thread-copy">
+                        <small class="thread-topline">
+                          <span class="thread-location">
+                            {#if thread.projectId}
+                              {@const project = props.projects.find((item) => item.id === thread.projectId)}
+                              {project ? project.name : folderName(thread.cwd)}
+                            {:else}
+                              {thread.cwd ? folderName(thread.cwd) : '~'}
+                            {/if}
                           </span>
-                        {/key}
+                          <span class="thread-status-motion">
+                            {#key attention.kind}
+                              <span
+                                class:attention={attention.kind === 'needs-approval' || attention.kind === 'needs-answer'}
+                                class:live={attention.kind === 'working'}
+                                class:error={attention.kind === 'failed'}
+                                class="thread-updated"
+                                transition:fade={{ duration: props.compactMotion ? 0 : 120 }}
+                              >
+                                {attention.kind === 'recent' ? relativeTime(thread.updatedAt) : attention.label}
+                              </span>
+                            {/key}
+                          </span>
+                        </small>
+                        <span class="thread-title-motion">
+                          {#key thread.title}
+                            <strong transition:fade={{ duration: props.compactMotion ? 0 : 120 }}>{thread.title}</strong>
+                          {/key}
+                        </span>
+                        <span class="thread-details">
+                          <img src={threadProfile.icon} alt="" />
+                          <span class="thread-provider">{threadHarness(thread, props.profiles)}</span>
+                          {#if attention.kind !== 'recent'}
+                            <span class="thread-reason">· {attention.reason}</span>
+                          {/if}
+                        </span>
                       </span>
-                    </small>
-                    <span class="thread-title-motion">
-                      {#key thread.title}
-                        <strong transition:fade={{ duration: props.compactMotion ? 0 : 120 }}>{thread.title}</strong>
-                      {/key}
-                    </span>
-                    <span class="thread-details">
-                      <img src={threadProfile.icon} alt="" />
-                      <span>{threadHarness(thread, props.profiles)}</span>
-                    </span>
-                  </span>
-                  </button>
-                    <span class="thread-actions">
-                      <button
-                        type="button"
-                        class="action-settle"
-                        aria-label={`Archive ${thread.title}`}
-                        title="Archive"
-                        onclick={(event) => { event.stopPropagation(); props.toggleSettled(thread.id); }}
-                      ><IconArchive size={13} stroke={1.7} /></button>
-                      <button
-                        type="button"
-                        class="remove-thread"
-                        aria-label={`Delete ${thread.title}`}
-                        title="Delete thread"
-                        onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
-                      ><IconTrash size={13} stroke={1.7} /></button>
-                    </span>
-                    </div>
-                  {/snippet}
-                </ContextMenu>
-              </div>
-            {/each}
-          {/if}
-        </nav>
+                      </button>
+                        <span class="thread-actions">
+                          <button
+                            type="button"
+                            class="action-settle"
+                            aria-label={`Archive ${thread.title}`}
+                            title="Archive"
+                            onclick={(event) => { event.stopPropagation(); props.toggleSettled(thread.id); }}
+                          ><IconArchive size={13} stroke={1.7} /></button>
+                          <button
+                            type="button"
+                            class="remove-thread"
+                            aria-label={`Delete ${thread.title}`}
+                            title="Delete thread"
+                            onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
+                          ><IconTrash size={13} stroke={1.7} /></button>
+                        </span>
+                        </div>
+                      {/snippet}
+                    </ContextMenu>
+                  </div>
+                {/each}
+              </nav>
+            </div>
+          {/each}
+        {/if}
       </section>
 
       <Collapsible.Root

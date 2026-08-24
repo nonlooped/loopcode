@@ -223,8 +223,22 @@
   const selectedInteraction = $derived(
     selectedThread ? interactions[interactionKey(selectedThread.id, selectedThread.profileId)] : undefined,
   );
+  const interactionRequestsByThread = $derived.by(() => {
+    const requests: Record<string, PermissionRequest> = {};
+    for (const thread of threads) {
+      const interaction = interactions[interactionKey(thread.id, thread.profileId)];
+      if (interaction) requests[thread.id] = interaction.request;
+    }
+    return requests;
+  });
   const inboxThreads = $derived(
-    threads.filter((thread) => !thread.settled).sort(compareSidebarThreads),
+    threads.filter((thread) => !thread.settled).sort((left, right) =>
+      compareSidebarThreads(
+        left,
+        right,
+        interactionRequestsByThread[left.id],
+        interactionRequestsByThread[right.id],
+      )),
   );
   const settledThreads = $derived(
     threads.filter((thread) => thread.settled).sort((left, right) => right.updatedAt - left.updatedAt),
@@ -1101,6 +1115,7 @@
       {selectedProjectId}
       {activeProject}
       {inboxThreads}
+      {interactionRequestsByThread}
       {settledThreads}
       {selectedThreadId}
       showSettled={showSettled}

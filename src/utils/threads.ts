@@ -5,6 +5,7 @@ import { newThreadTitle } from "./thread-title.ts";
 import type {
   HarnessProfile,
   ProviderModelCatalog,
+  PermissionRequest,
   ProviderSessionState,
   ThreadState,
   ThreadStatus,
@@ -77,6 +78,60 @@ export function threadStatus(thread: ThreadState): ThreadStatus {
   return provider.connectionStatus;
 }
 
+export type ThreadAttention =
+  | { kind: "needs-approval"; label: "Needs approval"; reason: string }
+  | { kind: "needs-answer"; label: "Needs answer"; reason: string }
+  | { kind: "failed"; label: "Failed"; reason: string }
+  | { kind: "working"; label: "Working"; reason: string }
+  | { kind: "recent" };
+
+export function threadAttention(thread: ThreadState, request?: PermissionRequest): ThreadAttention {
+  if (request?.type === "permission") {
+    return {
+      kind: "needs-approval",
+      label: "Needs approval",
+      reason: request.title.trim() || "Agent action",
+    };
+  }
+  if (request?.type === "question") {
+    return {
+      kind: "needs-answer",
+      label: "Needs answer",
+      reason: request.title.trim() || "Agent question",
+    };
+  }
+
+  const provider = activeProvider(thread);
+  if (
+    provider.turnStatus === "failed" ||
+    provider.turnStatus === "blocked" ||
+    provider.connectionStatus === "error" ||
+    provider.connectionStatus === "stopped"
+  ) {
+    return {
+      kind: "failed",
+      label: "Failed",
+      reason:
+        provider.error?.trim() ||
+        (provider.connectionStatus === "stopped" ? "Provider stopped" : "Provider failed"),
+    };
+  }
+  if (provider.turnStatus === "running") {
+    const tool = [...thread.tools]
+      .reverse()
+      .find((candidate) => candidate.status === "pending" || candidate.status === "in_progress");
+    return {
+      kind: "working",
+      label: "Working",
+      reason: tool?.title || "Agent is working",
+    };
+  }
+  if (provider.connectionStatus === "connecting") {
+    return { kind: "working", label: "Working", reason: "Connecting to provider" };
+  }
+  return { kind: "recent" };
+}
+
 export function threadHarness(
   thread: ThreadState,
   profiles: Pick<HarnessProfile, "id" | "label">[] = providerDefinitions,
@@ -88,15 +143,29 @@ export function threadHarness(
   );
 }
 
-export function compareSidebarThreads(left: ThreadState, right: ThreadState) {
-  const rank = (thread: ThreadState) => {
-    const status = threadStatus(thread);
-    if (status === "running") return 0;
-    if (status === "error") return 1;
-    if (status === "connecting") return 2;
-    return 3;
+export function compareSidebarThreads(
+  left: ThreadState,
+  right: ThreadState,
+  leftRequest?: PermissionRequest,
+  rightRequest?: PermissionRequest,
+) {
+  const rank = (attention: ThreadAttention) => {
+    switch (attention.kind) {
+      case "needs-approval":
+      case "needs-answer":
+        return 0;
+      case "failed":
+        return 1;
+      case "working":
+        return 2;
+      case "recent":
+        return 3;
+    }
   };
-  return rank(left) - rank(right) || right.updatedAt - left.updatedAt;
+  return (
+    rank(threadAttention(left, leftRequest)) - rank(threadAttention(right, rightRequest)) ||
+    right.updatedAt - left.updatedAt
+  );
 }
 
 export function folderName(path: string) {
