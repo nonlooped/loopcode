@@ -1,18 +1,21 @@
-# LoopCode v0.6.0: Review agent work without leaving the workspace
+# LoopCode v0.7.0: Sharper workspace feedback and preserved icons
 
-LoopCode can now separate agent work with Git worktrees, show what changed, and make threads that need attention easier to find.
+LoopCode now keeps your prompt in view while the agent works, surfaces Git line counts at a glance, and keeps Claude's brand color consistent everywhere.
 
 ## Highlights
 
-- Review working-tree changes or compare the current branch with another branch inside LoopCode.
-- Switch branches before starting a thread, or create a separate branch and worktree for it.
-- Find blocked and active threads faster through the new Needs you, Working, and Recent groups.
-- Follow long-running work through cleaner activity groups, file previews, and tool details.
+- Git review shows changed-file totals with additions and deletions.
+- Sent prompts stay near the top during streaming, with token-level reveal feedback.
+- Project explorer starts collapsed and the default theme is now violet for a cleaner first view.
+- Thread titles for blank prompts are shorter and easier to scan.
+- Claude's official colored icon is now preserved across the thread list, title bar, picker, and settings.
 
 ## Fixes
 
-- Fixed provider lifecycle problems around reconnecting and stopping processes.
-- Reused matching empty threads instead of creating duplicates.
+- Fixed archived Claude threads rendering with a monochrome filter.
+- Fixed the Changes panel failing when an untracked nested Git repository is present.
+- Fixed large untracked files being counted as zero additions.
+- Fixed prompt anchoring being undone on short transcripts.
 
 ## Availability
 
