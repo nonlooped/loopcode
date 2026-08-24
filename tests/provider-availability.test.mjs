@@ -6,6 +6,7 @@ import {
   providerSupportsPlatform,
 } from "../src/config/provider-definitions.ts";
 import {
+  providerCanToggle,
   providerDisplayStatus,
   providerVersionLabel,
   readyProviderId,
@@ -92,4 +93,11 @@ void test("provider display status distinguishes auth, connections, and missing 
   assert.equal(providerDisplayStatus("grok", true, missing), "Not installed");
   assert.equal(providerDisplayStatus("grok", false, missing), "Disabled");
   assert.equal(providerVersionLabel(missing), "");
+});
+
+void test("only connected or authenticated providers can be toggled", () => {
+  assert.equal(providerCanToggle("claude", ready("claude-model"), false), false);
+  assert.equal(providerCanToggle("claude", ready("claude-model"), true), true);
+  assert.equal(providerCanToggle("pi", ready("pi-model")), true);
+  assert.equal(providerCanToggle("grok", undefined), false);
 });

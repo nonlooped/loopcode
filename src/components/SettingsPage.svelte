@@ -16,6 +16,7 @@
     type SettingsCategory,
   } from '../utils/app-settings';
   import {
+    providerCanToggle,
     providerDisplayStatus,
     providerVersionLabel,
   } from '../utils/provider-availability';
@@ -683,6 +684,7 @@
                 class="toggle-control"
                 aria-label={`${enabled ? 'Disable' : 'Enable'} ${profile.label}`}
                 checked={enabled}
+                disabled={!providerCanToggle(profile.id, catalogs[profile.id], providerAuthStatuses[profile.id])}
                 onCheckedChange={(value) => setProviderPreference(profile.id, { ...providerPreference(profile.id), enabled: value })}
               >
                 <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>

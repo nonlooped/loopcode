@@ -91,6 +91,14 @@ export type ProviderDisplayStatus =
   | "Not installed"
   | "Not logged in";
 
+export function providerCanToggle(
+  profileId: string,
+  catalog: ProviderModelCatalog | undefined,
+  authenticated?: boolean,
+) {
+  return catalog?.status === "ready" && (profileId !== "claude" || authenticated === true);
+}
+
 export function providerDisplayStatus(
   profileId: string,
   enabled: boolean,
@@ -101,8 +109,7 @@ export function providerDisplayStatus(
   if (catalog?.status === "unavailable" && catalog.unavailableReason === "missing-executable") {
     return "Not installed";
   }
-  if (profileId === "claude" && authenticated !== true) return "Not logged in";
-  if (catalog?.status !== "ready") return "Not logged in";
+  if (!providerCanToggle(profileId, catalog, authenticated)) return "Not logged in";
   return profileId === "fx" || profileId === "opencode" || profileId === "pi"
     ? "Connected"
     : "Authenticated";

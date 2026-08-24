@@ -570,7 +570,7 @@ export class ProviderRuntime {
     let connection: AcpConnection | undefined;
     try {
       if (selection) {
-        connection = new AcpConnection({
+        connection = this.#createConnection({
           connectionStatus: () => {},
           turnStatus: () => {},
           ready: () => {},
@@ -586,7 +586,6 @@ export class ProviderRuntime {
           command: selection.profile.command,
           args: selection.profile.args,
           profileId: selection.profile.id,
-          threadId: thread.id,
         });
         title = normalizeThreadTitle(
           await connection.generateTitle(

@@ -356,6 +356,33 @@ void test("a failed reconnect stop drops the defunct connection", async () => {
   assert.equal(state.providers.codex.error, "stop failed");
 });
 
+void test("title generation does not replace the active thread harness", async () => {
+  const titleRequests = [];
+  const activeConnection = { async prompt() {} };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return activeConnection;
+    }
+  }
+  const runtime = new Runtime(catalogs, hooks, () => ({
+    async connect(request) {
+      titleRequests.push(request);
+    },
+    async generateTitle() {
+      return "Generated title";
+    },
+    async stop() {},
+  }));
+  const state = thread();
+  runtime.setTitlePreference({ profileId: "codex", modelId: "model-1" });
+
+  await runtime.runTurn(state, "Name this thread");
+
+  assert.equal(titleRequests.length, 1);
+  assert.equal(titleRequests[0].threadId, undefined);
+  assert.equal(state.title, "Generated title");
+});
+
 void test("a provider switch prevents a stale reconnect from prompting", async () => {
   let finishConnect;
   let prompts = 0;
