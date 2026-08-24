@@ -55,6 +55,7 @@ jobs:
       - run: npm install --global npm@12
       - run: npm ci
       - run: npm run check:versions
+      - run: npm run check:release-notes
       - run: npm run check
       - run: npm test
       - run: npm run build
@@ -140,7 +141,12 @@ jobs:
         run: |
           version="$(jq -r .version package.json)"
           tag="v$version"
-          test "$(git log -1 --format=%s)" = "chore(release): $tag" || exit 0
+          subject="$(git log -1 --format=%s)"
+          expected="chore(release): $tag"
+          if [[ "$subject" != "$expected" ]]; then
+            suffix="${subject#"$expected"}"
+            [[ "$suffix" =~ ^\ \(#[0-9]+\)$ ]] || exit 0
+          fi
           git rev-parse "$tag" >/dev/null 2>&1 && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

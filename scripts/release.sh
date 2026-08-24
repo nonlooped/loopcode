@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Bump the version everywhere, regenerate CHANGELOG.md, and commit.
-# CI tags the commit and starts the release after the commit passes.
+# Create a release branch, bump the version everywhere, regenerate CHANGELOG.md,
+# and commit the prepared release. CI tags the squash-merged release commit.
 # Usage: scripts/release.sh X.Y.Z
 set -euo pipefail
 
@@ -9,9 +9,16 @@ ver="${1:?usage: scripts/release.sh X.Y.Z}"
 root="$(git rev-parse --show-toplevel)"
 [[ "$(pwd -P)" == "$root" ]] || { echo "run from repository root: $root" >&2; exit 1; }
 [[ "$(git branch --show-current)" == "master" ]] || { echo "release from master" >&2; exit 1; }
-[[ -z "$(git status --porcelain=v1)" ]] || { echo "working tree not clean" >&2; exit 1; }
-git fetch --quiet origin master
+unexpected="$(git status --porcelain=v1 --untracked-files=all | grep -vE '^.. RELEASE_NOTES\.md$' || true)"
+[[ -z "$unexpected" ]] || { echo "only RELEASE_NOTES.md may be changed before a release" >&2; exit 1; }
+git fetch --quiet origin master --tags
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse refs/remotes/origin/master)" ]] || { echo "local master is not at origin/master" >&2; exit 1; }
+node scripts/check-release-notes.mjs "v$ver"
+
+release_branch="release/v$ver"
+! git show-ref --verify --quiet "refs/heads/$release_branch" || { echo "branch already exists: $release_branch" >&2; exit 1; }
+! git ls-remote --exit-code --heads origin "$release_branch" >/dev/null 2>&1 || { echo "remote branch already exists: $release_branch" >&2; exit 1; }
+git switch -c "$release_branch"
 
 npm version "$ver" --no-git-tag-version
 
@@ -35,7 +42,8 @@ node scripts/check-versions.mjs "v$ver"
 npx --yes git-cliff@2.13.1 --tag "v$ver" -o CHANGELOG.md
 npx vp check --fix CHANGELOG.md
 
-git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
+git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md RELEASE_NOTES.md
 git commit -m "chore(release): v$ver"
-echo "push the commit: git push origin master"
-echo "CI will tag v$ver and start the release after the gate passes"
+echo "push the branch: git push -u origin $release_branch"
+echo "open a PR titled chore(release): v$ver and add the skip-release-notes label"
+echo "squash-merge it after CI passes; master CI will tag and publish v$ver"
