@@ -146,7 +146,10 @@ jobs:
             suffix="${subject#"$expected"}"
             [[ "$suffix" =~ ^\ \(#[0-9]+\)$ ]] || exit 0
           fi
-          git rev-parse "$tag" >/dev/null 2>&1 && exit 0
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$tag" -m "$tag"
