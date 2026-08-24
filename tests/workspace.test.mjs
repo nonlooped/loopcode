@@ -203,7 +203,8 @@ void test("keeps project, selection, and deletion invariants behind one interfac
   assert.equal(state.selectedProjectId, project.id);
   assert.equal(state.selectedThreadId, first.id);
 
-  assert.notEqual(workspace.addThread("C:\\default", project.id), first);
+  assert.equal(workspace.addThread("C:\\default", project.id), first);
+  assert.equal(state.threads.filter((thread) => thread.projectId === project.id).length, 1);
   state.threads = [first];
   state.selectedThreadId = first.id;
   first.draft = "keep this";

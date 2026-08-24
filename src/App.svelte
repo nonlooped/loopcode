@@ -405,6 +405,7 @@
     const thread = workspace.addThread(
       defaultWorkingFolder,
       preferences.newThreadProject === 'selected' ? selectedProjectId : null,
+      hasComposerImages,
     );
     if (thread) applyNewThreadDefaults(thread);
     closeThreadSurfaces();
@@ -414,6 +415,7 @@
     const thread = workspace.addThread(
       defaultWorkingFolder,
       projectId,
+      hasComposerImages,
     );
     if (thread) {
       applyNewThreadDefaults(thread);
@@ -755,6 +757,7 @@
         const startupThread = workspace.addThread(
           defaultWorkingFolder,
           preferences.newThreadProject === 'selected' ? selectedProjectId : null,
+          hasComposerImages,
         );
         if (startupThread) applyNewThreadDefaults(startupThread);
       } else if (savedWorkspace === null && selectedThread) {
@@ -775,6 +778,10 @@
 
   function composerImages(threadId: string) {
     return composerImagesByThread[threadId] ?? [];
+  }
+
+  function hasComposerImages(threadId: string) {
+    return composerImages(threadId).length > 0;
   }
 
   async function attachImages(files: File[], threadId: string) {
