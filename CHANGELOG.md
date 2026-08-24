@@ -1,8 +1,24 @@
+## [0.6.0] - 2026-08-24
+
+### 🚀 Features
+
+- _(transcript)_ Improve work and file review
+- _(sidebar)_ Group threads by attention
+- _(git)_ Add workspace controls and change review
+
+### 🐛 Bug Fixes
+
+- _(release)_ Grant provenance check access
+- _(release)_ Serialize release publishing
+- _(release)_ Require releases in version order
+- _(provider)_ Protect lifecycle and availability state
+- _(workspace)_ Reuse matching empty threads
+
 ## [0.5.0] - 2026-08-23
 
 ### 🚀 Features
 
-- _(settings)_ Add visual previews for appearance, conversation, composer, and terminal settings
+- _(settings)_ Add visual setting previews
 
 ## [0.4.0] - 2026-08-23
 
