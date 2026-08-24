@@ -1,4 +1,4 @@
-import claudeIcon from "@lobehub/icons-static-svg/icons/claude.svg?url";
+import claudeIcon from "@lobehub/icons-static-svg/icons/claude-color.svg?url";
 import cursorIcon from "@lobehub/icons-static-svg/icons/cursor.svg?url";
 import grokIcon from "@lobehub/icons-static-svg/icons/grok.svg?url";
 import openAiIcon from "@lobehub/icons-static-svg/icons/openai.svg?url";
@@ -24,7 +24,7 @@ const icons = new Map(
 export const profiles: HarnessProfile[] = providerDefinitions.map((profile) => {
   const icon = icons.get(profile.id);
   if (!icon) throw new Error(`Missing icon for provider ${profile.id}`);
-  return { ...profile, icon };
+  return { ...profile, icon, iconMode: profile.id === "claude" ? "brand" : "theme" };
 });
 
 export function profileById(profileId: string) {

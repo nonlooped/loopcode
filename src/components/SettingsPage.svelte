@@ -666,7 +666,7 @@
             {@const status = providerStatus(profile.id)}
             <div class="settings-row settings-row-separated provider-settings-row">
               <button id={`provider-setting-${profile.id}`} class="provider-settings-open" onclick={() => showProvider(profile.id)}>
-                <span class="provider-settings-icon" aria-hidden="true"><img class="settings-provider-icon" src={profile.icon} alt="" /></span>
+                <span class="provider-settings-icon" aria-hidden="true"><img class:brand-color-icon={profile.iconMode === 'brand'} class="settings-provider-icon" src={profile.icon} alt="" /></span>
                 <span class="settings-row-copy">
                   <strong>{profile.label}{#if version} <span class="provider-version">{version}</span>{/if}</strong>
                   <small
