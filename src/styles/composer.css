@@ -11,7 +11,7 @@
 }
 
 .composer {
-  background: transparent;
+  background: var(--floating-solid);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }

@@ -44,6 +44,12 @@ interface RuntimeHooks {
   clearPermission: (threadId: string, profileId?: string) => void;
 }
 
+export interface ProviderRuntimeConfiguration {
+  profiles: ProviderDefinition[];
+  customModels: Record<string, ProviderModelCatalog["models"] | undefined>;
+  disabledProfileIds: string[];
+}
+
 export class ProviderRuntime {
   #catalogs: Record<string, ProviderModelCatalog>;
   #hooks: RuntimeHooks;
@@ -88,59 +94,48 @@ export class ProviderRuntime {
     this.#titlePreference = preference;
   }
 
-  setProfiles(profiles: ProviderDefinition[], threads = this.#threads) {
-    const changedProfiles = profiles
-      .filter((profile) => {
-        const current = this.#profiles.find((candidate) => candidate.id === profile.id);
-        return (
-          !current ||
-          current.command !== profile.command ||
-          current.args.length !== profile.args.length ||
-          current.args.some((arg, index) => arg !== profile.args[index])
-        );
-      })
-      .map((profile) => profile.id);
-    this.#profiles = profiles;
-    for (const profileId of changedProfiles) this.#disconnectProfile(profileId, threads);
-  }
-
-  setCustomModels(
-    profileId: string,
-    models: ProviderModelCatalog["models"],
-    threads = this.#threads,
-  ) {
-    const previous = this.#customModels.get(profileId) ?? [];
-    if (
-      models.length === previous.length &&
-      models.every(
-        (model, index) => model.id === previous[index]?.id && model.name === previous[index]?.name,
-      )
-    )
-      return;
-    this.#customModels.set(profileId, models);
-    const catalog = this.#catalogs[profileId];
-    if (catalog?.status !== "ready") return;
-    const mergedModels = mergeProviderModels(this.#baseModels.get(profileId) ?? [], models);
-    const selectedModelId = mergedModels.some((model) => model.id === catalog.selectedModelId)
-      ? catalog.selectedModelId
-      : mergedModels[0]?.id;
-    this.#catalogs[profileId] = { ...catalog, models: mergedModels, selectedModelId };
-    this.#disconnectProfile(profileId, threads);
-    this.applyCatalog(profileId, threads);
-  }
-
-  setDisabledProfiles(profileIds: string[], threads = this.#threads) {
+  configure(configuration: ProviderRuntimeConfiguration, threads = this.#threads) {
     this.#threads = [...threads];
-    const disabled = new Set(profileIds);
-    for (const profileId of disabled) {
-      if (!this.#disabledProfiles.has(profileId)) this.#disconnectProfile(profileId, threads);
+    const disconnected = new Set<string>();
+    const catalogsToApply = new Set<string>();
+    const disabledProfiles = new Set(configuration.disabledProfileIds);
+
+    for (const profile of configuration.profiles) {
+      const current = this.#profiles.find((candidate) => candidate.id === profile.id);
+      if (
+        !current ||
+        current.command !== profile.command ||
+        current.args.length !== profile.args.length ||
+        current.args.some((arg, index) => arg !== profile.args[index])
+      ) {
+        disconnected.add(profile.id);
+      }
+
+      const models = configuration.customModels[profile.id] ?? [];
+      const previous = this.#customModels.get(profile.id) ?? [];
+      if (!sameModels(models, previous)) {
+        this.#customModels.set(profile.id, models);
+        const catalog = this.#catalogs[profile.id];
+        if (catalog?.status === "ready") {
+          const mergedModels = mergeProviderModels(this.#baseModels.get(profile.id) ?? [], models);
+          const selectedModelId = mergedModels.some((model) => model.id === catalog.selectedModelId)
+            ? catalog.selectedModelId
+            : mergedModels[0]?.id;
+          this.#catalogs[profile.id] = { ...catalog, models: mergedModels, selectedModelId };
+          catalogsToApply.add(profile.id);
+        }
+        disconnected.add(profile.id);
+      }
     }
-    this.#disabledProfiles = disabled;
-    const fallbackProfileId = firstReadyProviderId(this.#enabledProfiles(), this.#catalogs);
-    if (!fallbackProfileId) return;
-    for (const thread of threads) {
-      if (disabled.has(thread.profileId)) this.activate(thread, fallbackProfileId, false);
+    for (const profileId of disabledProfiles) {
+      if (!this.#disabledProfiles.has(profileId)) disconnected.add(profileId);
     }
+
+    this.#profiles = configuration.profiles;
+    this.#disabledProfiles = disabledProfiles;
+    for (const profileId of disconnected) this.#disconnectProfile(profileId, threads);
+    for (const profileId of catalogsToApply) this.#applyCatalogState(profileId, threads);
+    this.#applyFallback(threads);
   }
 
   runTurn(thread: ThreadState, text: string, images: MessageImage[] = [], content?: PromptPart[]) {
@@ -187,7 +182,7 @@ export class ProviderRuntime {
 
   async discoverAll(cwd: string, threads: ThreadState[]) {
     this.#threads = [...threads];
-    this.setDisabledProfiles([...this.#disabledProfiles], threads);
+    this.#applyFallback(threads);
     await Promise.allSettled(
       this.#enabledProfiles().map((profile) => this.discover(profile, cwd, threads)),
     );
@@ -233,10 +228,9 @@ export class ProviderRuntime {
         args: profile.args,
         profileId: profile.id,
       });
-      const cursorModels = profile.id === "cursor" ? await connection.listCursorModels() : [];
-      if (profile.id === "cursor") {
-        if (cursorModels.length === 0) throw new Error("Cursor did not advertise any models.");
-        discovered.models = cursorModels.map(({ model }) => model);
+      const compatibilityModels = await connection.listProviderModels();
+      if (compatibilityModels.length > 0) {
+        discovered.models = compatibilityModels.map(({ model }) => model);
       }
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
@@ -256,7 +250,7 @@ export class ProviderRuntime {
           profile,
           connection,
           { ...discovered, selectedModelId },
-          cursorModels,
+          compatibilityModels,
         );
       const selectedReasoning = reasoningOptionsByModel[selectedModelId];
       const selectedFastMode = fastModeOptionsByModel[selectedModelId];
@@ -296,36 +290,8 @@ export class ProviderRuntime {
   }
 
   applyCatalog(profileId: string, threads: ThreadState[]) {
-    const catalog = this.#catalogs[profileId];
-    if (!catalog) return;
-    for (const thread of threads) {
-      const provider = thread.providers[profileId];
-      if (!provider) continue;
-      if (catalog.status === "ready") {
-        provider.models = catalog.models;
-        if (
-          !provider.selectedModelId ||
-          !catalog.models.some((model) => model.id === provider.selectedModelId)
-        ) {
-          provider.selectedModelId = catalog.selectedModelId;
-        }
-        provider.reasoningOptionsByModel = catalog.reasoningOptionsByModel;
-        applyReasoningForSelectedModel(provider);
-        provider.fastModeOptionsByModel = catalog.fastModeOptionsByModel;
-        applyFastModeForSelectedModel(provider);
-      } else if (catalog.status === "unavailable") {
-        provider.models = [];
-        provider.selectedModelId = undefined;
-      }
-    }
-
-    const fallbackProfileId = firstReadyProviderId(this.#enabledProfiles(), this.#catalogs);
-    if (!fallbackProfileId) return;
-    for (const thread of threads) {
-      if (this.#catalogs[thread.profileId]?.status === "unavailable") {
-        this.activate(thread, fallbackProfileId, false);
-      }
-    }
+    this.#applyCatalogState(profileId, threads);
+    this.#applyFallback(threads);
   }
 
   async connect(thread: ThreadState, profileId: string) {
@@ -768,6 +734,44 @@ export class ProviderRuntime {
     return this.#profiles.filter((profile) => !this.#disabledProfiles.has(profile.id));
   }
 
+  #applyCatalogState(profileId: string, threads: ThreadState[]) {
+    const catalog = this.#catalogs[profileId];
+    if (!catalog) return;
+    for (const thread of threads) {
+      const provider = thread.providers[profileId];
+      if (!provider) continue;
+      if (catalog.status === "ready") {
+        provider.models = catalog.models;
+        if (
+          !provider.selectedModelId ||
+          !catalog.models.some((model) => model.id === provider.selectedModelId)
+        ) {
+          provider.selectedModelId = catalog.selectedModelId;
+        }
+        provider.reasoningOptionsByModel = catalog.reasoningOptionsByModel;
+        applyReasoningForSelectedModel(provider);
+        provider.fastModeOptionsByModel = catalog.fastModeOptionsByModel;
+        applyFastModeForSelectedModel(provider);
+      } else if (catalog.status === "unavailable") {
+        provider.models = [];
+        provider.selectedModelId = undefined;
+      }
+    }
+  }
+
+  #applyFallback(threads: ThreadState[]) {
+    const fallbackProfileId = firstReadyProviderId(this.#enabledProfiles(), this.#catalogs);
+    if (!fallbackProfileId) return;
+    for (const thread of threads) {
+      if (
+        this.#disabledProfiles.has(thread.profileId) ||
+        this.#catalogs[thread.profileId]?.status === "unavailable"
+      ) {
+        this.activate(thread, fallbackProfileId, false);
+      }
+    }
+  }
+
   #disconnectProfile(profileId: string, threads: ThreadState[]) {
     const connections: AcpConnection[] = [];
     for (const thread of threads) {
@@ -885,9 +889,9 @@ export async function discoverProviderModelOptions(
   profile: ProviderDefinition,
   connection: Pick<AcpConnection, "setModel">,
   state: AcpModelState,
-  cursorStates: Awaited<ReturnType<AcpConnection["listCursorModels"]>> = [],
+  compatibilityStates: Awaited<ReturnType<AcpConnection["listProviderModels"]>> = [],
 ) {
-  if (profile.id === "cursor") return modelOptionsFromStates(cursorStates);
+  if (compatibilityStates.length > 0) return modelOptionsFromStates(compatibilityStates);
   if (profile.probeModelOptions) return discoverModelOptions(connection, state);
   const model = state.models.find((item) => item.id === state.selectedModelId);
   return modelOptionsFromStates(model ? [{ ...state, model }] : []);
@@ -898,6 +902,13 @@ export function mergeProviderModels(
   custom: ProviderModelCatalog["models"],
 ) {
   return [...new Map([...advertised, ...custom].map((model) => [model.id, model])).values()];
+}
+
+function sameModels(left: ProviderModelCatalog["models"], right: ProviderModelCatalog["models"]) {
+  return (
+    left.length === right.length &&
+    left.every((model, index) => model.id === right[index]?.id && model.name === right[index]?.name)
+  );
 }
 
 function acpPrompt(content: PromptPart[] | undefined, text: string, images: MessageImage[]) {

@@ -103,17 +103,17 @@
 :root[data-color-mode="dark"] {
   color-scheme: dark;
   --contrast-rgb: var(--theme-dark-accent-rgb);
-  --shell-tint: rgb(var(--theme-dark-shell-rgb) / 0.66);
   --shell-solid: rgb(var(--theme-dark-shell-rgb));
-  --sidebar-tint: rgb(var(--theme-dark-accent-rgb) / 0.026);
+  --shell-tint: var(--shell-solid);
   --sidebar-solid: color-mix(
     in srgb,
     rgb(var(--theme-dark-surface-rgb)) 82%,
     rgb(var(--theme-dark-shell-rgb))
   );
-  --floating-surface: rgb(var(--theme-dark-surface-rgb) / 0.96);
+  --sidebar-tint: var(--sidebar-solid);
   --floating-solid: rgb(var(--theme-dark-surface-rgb));
-  --decision-surface: rgb(var(--theme-dark-surface-rgb) / 0.96);
+  --floating-surface: var(--floating-solid);
+  --decision-surface: var(--floating-solid);
   --recessed-surface: rgb(0 0 0 / 0.2);
   --panel: rgb(var(--contrast-rgb) / 0.032);
   --panel-hover: rgb(var(--contrast-rgb) / 0.048);
@@ -135,7 +135,7 @@
   --selection: rgb(var(--theme-dark-accent-rgb) / 0.24);
   --scrollbar: rgb(var(--contrast-rgb) / 0.13);
   --scrollbar-hover: rgb(var(--contrast-rgb) / 0.2);
-  --raised-surface: rgb(var(--theme-dark-surface-rgb) / 0.9);
+  --raised-surface: var(--floating-solid);
   --raised-hover: color-mix(
     in srgb,
     rgb(var(--theme-dark-surface-rgb)) 82%,
@@ -151,17 +151,17 @@
 :root[data-color-mode="light"] {
   color-scheme: light;
   --contrast-rgb: var(--theme-light-accent-rgb);
-  --shell-tint: rgb(var(--theme-light-shell-rgb) / 0.76);
   --shell-solid: rgb(var(--theme-light-shell-rgb));
-  --sidebar-tint: rgb(var(--theme-light-accent-rgb) / 0.025);
+  --shell-tint: var(--shell-solid);
   --sidebar-solid: color-mix(
     in srgb,
     rgb(var(--theme-light-shell-rgb)) 88%,
     rgb(var(--theme-light-accent-rgb))
   );
-  --floating-surface: rgb(var(--theme-light-surface-rgb) / 0.96);
+  --sidebar-tint: var(--sidebar-solid);
   --floating-solid: rgb(var(--theme-light-surface-rgb));
-  --decision-surface: rgb(var(--theme-light-surface-rgb) / 0.96);
+  --floating-surface: var(--floating-solid);
+  --decision-surface: var(--floating-solid);
   --recessed-surface: rgb(var(--theme-light-accent-rgb) / 0.065);
   --panel: rgb(var(--contrast-rgb) / 0.026);
   --panel-hover: rgb(var(--contrast-rgb) / 0.052);
@@ -171,7 +171,7 @@
   --text: color-mix(in srgb, rgb(var(--theme-light-accent-rgb)) 12%, rgb(24 25 29 / 0.96));
   --text-soft: color-mix(in srgb, rgb(var(--theme-light-accent-rgb)) 10%, rgb(47 49 54));
   --muted: color-mix(in srgb, rgb(var(--theme-light-accent-rgb)) 8%, rgb(73 75 81));
-  --faint: color-mix(in srgb, rgb(var(--theme-light-accent-rgb)) 7%, rgb(96 99 107));
+  --faint: color-mix(in srgb, rgb(var(--theme-light-accent-rgb)) 7%, rgb(73 75 81));
   --accent: rgb(var(--theme-light-accent-rgb) / 0.94);
   --accent-hover: color-mix(in srgb, rgb(var(--theme-light-accent-rgb)) 86%, black);
   --accent-contrast: rgb(255 255 255 / 0.98);
@@ -183,7 +183,7 @@
   --selection: rgb(var(--theme-light-accent-rgb) / 0.18);
   --scrollbar: rgb(var(--contrast-rgb) / 0.18);
   --scrollbar-hover: rgb(var(--contrast-rgb) / 0.28);
-  --raised-surface: rgb(var(--theme-light-surface-rgb) / 0.92);
+  --raised-surface: var(--floating-solid);
   --raised-hover: color-mix(
     in srgb,
     rgb(var(--theme-light-surface-rgb)) 88%,

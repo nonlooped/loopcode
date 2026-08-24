@@ -21,17 +21,6 @@ export type BrokerEvent =
   | { event: "exited"; data: { code: number | null; success: boolean } }
   | { event: "error"; data: { message: string } };
 
-export interface ProjectFileEntry {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  isSymlink: boolean;
-}
-
-export interface ProjectFileChange {
-  paths: string[];
-}
-
 export interface StartTerminalRequest {
   threadId: string;
   cwd: string;
@@ -81,19 +70,34 @@ const gitFileDiffSchema = z.object({
   binary: z.boolean(),
   tooLarge: z.boolean(),
 });
+const projectFileEntrySchema = z.object({
+  name: z.string().min(1).max(4096),
+  path: z.string().min(1).max(4096),
+  isDirectory: z.boolean(),
+  isSymlink: z.boolean(),
+});
+const projectFileEntriesSchema = z.array(projectFileEntrySchema).max(100_000);
+const projectFileChangeSchema = z.object({
+  paths: z.array(z.string().min(1).max(4096)).max(10_000),
+});
+const composerCompletionEntrySchema = z.object({
+  kind: z.enum(["file", "folder", "skill"]),
+  name: z.string().min(1).max(4096),
+  path: z.string().min(1).max(4096),
+  relativePath: z.string().min(1).max(4096),
+  description: z.string().max(4096).optional(),
+});
+const composerCompletionEntriesSchema = z.array(composerCompletionEntrySchema).max(100_000);
+const watcherIdSchema = z.number().int().nonnegative();
 
 export type GitChange = z.infer<typeof gitChangeSchema>;
 export type GitChanges = z.infer<typeof gitChangesSchema>;
 export type GitFileDiff = z.infer<typeof gitFileDiffSchema>;
 export type TerminalEvent = z.infer<typeof terminalEventSchema>;
 
-export interface ComposerCompletionEntry {
-  kind: "file" | "folder" | "skill";
-  name: string;
-  path: string;
-  relativePath: string;
-  description?: string;
-}
+export type ComposerCompletionEntry = z.infer<typeof composerCompletionEntrySchema>;
+export type ProjectFileEntry = z.infer<typeof projectFileEntrySchema>;
+export type ProjectFileChange = z.infer<typeof projectFileChangeSchema>;
 
 export async function launchHarness(
   request: LaunchRequest,
@@ -254,18 +258,21 @@ export async function getProviderAuthStatus(
     .parse(await invoke("provider_auth_status", { command, args }));
 }
 
-export function listComposerCompletions(projectRoot: string): Promise<ComposerCompletionEntry[]> {
-  return invoke<ComposerCompletionEntry[]>("list_composer_completions", { projectRoot });
+export async function listComposerCompletions(
+  projectRoot: string,
+): Promise<ComposerCompletionEntry[]> {
+  return composerCompletionEntriesSchema.parse(
+    await invoke("list_composer_completions", { projectRoot }),
+  );
 }
 
-export function readProjectDirectory(
+export async function readProjectDirectory(
   projectRoot: string,
   directory: string,
 ): Promise<ProjectFileEntry[]> {
-  return invoke<ProjectFileEntry[]>("read_project_directory", {
-    projectRoot,
-    directory,
-  });
+  return projectFileEntriesSchema.parse(
+    await invoke("read_project_directory", { projectRoot, directory }),
+  );
 }
 
 export function readProjectFile(projectRoot: string, path: string): Promise<ArrayBuffer> {
@@ -284,12 +291,17 @@ export async function startProjectFileWatcher(
   projectRoot: string,
   onChange: (change: ProjectFileChange) => void,
 ): Promise<number> {
-  const channel = new Channel<ProjectFileChange>();
-  channel.onmessage = onChange;
-  return invoke<number>("start_project_file_watcher", {
-    projectRoot,
-    onChange: channel,
-  });
+  const channel = new Channel<unknown>();
+  channel.onmessage = (value) => {
+    const change = projectFileChangeSchema.safeParse(value);
+    if (change.success) onChange(change.data);
+  };
+  return watcherIdSchema.parse(
+    await invoke("start_project_file_watcher", {
+      projectRoot,
+      onChange: channel,
+    }),
+  );
 }
 
 export function stopProjectFileWatcher(watcherId: number): Promise<void> {

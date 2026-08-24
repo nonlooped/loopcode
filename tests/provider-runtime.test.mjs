@@ -49,6 +49,13 @@ function thread(connectionStatus) {
 
 const hooks = { permission() {}, clearPermission() {} };
 
+function configuration(
+  profiles = providerDefinitions,
+  { customModels = {}, disabledProfileIds = [] } = {},
+) {
+  return { profiles, customModels, disabledProfileIds };
+}
+
 void test("ProviderRuntime owns prompt and title lifecycle", async () => {
   const calls = [];
   const connection = {
@@ -154,7 +161,7 @@ void test("changing provider arguments disconnects its active harness", () => {
     profile.id === "codex" ? { ...profile, args: [...profile.args, "--changed"] } : profile,
   );
 
-  runtime.setProfiles(profiles, [state]);
+  runtime.configure(configuration(profiles), [state]);
 
   assert.equal(state.providers.codex.connectionStatus, "disconnected");
 });
@@ -163,7 +170,7 @@ void test("unchanged custom models do not disconnect ready providers", () => {
   const state = thread();
   const runtime = new ProviderRuntime(catalogs, hooks);
 
-  runtime.setCustomModels("codex", [], [state]);
+  runtime.configure(configuration(), [state]);
 
   assert.equal(state.providers.codex.connectionStatus, "ready");
 });
@@ -193,10 +200,30 @@ void test("disabling the active provider falls back to an enabled ready provider
   const readyCatalogs = { ...catalogs, claude: catalogs.codex };
   const runtime = new ProviderRuntime(readyCatalogs, hooks);
 
-  runtime.setDisabledProfiles(["codex"], [state]);
+  runtime.configure(configuration(providerDefinitions, { disabledProfileIds: ["codex"] }), [state]);
 
   assert.equal(state.profileId, "claude");
   assert.equal(state.providers.codex.connectionStatus, "disconnected");
+});
+
+void test("runtime configuration applies models and provider fallback atomically", () => {
+  const state = thread();
+  const readyCatalogs = { ...catalogs, claude: catalogs.codex };
+  const runtime = new ProviderRuntime(readyCatalogs, hooks);
+
+  runtime.configure(
+    configuration(providerDefinitions, {
+      customModels: { codex: [{ id: "custom", name: "Custom" }] },
+      disabledProfileIds: ["codex"],
+    }),
+    [state],
+  );
+
+  assert.deepEqual(
+    readyCatalogs.codex.models.map(({ id }) => id),
+    ["model-1", "custom"],
+  );
+  assert.equal(state.profileId, "claude");
 });
 
 void test("model defaults apply while discovery is still loading", async () => {
@@ -311,7 +338,7 @@ void test("reconnect waits for a replaced provider process to stop", async () =>
     profile.id === "codex" ? { ...profile, args: [...profile.args, "--changed"] } : profile,
   );
 
-  runtime.setProfiles(profiles, [state]);
+  runtime.configure(configuration(profiles), [state]);
   const reconnect = runtime.connect(state, "codex");
   await Promise.resolve();
   assert.equal(connectionCount, 1);
