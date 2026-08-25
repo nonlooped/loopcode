@@ -57,4 +57,5 @@ void test("release workflow only publishes successful master commits and recover
     /git tag -l 'v\*-nightly\.\*' --sort=-creatordate \| grep -vxF "\$tag"/,
   );
   assert.match(releaseWorkflow, /edit_args=\(--draft=false --prerelease --latest=false\)/);
+  assert.doesNotMatch(releaseWorkflow.split("  bundle:")[0], /rustup toolchain install/);
 });
