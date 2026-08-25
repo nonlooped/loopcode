@@ -58,6 +58,11 @@ void test("release workflow publishes both channels and reports failures", () =>
   assert.match(releaseWorkflow, /group: release-/);
   assert.match(releaseWorkflow, /grep -qx 'app=true'/);
   assert.match(releaseWorkflow, /-nightly\.\$\(date -u \+%Y%m%d\)\.\$GITHUB_RUN_NUMBER/);
+  assert.match(
+    releaseWorkflow,
+    /Packages are unsigned\. Verify `SHA256SUMS\.txt` before bypassing OS warnings\. The macOS DMG supports Apple Silicon and Intel Macs\./,
+  );
+  assert.doesNotMatch(releaseWorkflow, /xattr|SmartScreen|notarized/);
   assert.match(releaseWorkflow, /runner\.os == 'Windows' && '--bundles nsis'/);
   assert.match(releaseWorkflow, /edit_args=\(--draft=false --prerelease --latest=false\)/);
   assert.match(releaseWorkflow, /--prerelease --latest=false \\\n\s*--target "\$RELEASE_SHA"/);

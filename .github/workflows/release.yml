@@ -226,7 +226,7 @@ jobs:
           else
             node scripts/release-notes.mjs "$RELEASE_TAG" > release-notes.md
           fi
-          printf '\n> Windows and Linux packages are unsigned. The macOS app is ad-hoc signed but not Developer ID signed or notarized. On macOS, move LoopCode to Applications, then run `xattr -dr com.apple.quarantine /Applications/LoopCode.app`. On Windows, SmartScreen may require **More info > Run anyway**. Only bypass these warnings for packages downloaded from this repository whose checksum matches `SHA256SUMS.txt`.\n\nThe macOS DMG supports Apple Silicon and Intel Macs.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
+          printf '\n> Packages are unsigned. Verify `SHA256SUMS.txt` before bypassing OS warnings. The macOS DMG supports Apple Silicon and Intel Macs.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$PREVIOUS_TAG" "$RELEASE_TAG" >> release-notes.md
           release="$(gh release view "$RELEASE_TAG" --json isDraft --repo "$GITHUB_REPOSITORY" 2> /dev/null || true)"
           if [[ -n "$release" && "$(jq -r .isDraft <<< "$release")" != true && "$RELEASE_CHANNEL" == stable ]]; then
