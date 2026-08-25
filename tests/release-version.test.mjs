@@ -58,6 +58,9 @@ void test("release workflow publishes both channels and reports failures", () =>
   assert.match(releaseWorkflow, /group: release-/);
   assert.match(releaseWorkflow, /grep -qx 'app=true'/);
   assert.match(releaseWorkflow, /-nightly\.\$\(date -u \+%Y%m%d\)\.\$GITHUB_RUN_NUMBER/);
+  assert.match(releaseWorkflow, /title=LoopCode Nightly v\$version/);
+  assert.match(releaseWorkflow, /## \[%s\] - %s\\n\\n> Nightly prerelease\./);
+  assert.match(releaseWorkflow, /### Changes since %s/);
   assert.match(
     releaseWorkflow,
     /Packages are unsigned\. Verify `SHA256SUMS\.txt` before bypassing OS warnings\. The macOS DMG supports Apple Silicon and Intel Macs\./,

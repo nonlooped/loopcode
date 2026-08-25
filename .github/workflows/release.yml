@@ -72,7 +72,7 @@ jobs:
             version="$(jq -r .version package.json)-nightly.$(date -u +%Y%m%d).$GITHUB_RUN_NUMBER"
             echo "version=$version" >> "$GITHUB_OUTPUT"
             echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            echo "title=LoopCode Nightly $version" >> "$GITHUB_OUTPUT"
+            echo "title=LoopCode Nightly v$version" >> "$GITHUB_OUTPUT"
             echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -220,7 +220,8 @@ jobs:
           mapfile -d '' files < <(find artifacts -type f -print0)
           if [[ "$RELEASE_CHANNEL" == nightly ]]; then
             {
-              printf 'Nightly `%s`. Not a stable release.\n\n## Changes since %s\n\n' "$RELEASE_TAG" "$PREVIOUS_TAG"
+              printf '## [%s] - %s\n\n> Nightly prerelease. Expect unfinished changes and regressions.\n\n### Changes since %s\n\n' \
+                "${RELEASE_TAG#v}" "$(date -u +%Y-%m-%d)" "$PREVIOUS_TAG"
               git log --format='- %s' "$PREVIOUS_TAG..$RELEASE_SHA"
             } > release-notes.md
           else
