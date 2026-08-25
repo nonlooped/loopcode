@@ -46,7 +46,7 @@
     "bits-ui": "^2.19.0",
     "material-icon-theme": "^5.37.0",
     "shiki": "^4.4.3",
-    "svelte": "^5.56.9",
+    "svelte": "^5.56.10",
     "zod": "4.4.3"
   },
   "devDependencies": {
