@@ -10,7 +10,7 @@ export function desktopPlatform(
   tauriPlatform = import.meta.env?.TAURI_ENV_PLATFORM,
 ): DesktopPlatform {
   if (tauriPlatform === "windows") return "windows";
-  if (tauriPlatform === "darwin") return "macos";
+  if (tauriPlatform === "darwin" || tauriPlatform === "macos") return "macos";
   return "linux";
 }
 

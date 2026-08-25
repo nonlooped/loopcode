@@ -7,6 +7,7 @@ const bundle = JSON.parse(await readFile("src-tauri/tauri.conf.json", "utf8"));
 const mainWindow = overlay.app.windows.find((window) => window.label === "main");
 
 void test("macOS uses vibrancy instead of Windows acrylic", () => {
+  assert.equal(overlay.app.macOSPrivateApi, true);
   assert.equal(mainWindow.transparent, true);
   assert.equal(mainWindow.backgroundColor.toLowerCase(), "#00000000");
   assert.deepEqual(mainWindow.windowEffects?.effects, ["underWindowBackground"]);

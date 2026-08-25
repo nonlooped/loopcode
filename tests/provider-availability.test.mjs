@@ -26,6 +26,7 @@ void test("provider availability covers platform, discovery, executable, and aut
   const fx = providerDefinitions.find((profile) => profile.id === "fx");
   assert.ok(fx);
   assert.equal(desktopPlatform("darwin"), "macos");
+  assert.equal(desktopPlatform("macos"), "macos");
   assert.equal(desktopPlatform("windows"), "windows");
   assert.equal(desktopPlatform("linux"), "linux");
   assert.equal(desktopPlatform(undefined), "linux");
