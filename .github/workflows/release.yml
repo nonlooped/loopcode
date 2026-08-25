@@ -22,7 +22,7 @@ env:
 
 concurrency:
   group: release-${{ inputs.channel || 'stable' }}
-  cancel-in-progress: ${{ inputs.channel == 'nightly' }}
+  cancel-in-progress: false
 
 jobs:
   preflight:
@@ -116,7 +116,7 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: npm install --global npm@12
+      - run: npm install --global npm@12.0.2
       - id: npm-cache
         name: Get npm cache directory
         shell: bash
