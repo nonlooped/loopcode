@@ -217,7 +217,8 @@
   --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
 }
 
-:root[data-platform="linux"] {
+:root[data-platform="linux"],
+:root[data-platform="web"] {
   --shell-tint: var(--shell-solid);
   --sidebar-tint: var(--sidebar-solid);
   --floating-surface: var(--floating-solid);
