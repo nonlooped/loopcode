@@ -674,9 +674,11 @@ async fn wait_for_harness_stop(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use super::wrap_harness_command;
     use super::{
         MAX_ACP_LINE_BYTES, MAX_PENDING_REQUESTS, insert_pending_request, read_bounded_line,
-        wait_for_harness_stop, wrap_harness_command,
+        wait_for_harness_stop,
     };
     #[cfg(unix)]
     use std::process::Stdio;

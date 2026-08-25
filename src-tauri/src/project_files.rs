@@ -495,7 +495,7 @@ mod tests {
         fs::write(directory.path().join("ignored/hidden.txt"), "hidden")
             .expect("ignored file should be written");
 
-        let paths = composer_project_entries(&directory.path())
+        let paths = composer_project_entries(directory.path())
             .expect("project entries should load")
             .into_iter()
             .map(|entry| entry.relative_path)

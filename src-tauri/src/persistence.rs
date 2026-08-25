@@ -129,10 +129,10 @@ mod tests {
         let directory = tempfile::tempdir().expect("test directory should be created");
         let workspace = r#"{"version":1,"selectedThreadId":"thread-1","threads":[{"id":"thread-1","messages":[{"text":"hello"}]}]}"#;
 
-        save_to_directory(&directory.path(), workspace).expect("workspace should save");
+        save_to_directory(directory.path(), workspace).expect("workspace should save");
 
         assert_eq!(
-            load(&directory.path()).expect("workspace should load"),
+            load(directory.path()).expect("workspace should load"),
             Some(workspace.to_owned())
         );
         assert!(directory.path().join(THREADS_FILE_NAME).is_file());
@@ -141,17 +141,17 @@ mod tests {
     #[test]
     fn a_second_save_replaces_the_previous_snapshot() {
         let directory = tempfile::tempdir().expect("test directory should be created");
-        save_to_directory(&directory.path(), r#"{"version":1,"threads":[]}"#)
+        save_to_directory(directory.path(), r#"{"version":1,"threads":[]}"#)
             .expect("first workspace should save");
         let latest = r#"{"version":1,"threads":[{"id":"latest"}]}"#;
 
-        save_to_directory(&directory.path(), latest).expect("latest workspace should save");
+        save_to_directory(directory.path(), latest).expect("latest workspace should save");
 
         assert_eq!(
-            load(&directory.path()).expect("workspace should load"),
+            load(directory.path()).expect("workspace should load"),
             Some(latest.to_owned())
         );
-        let leftovers: Vec<_> = fs::read_dir(&directory.path())
+        let leftovers: Vec<_> = fs::read_dir(directory.path())
             .expect("directory should list")
             .map(|entry| entry.expect("entry should read").file_name())
             .filter(|name| name != THREADS_FILE_NAME && name != BACKUP_FILE_NAME)
@@ -203,7 +203,7 @@ mod tests {
             .expect("backup fixture should write");
 
         assert_eq!(
-            load(&directory.path()).expect("backup should load"),
+            load(directory.path()).expect("backup should load"),
             Some(workspace.to_owned())
         );
     }
@@ -212,14 +212,14 @@ mod tests {
     fn loads_the_backup_when_the_primary_file_is_corrupt() {
         let directory = tempfile::tempdir().expect("test directory should be created");
         let workspace = r#"{"version":1,"threads":[{"id":"recoverable"}]}"#;
-        save_to_directory(&directory.path(), workspace).expect("workspace should save");
+        save_to_directory(directory.path(), workspace).expect("workspace should save");
         fs::write(directory.path().join(BACKUP_FILE_NAME), workspace)
             .expect("backup fixture should write");
         fs::write(directory.path().join(THREADS_FILE_NAME), "{not-json")
             .expect("primary fixture should corrupt");
 
         assert_eq!(
-            load(&directory.path()).expect("backup should load"),
+            load(directory.path()).expect("backup should load"),
             Some(workspace.to_owned())
         );
     }
