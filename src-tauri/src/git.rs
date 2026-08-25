@@ -501,6 +501,9 @@ fn extract_git_hunks(patch: &[u8]) -> GitFileDiff {
 
 fn untracked_file_diff(cwd: &Path, path: &str) -> Result<GitFileDiff, String> {
     validate_git_relative_path(path)?;
+    let cwd = cwd
+        .canonicalize()
+        .map_err(|error| format!("Could not resolve Git working folder: {error}"))?;
     let candidate = cwd.join(path);
     let symlink_metadata = candidate
         .symlink_metadata()
@@ -515,7 +518,7 @@ fn untracked_file_diff(cwd: &Path, path: &str) -> Result<GitFileDiff, String> {
     let resolved = candidate
         .canonicalize()
         .map_err(|error| format!("Could not resolve changed file: {error}"))?;
-    if !resolved.starts_with(cwd) || !resolved.is_file() {
+    if !resolved.starts_with(&cwd) || !resolved.is_file() {
         return Err("The changed file is outside the working folder".to_owned());
     }
     if symlink_metadata.len() > MAX_GIT_DIFF_BYTES as u64 {
@@ -898,6 +901,8 @@ mod tests {
             .expect("tracked file should change");
         std::fs::write(repository.join("new.txt"), "new file\n")
             .expect("untracked file should be written");
+        std::fs::create_dir(repository.join("nested")).expect("nested directory should be created");
+        let noncanonical_repository = repository.join("nested").join("..");
 
         tauri::async_runtime::block_on(async {
             let changes = list_git_changes_at(&repository, None)
@@ -914,7 +919,7 @@ mod tests {
                 .await
                 .expect("tracked diff should load");
             assert!(tracked_diff.hunks[0].contains("-before\n+after"));
-            let untracked_diff = git_file_diff_at(&repository, None, "new.txt", None)
+            let untracked_diff = git_file_diff_at(&noncanonical_repository, None, "new.txt", None)
                 .await
                 .expect("untracked diff should load");
             assert!(untracked_diff.hunks[0].contains("+new file"));
