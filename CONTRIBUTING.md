@@ -18,21 +18,18 @@ Squash-merge after `CI / gate` passes and review threads are resolved. GitHub de
 
 ## Releases
 
-LoopCode follows [Semantic Versioning](https://semver.org/), with a documented meaning for the pre-1.0 period:
+LoopCode has two channels:
 
-- `0.Y.0` is a planned feature release. It may include fixes alongside new user-visible behavior.
-- `0.Y.Z` is a fixes-only release for regressions, security problems, or other urgent defects.
-- Breaking changes before `1.0.0` ship in `0.Y.0` and must be called out in the release note.
-- Internal chores, tests, and documentation do not cause a release. They ship with the next feature or fix release.
-- After `1.0.0`, incompatible changes bump the major version, backward-compatible features bump the minor version, and fixes bump the patch version.
+- **Nightly** is a GitHub pre-release. Master CI starts one after `CI / gate` passes on a push that is not a stable version bump. The app version is `{current-stable}-nightly.{date}.{run}`, for example `0.8.0-nightly.20260825.12`. Nightlies do not become GitHub Latest and do not bump `package.json` on `master`.
+- **Stable** is a SemVer GitHub Release. `0.Y.0` is a feature release. `0.Y.Z` is fixes only. Breaking changes before `1.0.0` ship in `0.Y.0` and must be called out in the release note. After `1.0.0`, incompatible changes bump the major version, backward-compatible features bump the minor version, and fixes bump the patch version.
 
-SemVer chooses the number. It does not require publishing every time `master` changes. LoopCode normally publishes at most one feature release per week, and only when the accumulated work gives users a clear reason to update. A patch may ship sooner when waiting would leave users with a serious defect. Do not publish another feature release minutes or hours after the previous one.
+Install Stable for daily use. Nightly is for trying `master` without building from source. Windows may treat successive nightlies as the same installer version after the prerelease suffix is stripped, so uninstall the previous nightly if the installer refuses.
 
-### Prepare a release
+### Prepare a stable release
 
 1. Start from an up-to-date `master` with a clean working tree.
 2. Run `scripts/release.sh X.Y.Z`. The script creates `release/vX.Y.Z`, updates every version, regenerates the changelog, and commits the release.
 3. Push the branch and open a pull request titled exactly `chore(release): vX.Y.Z`.
 4. Review the generated changelog and version diff, then squash-merge after `CI / gate` passes.
 
-Master CI creates the protected tag only after the merged release commit passes again. The release workflow runs from that tag, verifies the version, preceding release, source commit, and top changelog entry, then builds the Windows and Linux installers. It creates checksums and a draft GitHub Release from the changelog. Review the title, notes, expected assets, and unsigned-package warning before publishing the draft.
+Master CI creates the protected tag only after the merged release commit passes again. The release workflow runs from that tag, verifies the version, preceding stable release, source commit, and top changelog entry, then builds the Windows and Linux installers. It creates checksums and a draft GitHub Release from the changelog. Review the title, notes, expected assets, and unsigned-package warning before publishing the draft. Nightlies of that same commit are skipped.

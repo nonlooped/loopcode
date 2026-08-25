@@ -135,6 +135,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          fetch-tags: true
       - name: Tag version bump
         id: release
         run: |
@@ -161,3 +162,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: gh workflow run release.yml --ref "$TAG"
+      - name: Start nightly
+        if: ${{ !steps.release.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git tag --points-at "$GITHUB_SHA" | grep -q -- '-nightly\.'; then
+            echo "nightly already exists for $GITHUB_SHA"
+            exit 0
+          fi
+          gh workflow run release.yml --ref master -f channel=nightly -f sha="$GITHUB_SHA"
