@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  desktopPlatform,
   providerDefinitions,
   providerSupportsPlatform,
 } from "../src/config/provider-definitions.ts";
@@ -24,7 +25,13 @@ const ready = (modelId) => ({
 void test("provider availability covers platform, discovery, executable, and auth failures", () => {
   const fx = providerDefinitions.find((profile) => profile.id === "fx");
   assert.ok(fx);
+  assert.equal(desktopPlatform("darwin"), "macos");
+  assert.equal(desktopPlatform("windows"), "windows");
+  assert.equal(desktopPlatform("linux"), "linux");
+  assert.equal(desktopPlatform(undefined), "linux");
+  assert.ok(providerDefinitions.every((profile) => profile.platforms.includes("macos")));
   assert.equal(providerSupportsPlatform(fx, "linux"), true);
+  assert.equal(providerSupportsPlatform(fx, "macos"), true);
   assert.equal(providerSupportsPlatform(fx, "windows"), false);
   assert.equal(unavailableReason(new Error("Authentication required")), "authentication");
   assert.equal(

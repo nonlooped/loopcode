@@ -160,7 +160,7 @@ export interface ProviderSessionState {
   errorDetails?: AcpErrorDetails;
 }
 
-export type DesktopPlatform = "linux" | "windows";
+export type DesktopPlatform = "linux" | "macos" | "windows";
 
 export interface HarnessProfile {
   id: string;

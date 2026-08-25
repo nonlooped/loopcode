@@ -103,10 +103,26 @@ jobs:
           shared-key: windows-rust-ci
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
 
+  macos-rust:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install --no-self-update
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: macos-rust-ci
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+
   gate:
     name: CI / gate
     if: always()
-    needs: [changes, frontend, rust, windows-rust]
+    needs: [changes, frontend, rust, windows-rust, macos-rust]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     env:
@@ -115,6 +131,7 @@ jobs:
       NATIVE: ${{ needs.changes.outputs.native }}
       RUST: ${{ needs.rust.result }}
       WINDOWS_RUST: ${{ needs.windows-rust.result }}
+      MACOS_RUST: ${{ needs.macos-rust.result }}
     steps:
       - name: Require every applicable check
         run: |
@@ -123,9 +140,11 @@ jobs:
           if [[ "$NATIVE" == true ]]; then
             test "$RUST" = success
             test "$WINDOWS_RUST" = success
+            test "$MACOS_RUST" = success
           else
             test "$RUST" = skipped
             test "$WINDOWS_RUST" = skipped
+            test "$MACOS_RUST" = skipped
           fi
 
   tag-release:

@@ -105,6 +105,9 @@ jobs:
           - platform: windows-latest
             artifact: windows-bundles
             cache-key: windows-rust-release
+          - platform: macos-latest
+            artifact: macos-bundles
+            cache-key: macos-rust-release
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
     steps:
@@ -169,6 +172,8 @@ jobs:
             src-tauri/target/release/bundle/**/*.rpm
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.app.tar.gz
             src-tauri/target/release/bundle/**/*.sig
           if-no-files-found: error
 
@@ -212,7 +217,7 @@ jobs:
           else
             node scripts/release-notes.mjs "$RELEASE_TAG" > release-notes.md
           fi
-          printf '\n> Windows and Linux packages are currently unsigned.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
+          printf '\n> Windows, Linux, and macOS packages are currently unsigned.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$PREVIOUS_TAG" "$RELEASE_TAG" >> release-notes.md
           release="$(gh release view "$RELEASE_TAG" --json isDraft --repo "$GITHUB_REPOSITORY" 2> /dev/null || true)"
           if [[ -n "$release" && "$(jq -r .isDraft <<< "$release")" != true && "$RELEASE_CHANNEL" == stable ]]; then

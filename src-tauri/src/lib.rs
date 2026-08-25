@@ -35,7 +35,36 @@ use terminal::{
     stop_terminal_for_thread, write_terminal,
 };
 
+#[cfg(any(target_os = "macos", test))]
+const MACOS_GUI_PATH_PREFIXES: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
+
+// ponytail: Homebrew and /usr/local only. Pull login-shell PATH if GUI launches still miss nvm/fnm CLIs.
+#[cfg(any(target_os = "macos", test))]
+fn with_macos_gui_path(path: &str) -> String {
+    let existing: Vec<&str> = path.split(':').filter(|part| !part.is_empty()).collect();
+    let extra: Vec<&str> = MACOS_GUI_PATH_PREFIXES
+        .into_iter()
+        .filter(|prefix| !existing.contains(prefix))
+        .collect();
+    if extra.is_empty() {
+        path.to_owned()
+    } else if path.is_empty() {
+        extra.join(":")
+    } else {
+        format!("{}:{path}", extra.join(":"))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn apply_macos_gui_path() {
+    let path = with_macos_gui_path(&std::env::var("PATH").unwrap_or_default());
+    // SAFETY: PATH is rewritten once at process start, before agent or git children spawn.
+    unsafe { std::env::set_var("PATH", path) };
+}
+
 pub fn run() {
+    #[cfg(target_os = "macos")]
+    apply_macos_gui_path();
     let shutdown_started = Arc::new(AtomicBool::new(false));
     let shutdown_completed = Arc::new(AtomicBool::new(false));
     let app = tauri::Builder::default()
@@ -117,4 +146,25 @@ pub fn run() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_macos_gui_path;
+
+    #[test]
+    fn macos_gui_path_prepends_homebrew_prefixes() {
+        assert_eq!(
+            with_macos_gui_path("/usr/bin"),
+            "/opt/homebrew/bin:/usr/local/bin:/usr/bin"
+        );
+    }
+
+    #[test]
+    fn macos_gui_path_skips_prefixes_already_present() {
+        assert_eq!(
+            with_macos_gui_path("/opt/homebrew/bin:/usr/bin"),
+            "/usr/local/bin:/opt/homebrew/bin:/usr/bin"
+        );
+    }
 }
