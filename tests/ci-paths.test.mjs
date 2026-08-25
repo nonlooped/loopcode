@@ -31,6 +31,8 @@ void test("ci-paths writes GitHub output on stdin", () => {
 });
 
 void test("CI compiles rust only for native paths and tests Windows", () => {
+  assert.match(ciWorkflow, /^  node:/m);
+  assert.doesNotMatch(ciWorkflow, /^  frontend:/m);
   assert.match(
     ciWorkflow,
     /group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.event_name == 'push' && github\.sha \|\| github\.ref \}\}/,
