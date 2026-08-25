@@ -128,7 +128,7 @@
   outline: 0;
   background: transparent;
   color: var(--text-soft);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .model-search input::placeholder {
@@ -199,7 +199,7 @@
   max-width: 92px;
   overflow: hidden;
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -213,7 +213,7 @@
   justify-content: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.4;
   text-align: center;
 }
@@ -230,7 +230,7 @@
   border-radius: 5px;
   background: var(--recessed-surface);
   color: var(--text-soft);
-  font-size: 9px;
+  font-size: 11px;
   text-align: left;
   user-select: text;
 }
@@ -242,7 +242,7 @@
   border-radius: 7px;
   background: var(--panel-hover);
   color: var(--text-soft);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .model-picker-state button:disabled {
@@ -278,7 +278,7 @@
   justify-content: space-between;
   gap: 10px;
   color: var(--faint);
-  font-size: 9.5px;
+  font-size: 11px;
 }
 
 .composer-meta span {

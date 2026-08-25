@@ -57,14 +57,14 @@
   min-width: 0;
   flex: 1 1 auto;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .tool-title small {
   flex: 0 0 auto;
   color: var(--faint);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: capitalize;
 }
 
@@ -81,7 +81,7 @@
   border-radius: 5px;
   background: var(--recessed-surface);
   color: var(--muted);
-  font-size: 9.5px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -91,7 +91,7 @@
   gap: 4px;
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 11px;
 }
 
 .tool-locations span {

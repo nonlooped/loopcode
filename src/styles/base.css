@@ -204,10 +204,10 @@
 }
 
 :root {
-  font-family: "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --sidebar-expanded-width: 256px;
+  --sidebar-expanded-width: 300px;
   --project-explorer-expanded-width: 280px;
   --sidebar-width: var(--sidebar-expanded-width);
   --project-explorer-width: var(--project-explorer-expanded-width);
