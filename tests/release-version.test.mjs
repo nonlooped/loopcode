@@ -53,10 +53,7 @@ void test("release workflow publishes both channels and reports failures", () =>
   assert.match(releaseWorkflow, /group: release-/);
   assert.match(releaseWorkflow, /grep -qx 'app=true'/);
   assert.match(releaseWorkflow, /-nightly\.\$\(date -u \+%Y%m%d\)\.\$GITHUB_RUN_NUMBER/);
-  assert.match(
-    releaseWorkflow,
-    /runner\.os == 'Windows' && env\.RELEASE_CHANNEL == 'nightly' && '--bundles nsis'/,
-  );
+  assert.match(releaseWorkflow, /runner\.os == 'Windows' && '--bundles nsis'/);
   assert.match(releaseWorkflow, /edit_args=\(--draft=false --prerelease --latest=false\)/);
   assert.match(releaseWorkflow, /--prerelease --latest=false \\\n\s*--target "\$RELEASE_SHA"/);
   assert.match(releaseWorkflow, /^  report-failure:/m);

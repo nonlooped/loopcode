@@ -165,7 +165,7 @@ jobs:
           a45d3e227bc7f397e9cf6bfa4c9507494efa2293357b6e86690a3de2ca992e79  linuxdeploy-plugin-appimage.AppImage
           SHA256
           chmod +x ./*
-      - run: npm run tauri -- build --ci ${{ runner.os == 'macOS' && '--target universal-apple-darwin' || '' }} ${{ runner.os == 'Windows' && env.RELEASE_CHANNEL == 'nightly' && '--bundles nsis' || '' }} -- --locked
+      - run: npm run tauri -- build --ci ${{ runner.os == 'macOS' && '--target universal-apple-darwin' || '' }} ${{ runner.os == 'Windows' && '--bundles nsis' || '' }} -- --locked
       - name: Verify macOS bundle
         if: runner.os == 'macOS'
         shell: bash
@@ -181,7 +181,6 @@ jobs:
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.rpm
-            src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/universal-apple-darwin/release/bundle/**/*.dmg
           if-no-files-found: error
