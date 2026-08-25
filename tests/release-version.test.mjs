@@ -6,6 +6,7 @@ import { nightlyVersion } from "../scripts/nightly-version.mjs";
 import { nightlyNotes, releaseNotes } from "../scripts/release-notes.mjs";
 
 const version = JSON.parse(readFileSync("package.json", "utf8")).version;
+const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
 
 void test("release version check accepts the matching tag and rejects another tag", () => {
   const options = { stdio: "pipe" };
@@ -38,4 +39,22 @@ void test("nightly notes list commits since the previous tag", () => {
     }),
     "Nightly `v0.8.0-nightly.20260825.12` (abc1234). Not a stable release.\n\n## Changes since v0.8.0\n\n- feat(ui): restore acrylic chrome\n- fix(ui): keep web preview shell opaque\n",
   );
+});
+
+void test("release workflow only publishes successful master commits and recovers nightlies", () => {
+  assert.match(
+    releaseWorkflow,
+    /RELEASE_SHA: \$\{\{ inputs\.channel == 'nightly' && inputs\.sha \|\| github\.sha \}\}/,
+  );
+  assert.match(releaseWorkflow, /\[\[ "\$RELEASE_SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
+  assert.match(releaseWorkflow, /git merge-base --is-ancestor "\$RELEASE_SHA" origin\/master/);
+  assert.match(
+    releaseWorkflow,
+    /gh run list --workflow ci\.yml --branch master --commit "\$RELEASE_SHA"[\s\S]*--event push --status success/,
+  );
+  assert.match(
+    releaseWorkflow,
+    /git tag -l 'v\*-nightly\.\*' --sort=-creatordate \| grep -vxF "\$tag"/,
+  );
+  assert.match(releaseWorkflow, /edit_args=\(--draft=false --prerelease --latest=false\)/);
 });

@@ -17,8 +17,8 @@ on:
         type: string
 
 env:
-  RELEASE_SHA: ${{ github.event.inputs.sha || github.sha }}
-  RELEASE_CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
+  RELEASE_SHA: ${{ inputs.channel == 'nightly' && inputs.sha || github.sha }}
+  RELEASE_CHANNEL: ${{ inputs.channel || 'stable' }}
 
 concurrency:
   group: release
@@ -30,7 +30,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       actions: read
-      checks: read
       contents: read
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
@@ -39,18 +38,21 @@ jobs:
       short_sha: ${{ steps.meta.outputs.short_sha }}
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - name: Require successful master CI for this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Require full commit SHA
         run: |
-          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_SHA/check-runs" \
-            --jq '[.check_runs[] | select(.name == "CI / gate")][0].conclusion')"
-          test "$conclusion" = success
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Require successful master CI for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/master
+          test -n "$(gh run list --workflow ci.yml --branch master --commit "$RELEASE_SHA" \
+            --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
@@ -66,7 +68,7 @@ jobs:
           if [[ "$RELEASE_CHANNEL" == nightly ]]; then
             version="$(node scripts/nightly-version.mjs "$(jq -r .version package.json)" "$(date -u +%Y%m%d)" "$GITHUB_RUN_NUMBER")"
             tag="v$version"
-            previous_tag="$(git tag -l 'v*-nightly.*' --sort=-creatordate | head -n 1)"
+            previous_tag="$(git tag -l 'v*-nightly.*' --sort=-creatordate | grep -vxF "$tag" | head -n 1)"
             if [[ -z "$previous_tag" ]]; then
               previous_tag="$(git tag -l 'v*' --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)"
             fi
@@ -211,8 +213,12 @@ jobs:
           fi
           if [[ -n "$release" ]]; then
             gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            edit_args=()
+            if [[ "$RELEASE_CHANNEL" == nightly ]]; then
+              edit_args=(--draft=false --prerelease --latest=false)
+            fi
             gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" \
-              --notes-file release-notes.md --repo "$GITHUB_REPOSITORY"
+              --notes-file release-notes.md "${edit_args[@]}" --repo "$GITHUB_REPOSITORY"
           elif [[ "$RELEASE_CHANNEL" == nightly ]]; then
             gh release create "$RELEASE_TAG" "${files[@]}" --prerelease --latest=false \
               --target "$RELEASE_SHA" --notes-file release-notes.md \
