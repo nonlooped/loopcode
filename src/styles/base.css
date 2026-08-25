@@ -197,8 +197,8 @@
     rgb(var(--theme-light-shell-rgb)) 72%,
     rgb(var(--theme-light-accent-rgb))
   );
-  --overlay-shadow: 0 18px 48px rgb(var(--theme-light-accent-rgb) / 0.16),
-    inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --overlay-shadow:
+    0 18px 48px rgb(var(--theme-light-accent-rgb) / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.7);
   --provider-filter: grayscale(1) brightness(0);
   --shadow: 0 28px 90px rgb(var(--theme-light-accent-rgb) / 0.2);
 }
