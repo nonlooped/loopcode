@@ -8,8 +8,12 @@ if (!version || !/^\d+\.\d+\.\d+(-nightly\.\d{8}\.\d+)?$/.test(version)) {
   process.exit(1);
 }
 
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-execFileSync(npm, ["version", version, "--no-git-tag-version"], { stdio: "inherit" });
+for (const file of ["package.json", "package-lock.json"]) {
+  const json = JSON.parse(readFileSync(file, "utf8"));
+  json.version = version;
+  if (file === "package-lock.json") json.packages[""].version = version;
+  writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
+}
 
 for (const file of ["src-tauri/tauri.conf.json"]) {
   const source = readFileSync(file, "utf8");

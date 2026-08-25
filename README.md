@@ -33,9 +33,21 @@ LoopCode downloads the pinned Codex, Claude, and Pi ACP adapters on first use. f
 
 Models, reasoning levels, and fast modes come from each agent, so every thread gets the controls its provider supports.
 
+## Install a release
+
+Download packages and `SHA256SUMS.txt` from the [Releases](https://github.com/nonlooped/loopcode/releases) page. Windows and Linux packages are unsigned. The macOS app has an ad-hoc signature but is not Developer ID signed or notarized. Verify the checksum before bypassing an operating-system warning.
+
+The macOS DMG supports Apple Silicon and Intel Macs. If macOS reports that LoopCode is damaged, move it to Applications and remove the quarantine attribute:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/LoopCode.app
+```
+
+Windows SmartScreen may require **More info > Run anyway**. Only bypass Gatekeeper or SmartScreen for a package downloaded from this repository whose checksum matches `SHA256SUMS.txt`.
+
 ## Build from source
 
-LoopCode supports Windows 10 or 11, Linux, and macOS. Release packages are currently unsigned.
+LoopCode supports Windows 10 or 11, Linux, and macOS.
 
 ```sh
 git clone https://github.com/nonlooped/loopcode.git

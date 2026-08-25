@@ -131,13 +131,18 @@ jobs:
           restore-keys: npm-${{ runner.os }}-
       - run: npm ci
       - run: rustup toolchain install --no-self-update
+      - name: Install macOS targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: src-tauri -> target
           shared-key: ${{ matrix.cache-key }}
       - name: Stamp nightly version
         if: env.RELEASE_CHANNEL == 'nightly'
-        run: node scripts/set-version.mjs "${{ needs.preflight.outputs.version }}"
+        run: |
+          node scripts/set-version.mjs "${{ needs.preflight.outputs.version }}"
+          node scripts/check-versions.mjs
       - uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         if: runner.os == 'Linux'
         with:
@@ -162,7 +167,15 @@ jobs:
           a45d3e227bc7f397e9cf6bfa4c9507494efa2293357b6e86690a3de2ca992e79  linuxdeploy-plugin-appimage.AppImage
           SHA256
           chmod +x ./*
-      - run: npm run tauri -- build --ci -- --locked
+      - run: npm run tauri -- build --ci ${{ runner.os == 'macOS' && '--target universal-apple-darwin' || '' }} -- --locked
+      - name: Verify macOS bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          app=(src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app)
+          codesign --verify --deep --strict "${app[0]}"
+          archs="$(lipo -archs "${app[0]}/Contents/MacOS/LoopCode")"
+          [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]]
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact }}
@@ -172,9 +185,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.rpm
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.app.tar.gz
-            src-tauri/target/release/bundle/**/*.sig
+            src-tauri/target/universal-apple-darwin/release/bundle/**/*.dmg
           if-no-files-found: error
 
   publish:
@@ -217,7 +228,7 @@ jobs:
           else
             node scripts/release-notes.mjs "$RELEASE_TAG" > release-notes.md
           fi
-          printf '\n> Windows, Linux, and macOS packages are currently unsigned.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
+          printf '\n> Windows and Linux packages are unsigned. The macOS app is ad-hoc signed but not Developer ID signed or notarized. On macOS, move LoopCode to Applications, then run `xattr -dr com.apple.quarantine /Applications/LoopCode.app`. On Windows, SmartScreen may require **More info > Run anyway**. Only bypass these warnings for packages downloaded from this repository whose checksum matches `SHA256SUMS.txt`.\n\nThe macOS DMG supports Apple Silicon and Intel Macs.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$PREVIOUS_TAG" "$RELEASE_TAG" >> release-notes.md
           release="$(gh release view "$RELEASE_TAG" --json isDraft --repo "$GITHUB_REPOSITORY" 2> /dev/null || true)"
           if [[ -n "$release" && "$(jq -r .isDraft <<< "$release")" != true && "$RELEASE_CHANNEL" == stable ]]; then
@@ -239,4 +250,48 @@ jobs:
           else
             gh release create "$RELEASE_TAG" "${files[@]}" --draft --notes-file release-notes.md \
               --title "$RELEASE_TITLE" --repo "$GITHUB_REPOSITORY"
+          fi
+
+  cleanup-nightly-tag:
+    if: ${{ always() && (inputs.channel || 'stable') == 'nightly' }}
+    needs: [preflight, bundle, publish]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Delete source tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$GITHUB_REF_NAME" == nightly-src-* ]] || exit 0
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --silent > /dev/null 2>&1; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$GITHUB_REF_NAME"
+          fi
+
+  report-failure:
+    if: ${{ always() && (needs.preflight.result == 'failure' || needs.bundle.result == 'failure' || needs.publish.result == 'failure') }}
+    needs: [preflight, bundle, publish]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update release failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+          BUNDLE_RESULT: ${{ needs.bundle.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+        run: |
+          title="Release workflow failed"
+          body="$(printf '[Release run %s](%s/%s/actions/runs/%s) failed for `%s` at `%s`.\n\nPreflight: %s  \nBundle: %s  \nPublish: %s' \
+            "$GITHUB_RUN_NUMBER" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" \
+            "$RELEASE_CHANNEL" "$RELEASE_SHA" "$PREFLIGHT_RESULT" "$BUNDLE_RESULT" "$PUBLISH_RESULT")"
+          issue="$(gh issue list --state open --search 'Release workflow failed in:title' --json number,title \
+            --jq '.[] | select(.title == "Release workflow failed") | .number' | head -n 1)"
+          if [[ -n "$issue" ]]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --assignee "$GITHUB_REPOSITORY_OWNER"
           fi
