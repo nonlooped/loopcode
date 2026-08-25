@@ -200,4 +200,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rev-parse "$source_tag" >/dev/null 2>&1 || git tag "$source_tag" "$GITHUB_SHA"
           git push origin "$source_tag"
-          gh workflow run release.yml --ref "$source_tag" -f channel=nightly -f sha="$GITHUB_SHA"
+          if ! gh workflow run release.yml --ref "$source_tag" -f channel=nightly -f sha="$GITHUB_SHA"; then
+            git push origin ":refs/tags/$source_tag"
+            exit 1
+          fi

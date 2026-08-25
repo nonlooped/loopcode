@@ -52,6 +52,7 @@ void test("CI compiles rust only for native paths and tests Windows and macOS", 
   assert.doesNotMatch(ciWorkflow, /dtolnay\/rust-toolchain/);
   assert.match(ciWorkflow, /needs\.changes\.outputs\.app == 'true'/);
   assert.match(ciWorkflow, /gh workflow run release\.yml --ref "\$source_tag"/);
+  assert.match(ciWorkflow, /git push origin ":refs\/tags\/\$source_tag"/);
   assert.doesNotMatch(ciWorkflow, /--ref master -f channel=nightly/);
   assert.doesNotMatch(checkVersions, /execFileSync|"cargo"/);
   assert.equal([...ciWorkflow.matchAll(/npm install --global npm@12\.0\.2/g)].length, 1);
@@ -65,7 +66,12 @@ void test("release workflow isolates nightly concurrency and cache from CI", () 
   assert.match(releaseWorkflow, /cache-key: windows-rust-release/);
   assert.match(releaseWorkflow, /cache-key: macos-rust-release/);
   assert.match(releaseWorkflow, /platform: macos-latest/);
-  assert.match(releaseWorkflow, /\*\*\/\*\.dmg/);
+  assert.match(releaseWorkflow, /rustup target add aarch64-apple-darwin x86_64-apple-darwin/);
+  assert.match(releaseWorkflow, /--target universal-apple-darwin/);
+  assert.match(releaseWorkflow, /target\/universal-apple-darwin\/release\/bundle\/\*\*\/\*\.dmg/);
+  assert.match(releaseWorkflow, /codesign --verify --deep --strict/);
+  assert.match(releaseWorkflow, /lipo -archs/);
+  assert.doesNotMatch(releaseWorkflow, /app\.tar\.gz|\*\.sig/);
   assert.equal(
     [...releaseWorkflow.matchAll(/rustup toolchain install --no-self-update/g)].length,
     1,

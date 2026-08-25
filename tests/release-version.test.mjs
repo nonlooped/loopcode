@@ -7,6 +7,7 @@ import { nightlyNotes, releaseNotes } from "../scripts/release-notes.mjs";
 
 const version = JSON.parse(readFileSync("package.json", "utf8")).version;
 const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
+const versionSetter = readFileSync("scripts/set-version.mjs", "utf8");
 
 void test("release version check accepts the matching tag and rejects another tag", () => {
   const options = { stdio: "pipe" };
@@ -16,6 +17,11 @@ void test("release version check accepts the matching tag and rejects another ta
   assert.throws(() =>
     execFileSync(process.execPath, ["scripts/check-versions.mjs", "v0.0.0-invalid"], options),
   );
+});
+
+void test("version setter updates package metadata without platform command wrappers", () => {
+  assert.match(versionSetter, /\["package\.json", "package-lock\.json"\]/);
+  assert.doesNotMatch(versionSetter, /npm\.cmd|execFileSync\(npm/);
 });
 
 void test("release notes use the matching top changelog section", () => {
@@ -57,5 +63,8 @@ void test("release workflow only publishes successful master commits and recover
     /git tag -l 'v\*-nightly\.\*' --sort=-creatordate \| grep -vxF "\$tag"/,
   );
   assert.match(releaseWorkflow, /edit_args=\(--draft=false --prerelease --latest=false\)/);
+  assert.match(releaseWorkflow, /^  cleanup-nightly-tag:/m);
+  assert.match(releaseWorkflow, /^  report-failure:/m);
+  assert.match(releaseWorkflow, /gh issue create[\s\S]*--assignee "\$GITHUB_REPOSITORY_OWNER"/);
   assert.doesNotMatch(releaseWorkflow.split("  bundle:")[0], /rustup toolchain install/);
 });
