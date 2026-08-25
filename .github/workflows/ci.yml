@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -38,7 +38,7 @@ jobs:
           fi
           node scripts/ci-paths.mjs <<< "$changed" >> "$GITHUB_OUTPUT"
 
-  frontend:
+  node:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
@@ -49,7 +49,7 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: npm install --global npm@12
+      - run: npm install --global npm@12.0.2
       - id: npm-cache
         name: Get npm cache directory
         shell: bash
@@ -106,12 +106,12 @@ jobs:
   gate:
     name: CI / gate
     if: always()
-    needs: [changes, frontend, rust, windows-rust]
+    needs: [changes, node, rust, windows-rust]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     env:
       CHANGES: ${{ needs.changes.result }}
-      FRONTEND: ${{ needs.frontend.result }}
+      NODE: ${{ needs.node.result }}
       NATIVE: ${{ needs.changes.outputs.native }}
       RUST: ${{ needs.rust.result }}
       WINDOWS_RUST: ${{ needs.windows-rust.result }}
@@ -119,7 +119,7 @@ jobs:
       - name: Require every applicable check
         run: |
           test "$CHANGES" = success
-          test "$FRONTEND" = success
+          test "$NODE" = success
           if [[ "$NATIVE" == true ]]; then
             test "$RUST" = success
             test "$WINDOWS_RUST" = success

@@ -8,11 +8,7 @@ export function classifyChangedPaths(changed) {
       path.startsWith("src-tauri/") || path === "rust-toolchain.toml" || path === "rust-toolchain",
   );
   const app = paths.some(
-    (path) =>
-      path.startsWith("src/") ||
-      path.startsWith("src-tauri/") ||
-      path === "rust-toolchain.toml" ||
-      path === "rust-toolchain",
+    (path) => !path.includes("/") || path.startsWith("src/") || path.startsWith("src-tauri/"),
   );
   return { native, app };
 }
