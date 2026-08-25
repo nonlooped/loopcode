@@ -390,16 +390,6 @@
   box-shadow: var(--overlay-shadow);
 }
 
-.question-composer-label {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--faint);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.055em;
-  line-height: 1.2;
-}
-
 .question-composer h2 {
   margin: 0;
   color: var(--text);

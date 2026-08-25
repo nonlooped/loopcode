@@ -1,5 +1,3 @@
-import type { SessionUpdate } from "@agentclientprotocol/sdk";
-
 import {
   providerDefinitions,
   providerSupportsPlatform,
@@ -967,5 +965,3 @@ export function applyProviderConfigState(provider: ProviderSessionState, state: 
   provider.fastModeValueType = state.fastModeValueType;
   provider.fastModeDescription = state.fastModeDescription;
 }
-
-export type { SessionUpdate };

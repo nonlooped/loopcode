@@ -19,7 +19,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       native: ${{ steps.paths.outputs.native }}
-      app: ${{ steps.paths.outputs.app }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -186,21 +185,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
         run: gh workflow run release.yml --ref "$TAG"
-      - name: Start nightly
-        if: ${{ !steps.release.outputs.tag && needs.changes.outputs.app == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if git tag --points-at "$GITHUB_SHA" | grep -q -- '-nightly\.'; then
-            echo "nightly already exists for $GITHUB_SHA"
-            exit 0
-          fi
-          source_tag="nightly-src-$GITHUB_SHA"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rev-parse "$source_tag" >/dev/null 2>&1 || git tag "$source_tag" "$GITHUB_SHA"
-          git push origin "$source_tag"
-          if ! gh workflow run release.yml --ref "$source_tag" -f channel=nightly -f sha="$GITHUB_SHA"; then
-            git push origin ":refs/tags/$source_tag"
-            exit 1
-          fi

@@ -1,19 +1,12 @@
-use crate::app_commands::loopcode_data_directory;
+use crate::{app_commands::loopcode_data_directory, native_command};
 use serde::Serialize;
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
 };
+
 fn git_command() -> tokio::process::Command {
-    let command = tokio::process::Command::new("git");
-    #[cfg(target_os = "windows")]
-    let command = {
-        use std::os::windows::process::CommandExt;
-        let mut command = command;
-        command.as_std_mut().creation_flags(0x0800_0000);
-        command
-    };
-    command
+    native_command("git")
 }
 const MAX_GIT_CHANGES: usize = 10_000;
 const MAX_GIT_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
@@ -71,6 +64,12 @@ fn validate_git_cwd(cwd: &str) -> Result<PathBuf, String> {
         return Err("The Git working folder must be a directory".to_owned());
     }
     Ok(path)
+}
+
+async fn validated_git_cwd(cwd: String) -> Result<PathBuf, String> {
+    tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
+        .await
+        .map_err(|error| format!("Could not join Git path validation task: {error}"))?
 }
 
 fn validate_git_relative_path(path: &str) -> Result<&str, String> {
@@ -287,9 +286,7 @@ async fn git_ref(cwd: &Path, args: &[&str]) -> Option<String> {
 
 #[tauri::command]
 pub(crate) async fn get_git_branch(cwd: String) -> Result<Option<String>, String> {
-    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
-        .await
-        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    let cwd = validated_git_cwd(cwd).await?;
     if let Some(branch) = git_ref(&cwd, &["branch", "--show-current"]).await {
         return Ok(Some(branch));
     }
@@ -338,18 +335,18 @@ async fn git_numstat_at(
     comparison: &str,
     context: &str,
 ) -> Result<(usize, usize), String> {
-    let args = vec![
-        OsString::from("diff"),
-        OsString::from("--no-ext-diff"),
-        OsString::from("--no-textconv"),
-        OsString::from("--no-color"),
-        OsString::from("--numstat"),
-        OsString::from("-z"),
-        OsString::from("--find-renames"),
-        OsString::from("--relative"),
-        OsString::from(comparison),
-        OsString::from("--"),
-        OsString::from("."),
+    let args = [
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        "--numstat",
+        "-z",
+        "--find-renames",
+        "--relative",
+        comparison,
+        "--",
+        ".",
     ];
     let output = git_output(cwd, args, 10, context).await?;
     parse_git_numstat(&output.stdout)
@@ -395,18 +392,18 @@ async fn git_branch_comparison_ref(cwd: &Path, branch: &str) -> Result<String, S
 async fn list_git_changes_at(cwd: &Path, base_branch: Option<&str>) -> Result<GitChanges, String> {
     if let Some(base_branch) = base_branch {
         let comparison = git_branch_comparison_ref(cwd, base_branch).await?;
-        let args = vec![
-            OsString::from("diff"),
-            OsString::from("--no-ext-diff"),
-            OsString::from("--no-textconv"),
-            OsString::from("--no-color"),
-            OsString::from("--name-status"),
-            OsString::from("-z"),
-            OsString::from("--find-renames"),
-            OsString::from("--relative"),
-            OsString::from(comparison.clone()),
-            OsString::from("--"),
-            OsString::from("."),
+        let args = [
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-color",
+            "--name-status",
+            "-z",
+            "--find-renames",
+            "--relative",
+            comparison.as_str(),
+            "--",
+            ".",
         ];
         let output = git_output(cwd, args, 10, "Could not compare Git branches").await?;
         let (additions, deletions) =
@@ -455,9 +452,7 @@ pub(crate) async fn list_git_changes(
     cwd: String,
     base_branch: Option<String>,
 ) -> Result<GitChanges, String> {
-    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
-        .await
-        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    let cwd = validated_git_cwd(cwd).await?;
     list_git_changes_at(&cwd, base_branch.as_deref()).await
 }
 
@@ -601,20 +596,20 @@ async fn git_file_diff_at(
     };
 
     let mut args = vec![
-        OsString::from("diff"),
-        OsString::from("--no-ext-diff"),
-        OsString::from("--no-textconv"),
-        OsString::from("--no-color"),
-        OsString::from("--find-renames"),
-        OsString::from("--relative"),
-        OsString::from("--unified=3"),
-        OsString::from(comparison),
-        OsString::from("--"),
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        "--find-renames",
+        "--relative",
+        "--unified=3",
+        comparison.as_str(),
+        "--",
     ];
     if let Some(old_path) = old_path {
-        args.push(OsString::from(old_path));
+        args.push(old_path);
     }
-    args.push(OsString::from(path));
+    args.push(path);
     let output = git_output(cwd, args, 15, "Could not read the file diff").await?;
     Ok(extract_git_hunks(&output.stdout))
 }
@@ -626,9 +621,7 @@ pub(crate) async fn get_git_file_diff(
     path: String,
     old_path: Option<String>,
 ) -> Result<GitFileDiff, String> {
-    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
-        .await
-        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    let cwd = validated_git_cwd(cwd).await?;
     git_file_diff_at(&cwd, base_branch.as_deref(), &path, old_path.as_deref()).await
 }
 
@@ -654,9 +647,7 @@ async fn list_git_branches_at(cwd: &Path) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub(crate) async fn list_git_branches(cwd: String) -> Result<Vec<String>, String> {
-    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
-        .await
-        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    let cwd = validated_git_cwd(cwd).await?;
     list_git_branches_at(&cwd).await
 }
 
@@ -674,9 +665,7 @@ async fn switch_git_branch_at(cwd: &Path, branch: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) async fn switch_git_branch(cwd: String, branch: String) -> Result<(), String> {
-    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
-        .await
-        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    let cwd = validated_git_cwd(cwd).await?;
     switch_git_branch_at(&cwd, &branch).await
 }
 
@@ -790,9 +779,7 @@ pub(crate) async fn create_git_worktree(
     branch: String,
 ) -> Result<GitWorktreeResult, String> {
     let worktrees_root = loopcode_data_directory(&app)?.join("worktrees");
-    let cwd = tauri::async_runtime::spawn_blocking(move || validate_git_cwd(&cwd))
-        .await
-        .map_err(|error| format!("Could not join Git path validation task: {error}"))??;
+    let cwd = validated_git_cwd(cwd).await?;
     create_git_worktree_at(&cwd, &worktrees_root, &base_branch, &branch).await
 }
 

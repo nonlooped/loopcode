@@ -50,17 +50,18 @@ void test("CI compiles rust only for native paths and tests Windows and macOS", 
   assert.doesNotMatch(ciWorkflow, /cargo check --locked/);
   assert.equal([...ciWorkflow.matchAll(/rustup toolchain install --no-self-update/g)].length, 3);
   assert.doesNotMatch(ciWorkflow, /dtolnay\/rust-toolchain/);
-  assert.match(ciWorkflow, /needs\.changes\.outputs\.app == 'true'/);
-  assert.match(ciWorkflow, /gh workflow run release\.yml --ref "\$source_tag"/);
-  assert.match(ciWorkflow, /git push origin ":refs\/tags\/\$source_tag"/);
-  assert.doesNotMatch(ciWorkflow, /--ref master -f channel=nightly/);
+  assert.match(ciWorkflow, /gh workflow run release\.yml --ref "\$TAG"/);
+  assert.doesNotMatch(ciWorkflow, /nightly/);
   assert.doesNotMatch(checkVersions, /execFileSync|"cargo"/);
   assert.equal([...ciWorkflow.matchAll(/npm install --global npm@12\.0\.2/g)].length, 1);
   assert.doesNotMatch(ciWorkflow, /npm install --global npm@12\s/);
 });
 
-void test("release workflow isolates nightly concurrency and cache from CI", () => {
-  assert.match(releaseWorkflow, /group: release-\$\{\{ inputs\.channel \|\| 'stable' \}\}/);
+void test("release workflow uses separate release caches", () => {
+  assert.match(
+    releaseWorkflow,
+    /group: release-\$\{\{ github\.event_name == 'workflow_run' && 'nightly' \|\| 'stable' \}\}/,
+  );
   assert.match(releaseWorkflow, /cancel-in-progress: false/);
   assert.match(releaseWorkflow, /cache-key: linux-rust-release/);
   assert.match(releaseWorkflow, /cache-key: windows-rust-release/);

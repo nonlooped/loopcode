@@ -67,8 +67,9 @@ void test("restores a workspace and resets transient provider runtime state", ()
 void test("repairs unknown persisted provider ids explicitly", () => {
   const restored = restoreWorkspace(
     {
-      version: 1,
+      version: 2,
       selectedThreadId: "thread-1",
+      projects: [],
       threads: [
         {
           id: "thread-1",
@@ -94,6 +95,7 @@ void test("repairs unknown persisted provider ids explicitly", () => {
 void test("rejects invalid workspaces and drops orphaned project references", () => {
   const invalid = setup();
   assert.equal(invalid.workspace.initialize({ version: 3, threads: [] }, "C:\\default"), false);
+  assert.equal(invalid.workspace.initialize({ version: 1, threads: [] }, "C:\\default"), false);
   assert.deepEqual(invalid.events, []);
 
   const { state, workspace } = setup();
@@ -129,8 +131,9 @@ void test("snapshots retain private sessions but exclude transient provider stat
   assert.equal(
     workspace.initialize(
       {
-        version: 1,
+        version: 2,
         selectedThreadId: "thread-1",
+        projects: [],
         threads: [
           {
             id: "thread-1",

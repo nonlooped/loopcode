@@ -2,30 +2,23 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      channel:
-        description: Release channel
-        required: false
-        default: stable
-        type: choice
-        options:
-          - stable
-          - nightly
-      sha:
-        description: Commit SHA for nightly builds
-        required: false
-        type: string
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
 
 env:
-  RELEASE_SHA: ${{ inputs.channel == 'nightly' && inputs.sha || github.sha }}
-  RELEASE_CHANNEL: ${{ inputs.channel || 'stable' }}
+  RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+  RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'nightly' || 'stable' }}
 
 concurrency:
-  group: release-${{ inputs.channel || 'stable' }}
+  group: release-${{ github.event_name == 'workflow_run' && 'nightly' || 'stable' }}
   cancel-in-progress: false
 
 jobs:
   preflight:
+    if: github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
@@ -35,7 +28,6 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       title: ${{ steps.meta.outputs.title }}
       previous_tag: ${{ steps.meta.outputs.previous_tag }}
-      short_sha: ${{ steps.meta.outputs.short_sha }}
       version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Require full commit SHA
@@ -62,23 +54,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          short_sha="$(git rev-parse --short=12 "$RELEASE_SHA")"
-          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
           if [[ "$RELEASE_CHANNEL" == nightly ]]; then
-            version="$(node scripts/nightly-version.mjs "$(jq -r .version package.json)" "$(date -u +%Y%m%d)" "$GITHUB_RUN_NUMBER")"
-            tag="v$version"
-            previous_tag="$(git tag -l 'v*-nightly.*' --sort=-creatordate | grep -vxF "$tag" | head -n 1)"
-            if [[ -z "$previous_tag" ]]; then
-              previous_tag="$(git tag -l 'v*' --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)"
+            if git log -1 --format=%s "$RELEASE_SHA" | grep -qE '^chore\(release\): v'; then
+              echo "stable release commit; skipping nightly"
+              exit 0
             fi
+            if [[ -n "$(git tag --points-at "$RELEASE_SHA")" ]]; then
+              echo "a release already exists for $RELEASE_SHA"
+              exit 0
+            fi
+            previous_tag="$(git tag -l 'v*' --sort=-creatordate | head -n 1)"
             test -n "$previous_tag"
+            if ! git diff --name-only "$previous_tag" "$RELEASE_SHA" | node scripts/ci-paths.mjs | grep -qx 'app=true'; then
+              echo "no app changes since $previous_tag; skipping nightly"
+              exit 0
+            fi
+            version="$(jq -r .version package.json)-nightly.$(date -u +%Y%m%d).$GITHUB_RUN_NUMBER"
             echo "version=$version" >> "$GITHUB_OUTPUT"
-            echo "tag=$tag" >> "$GITHUB_OUTPUT"
-            echo "title=LoopCode Nightly $version ($short_sha)" >> "$GITHUB_OUTPUT"
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"
+            echo "title=LoopCode Nightly $version" >> "$GITHUB_OUTPUT"
             echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          test "$RELEASE_CHANNEL" = stable
           test "$GITHUB_REF_TYPE" = tag
           tag="$GITHUB_REF_NAME"
           previous_tag="$(git tag -l 'v*' --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vxF "$tag" | head -n 1)"
@@ -86,13 +83,13 @@ jobs:
           gh release view "$previous_tag" --repo "$GITHUB_REPOSITORY" > /dev/null
           node scripts/check-versions.mjs "$tag"
           node scripts/release-notes.mjs "$tag" > /dev/null
-          echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "title=LoopCode $tag" >> "$GITHUB_OUTPUT"
           echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
 
   bundle:
     needs: preflight
+    if: needs.preflight.outputs.tag
     permissions:
       contents: read
     strategy:
@@ -219,12 +216,13 @@ jobs:
           RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
           RELEASE_TITLE: ${{ needs.preflight.outputs.title }}
           PREVIOUS_TAG: ${{ needs.preflight.outputs.previous_tag }}
-          SHORT_SHA: ${{ needs.preflight.outputs.short_sha }}
         run: |
           mapfile -d '' files < <(find artifacts -type f -print0)
           if [[ "$RELEASE_CHANNEL" == nightly ]]; then
-            git log --format=%s "$PREVIOUS_TAG..$RELEASE_SHA" \
-              | node scripts/release-notes.mjs "$RELEASE_TAG" "$SHORT_SHA" "$PREVIOUS_TAG" > release-notes.md
+            {
+              printf 'Nightly `%s`. Not a stable release.\n\n## Changes since %s\n\n' "$RELEASE_TAG" "$PREVIOUS_TAG"
+              git log --format='- %s' "$PREVIOUS_TAG..$RELEASE_SHA"
+            } > release-notes.md
           else
             node scripts/release-notes.mjs "$RELEASE_TAG" > release-notes.md
           fi
@@ -250,23 +248,6 @@ jobs:
           else
             gh release create "$RELEASE_TAG" "${files[@]}" --draft --notes-file release-notes.md \
               --title "$RELEASE_TITLE" --repo "$GITHUB_REPOSITORY"
-          fi
-
-  cleanup-nightly-tag:
-    if: ${{ always() && (inputs.channel || 'stable') == 'nightly' }}
-    needs: [preflight, bundle, publish]
-    runs-on: ubuntu-22.04
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: Delete source tag
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          [[ "$GITHUB_REF_NAME" == nightly-src-* ]] || exit 0
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --silent > /dev/null 2>&1; then
-            gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$GITHUB_REF_NAME"
           fi
 
   report-failure:

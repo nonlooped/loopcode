@@ -182,10 +182,6 @@ pub fn rpc_fields(
     Value::Object(fields)
 }
 
-pub fn safe_stderr(line: &str) -> String {
-    redact_text(line)
-}
-
 fn sanitize_value(value: Value) -> Value {
     match value {
         Value::Object(values) => Value::Object(
@@ -217,12 +213,12 @@ fn sanitize_value(value: Value) -> Value {
         Value::Array(values) => {
             Value::Array(values.into_iter().take(50).map(sanitize_value).collect())
         }
-        Value::String(value) => Value::String(redact_text(&value)),
+        Value::String(value) => Value::String(safe_stderr(&value)),
         value => value,
     }
 }
 
-fn redact_text(value: &str) -> String {
+pub(crate) fn safe_stderr(value: &str) -> String {
     let lower = value.to_ascii_lowercase();
     if [
         "authorization",

@@ -176,8 +176,6 @@ void test("reset removes preferences without touching workspace history", () => 
   assert.ok(removed.includes("loopcode.theme"));
   assert.ok(removed.includes("loopcode.default-provider"));
   assert.ok(removed.includes("loopcode.title-provider"));
-  assert.ok(removed.includes("loopcode.auto-follow-output"));
-  assert.ok(removed.includes("loopcode.composer-autocomplete"));
   assert.ok(removed.includes("loopcode.permission-mode"));
   assert.ok(removed.includes("loopcode.terminal-height"));
   assert.ok(!removed.includes("loopcode.workspace"));

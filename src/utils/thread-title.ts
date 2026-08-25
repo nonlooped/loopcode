@@ -3,10 +3,6 @@ const TITLE_INSTRUCTION =
 const MAX_REQUEST_LENGTH = 800;
 const MAX_TITLE_LENGTH = 60;
 
-export function newThreadTitle(): string {
-  return "New Thread";
-}
-
 export function buildThreadTitlePrompt(request: string): string {
   const conciseRequest = request.trim().replace(/\s+/g, " ").slice(0, MAX_REQUEST_LENGTH).trimEnd();
   return `${TITLE_INSTRUCTION}\n\n${conciseRequest}`;

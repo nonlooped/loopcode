@@ -102,19 +102,13 @@ export interface PersistedProjectState {
   createdAt: number;
 }
 
-export type PersistedWorkspace =
-  | {
-      version: 1;
-      selectedThreadId: string;
-      threads: PersistedThreadState[];
-    }
-  | {
-      version: 2;
-      selectedThreadId: string;
-      selectedProjectId?: string | null;
-      threads: PersistedThreadState[];
-      projects: PersistedProjectState[];
-    };
+export interface PersistedWorkspace {
+  version: 2;
+  selectedThreadId: string;
+  selectedProjectId?: string | null;
+  threads: PersistedThreadState[];
+  projects: PersistedProjectState[];
+}
 
 export interface ModelOption {
   id: string;

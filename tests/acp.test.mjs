@@ -476,7 +476,7 @@ void test("uses the official SDK to initialize, create a session, and route upda
 
   await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
   await connection.setConfigOption("fast_mode", true);
-  await connection.prompt("Hello");
+  await connection.prompt([{ type: "text", text: "Hello" }]);
 
   assert.deepEqual(
     fake.sent.find((message) => message.method === "initialize")?.params.clientCapabilities,
@@ -598,8 +598,14 @@ void test("blocks another prompt when ACP completes with a tool still active", a
   );
 
   await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
-  await assert.rejects(connection.prompt("First"), /tool call\(s\) still active/);
-  await assert.rejects(connection.prompt("Second"), /already has an active turn/);
+  await assert.rejects(
+    connection.prompt([{ type: "text", text: "First" }]),
+    /tool call\(s\) still active/,
+  );
+  await assert.rejects(
+    connection.prompt([{ type: "text", text: "Second" }]),
+    /already has an active turn/,
+  );
 
   assert.equal(fake.sent.filter((message) => message.method === "session/prompt").length, 1);
   assert.deepEqual(turnStatuses, ["running", "blocked"]);
@@ -624,9 +630,12 @@ void test("cancellation does not release the active-turn guard before prompt com
   );
 
   await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
-  void connection.prompt("First");
+  void connection.prompt([{ type: "text", text: "First" }]);
   await connection.cancel();
-  await assert.rejects(connection.prompt("Second"), /already has an active turn/);
+  await assert.rejects(
+    connection.prompt([{ type: "text", text: "Second" }]),
+    /already has an active turn/,
+  );
   assert.equal(fake.sent.filter((message) => message.method === "session/prompt").length, 1);
   assert.equal(
     fake.sent.some((message) => message.method === "session/cancel"),
@@ -654,7 +663,7 @@ void test("preserves structured prompt errors without marking the connection una
   );
 
   await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
-  await assert.rejects(connection.prompt("Hello"), /Internal error/);
+  await assert.rejects(connection.prompt([{ type: "text", text: "Hello" }]), /Internal error/);
 
   assert.deepEqual(connectionStatuses, ["connecting", "ready"]);
   assert.deepEqual(turnStatuses, ["running", "failed"]);

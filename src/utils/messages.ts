@@ -24,7 +24,7 @@ export function addMessage(
   thread.updatedAt = createdAt;
 }
 
-function copyPromptPart(part: PromptPart): PromptPart {
+export function copyPromptPart(part: PromptPart): PromptPart {
   return part.type === "text"
     ? { ...part }
     : { type: "reference", reference: { ...part.reference } };

@@ -6,6 +6,20 @@ mod persistence;
 mod project_files;
 mod terminal;
 
+pub(crate) fn native_command(command: &str) -> tokio::process::Command {
+    #[cfg(not(target_os = "windows"))]
+    {
+        tokio::process::Command::new(command)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut command = tokio::process::Command::new(command);
+        command.as_std_mut().creation_flags(0x0800_0000);
+        command
+    }
+}
+
 #[cfg(windows)]
 use app_commands::configure_native_window;
 use app_commands::{
