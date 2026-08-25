@@ -68,6 +68,10 @@
   });
 
   $effect(() => {
+    if (currentBranch === null) view = 'files';
+  });
+
+  $effect(() => {
     if (!tree) return;
     const observer = new MutationObserver(resetMissingTreeFocus);
     observer.observe(tree, { childList: true, subtree: true });
@@ -181,7 +185,7 @@
   <Tabs.Root class="project-explorer-tabs" value={view} onValueChange={setView}>
     <Tabs.List class="project-explorer-tab-list" aria-label="Right sidebar views">
       <Tabs.Trigger value="files">Files</Tabs.Trigger>
-      <Tabs.Trigger value="changes">Changes</Tabs.Trigger>
+      {#if currentBranch !== null}<Tabs.Trigger value="changes">Changes</Tabs.Trigger>{/if}
     </Tabs.List>
     <Tabs.Content class="project-explorer-scroll" value="files">
       {#if loading && entries.length === 0}
@@ -214,16 +218,18 @@
         </ul>
       {/if}
     </Tabs.Content>
-    <Tabs.Content class="project-explorer-scroll project-changes-scroll" value="changes">
-      {#if view === 'changes'}
-        <ChangesPanel
-          cwd={projectRoot}
-          {currentBranch}
-          {branches}
-          {revision}
-        />
-      {/if}
-    </Tabs.Content>
+    {#if currentBranch !== null}
+      <Tabs.Content class="project-explorer-scroll project-changes-scroll" value="changes">
+        {#if view === 'changes'}
+          <ChangesPanel
+            cwd={projectRoot}
+            {currentBranch}
+            {branches}
+            {revision}
+          />
+        {/if}
+      </Tabs.Content>
+    {/if}
   </Tabs.Root>
 
   {#if notice}

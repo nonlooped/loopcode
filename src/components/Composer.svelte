@@ -682,17 +682,19 @@
   </div>
   <div class="composer-meta">
     <div class="composer-meta-actions">
-      <GitControls
-        cwd={props.thread.cwd}
-        currentBranch={props.currentBranch}
-        branches={props.gitBranches}
-        worktree={props.gitWorktree}
-        editable={props.gitEditable}
-        lockReason={props.gitLockReason}
-        busy={props.gitBusy}
-        switchBranch={props.switchGitBranch}
-        createWorktree={props.createGitWorktree}
-      />
+      {#if props.currentBranch !== null}
+        <GitControls
+          cwd={props.thread.cwd}
+          currentBranch={props.currentBranch}
+          branches={props.gitBranches}
+          worktree={props.gitWorktree}
+          editable={props.gitEditable}
+          lockReason={props.gitLockReason}
+          busy={props.gitBusy}
+          switchBranch={props.switchGitBranch}
+          createWorktree={props.createGitWorktree}
+        />
+      {/if}
     </div>
   </div>
 </section>
