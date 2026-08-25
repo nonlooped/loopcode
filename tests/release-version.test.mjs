@@ -53,10 +53,16 @@ void test("release workflow publishes both channels and reports failures", () =>
   assert.match(releaseWorkflow, /group: release-/);
   assert.match(releaseWorkflow, /grep -qx 'app=true'/);
   assert.match(releaseWorkflow, /-nightly\.\$\(date -u \+%Y%m%d\)\.\$GITHUB_RUN_NUMBER/);
+  assert.match(releaseWorkflow, /runner\.os == 'Windows' && '--bundles nsis'/);
   assert.match(releaseWorkflow, /edit_args=\(--draft=false --prerelease --latest=false\)/);
   assert.match(releaseWorkflow, /--prerelease --latest=false \\\n\s*--target "\$RELEASE_SHA"/);
   assert.match(releaseWorkflow, /^  report-failure:/m);
-  assert.match(releaseWorkflow, /gh issue create[\s\S]*--assignee "\$GITHUB_REPOSITORY_OWNER"/);
+  assert.match(releaseWorkflow, /gh issue list --repo "\$GITHUB_REPOSITORY"/);
+  assert.match(releaseWorkflow, /gh issue comment "\$issue" --repo "\$GITHUB_REPOSITORY"/);
+  assert.match(
+    releaseWorkflow,
+    /gh issue create --repo "\$GITHUB_REPOSITORY"[\s\S]*--assignee "\$GITHUB_REPOSITORY_OWNER"/,
+  );
   assert.doesNotMatch(releaseWorkflow, /nightly-src|cleanup-nightly-tag/);
   assert.doesNotMatch(releaseWorkflow.split("  bundle:")[0], /rustup toolchain install/);
 });
