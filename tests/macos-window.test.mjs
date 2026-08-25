@@ -6,9 +6,9 @@ const overlay = JSON.parse(await readFile("src-tauri/tauri.macos.conf.json", "ut
 const bundle = JSON.parse(await readFile("src-tauri/tauri.conf.json", "utf8"));
 const mainWindow = overlay.app.windows.find((window) => window.label === "main");
 
-void test("macOS keeps a transparent native window without Windows acrylic", () => {
+void test("macOS uses vibrancy instead of Windows acrylic", () => {
   assert.equal(mainWindow.transparent, true);
   assert.equal(mainWindow.backgroundColor.toLowerCase(), "#00000000");
-  assert.equal(mainWindow.windowEffects, undefined);
+  assert.deepEqual(mainWindow.windowEffects?.effects, ["underWindowBackground"]);
   assert.equal(bundle.bundle.macOS.signingIdentity, "-");
 });

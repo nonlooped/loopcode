@@ -218,7 +218,6 @@
 }
 
 :root[data-platform="linux"],
-:root[data-platform="darwin"],
 :root[data-platform="web"] {
   --shell-tint: var(--shell-solid);
   --sidebar-tint: var(--sidebar-solid);

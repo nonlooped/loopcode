@@ -12,7 +12,10 @@
         "decorations": false,
         "transparent": true,
         "shadow": true,
-        "backgroundColor": "#00000000"
+        "backgroundColor": "#00000000",
+        "windowEffects": {
+          "effects": ["underWindowBackground"]
+        }
       }
     ]
   }
