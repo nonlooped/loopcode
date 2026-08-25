@@ -2,16 +2,23 @@ name: Release
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
 
 env:
-  RELEASE_SHA: ${{ github.sha }}
+  RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+  RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'nightly' || 'stable' }}
 
 concurrency:
-  group: release
+  group: release-${{ github.event_name == 'workflow_run' && 'nightly' || 'stable' }}
   cancel-in-progress: false
 
 jobs:
   preflight:
+    if: github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
@@ -21,6 +28,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       title: ${{ steps.meta.outputs.title }}
       previous_tag: ${{ steps.meta.outputs.previous_tag }}
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Require full commit SHA
         run: |
@@ -46,6 +54,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [[ "$RELEASE_CHANNEL" == nightly ]]; then
+            if git log -1 --format=%s "$RELEASE_SHA" | grep -qE '^chore\(release\): v'; then
+              echo "stable release commit; skipping nightly"
+              exit 0
+            fi
+            if [[ -n "$(git tag --points-at "$RELEASE_SHA")" ]]; then
+              echo "a release already exists for $RELEASE_SHA"
+              exit 0
+            fi
+            previous_tag="$(git tag -l 'v*' --sort=-creatordate | head -n 1)"
+            test -n "$previous_tag"
+            if ! git diff --name-only "$previous_tag" "$RELEASE_SHA" | node scripts/ci-paths.mjs | grep -qx 'app=true'; then
+              echo "no app changes since $previous_tag; skipping nightly"
+              exit 0
+            fi
+            version="$(jq -r .version package.json)-nightly.$(date -u +%Y%m%d).$GITHUB_RUN_NUMBER"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"
+            echo "title=LoopCode Nightly $version" >> "$GITHUB_OUTPUT"
+            echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           test "$GITHUB_REF_TYPE" = tag
           tag="$GITHUB_REF_NAME"
           previous_tag="$(git tag -l 'v*' --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vxF "$tag" | head -n 1)"
@@ -59,6 +89,7 @@ jobs:
 
   bundle:
     needs: preflight
+    if: needs.preflight.outputs.tag
     permissions:
       contents: read
     strategy:
@@ -104,6 +135,11 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: ${{ matrix.cache-key }}
+      - name: Stamp nightly version
+        if: env.RELEASE_CHANNEL == 'nightly'
+        run: |
+          node scripts/set-version.mjs "${{ needs.preflight.outputs.version }}"
+          node scripts/check-versions.mjs
       - uses: awalsh128/cache-apt-pkgs-action@553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9 # v1.6.3
         if: runner.os == 'Linux'
         with:
@@ -182,18 +218,33 @@ jobs:
           PREVIOUS_TAG: ${{ needs.preflight.outputs.previous_tag }}
         run: |
           mapfile -d '' files < <(find artifacts -type f -print0)
-          node scripts/release-notes.mjs "$RELEASE_TAG" > release-notes.md
+          if [[ "$RELEASE_CHANNEL" == nightly ]]; then
+            {
+              printf 'Nightly `%s`. Not a stable release.\n\n## Changes since %s\n\n' "$RELEASE_TAG" "$PREVIOUS_TAG"
+              git log --format='- %s' "$PREVIOUS_TAG..$RELEASE_SHA"
+            } > release-notes.md
+          else
+            node scripts/release-notes.mjs "$RELEASE_TAG" > release-notes.md
+          fi
           printf '\n> Windows and Linux packages are unsigned. The macOS app is ad-hoc signed but not Developer ID signed or notarized. On macOS, move LoopCode to Applications, then run `xattr -dr com.apple.quarantine /Applications/LoopCode.app`. On Windows, SmartScreen may require **More info > Run anyway**. Only bypass these warnings for packages downloaded from this repository whose checksum matches `SHA256SUMS.txt`.\n\nThe macOS DMG supports Apple Silicon and Intel Macs.\n\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
             "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$PREVIOUS_TAG" "$RELEASE_TAG" >> release-notes.md
           release="$(gh release view "$RELEASE_TAG" --json isDraft --repo "$GITHUB_REPOSITORY" 2> /dev/null || true)"
-          if [[ -n "$release" && "$(jq -r .isDraft <<< "$release")" != true ]]; then
+          if [[ -n "$release" && "$(jq -r .isDraft <<< "$release")" != true && "$RELEASE_CHANNEL" == stable ]]; then
             echo "release is already published: $RELEASE_TAG" >&2
             exit 1
           fi
           if [[ -n "$release" ]]; then
             gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+            edit_args=()
+            if [[ "$RELEASE_CHANNEL" == nightly ]]; then
+              edit_args=(--draft=false --prerelease --latest=false)
+            fi
             gh release edit "$RELEASE_TAG" --title "$RELEASE_TITLE" \
-              --notes-file release-notes.md --repo "$GITHUB_REPOSITORY"
+              --notes-file release-notes.md "${edit_args[@]}" --repo "$GITHUB_REPOSITORY"
+          elif [[ "$RELEASE_CHANNEL" == nightly ]]; then
+            gh release create "$RELEASE_TAG" "${files[@]}" --prerelease --latest=false \
+              --target "$RELEASE_SHA" --notes-file release-notes.md \
+              --title "$RELEASE_TITLE" --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$RELEASE_TAG" "${files[@]}" --draft --notes-file release-notes.md \
               --title "$RELEASE_TITLE" --repo "$GITHUB_REPOSITORY"
@@ -215,9 +266,9 @@ jobs:
           PUBLISH_RESULT: ${{ needs.publish.result }}
         run: |
           title="Release workflow failed"
-          body="$(printf '[Release run %s](%s/%s/actions/runs/%s) failed at `%s`.\n\nPreflight: %s  \nBundle: %s  \nPublish: %s' \
+          body="$(printf '[Release run %s](%s/%s/actions/runs/%s) failed for `%s` at `%s`.\n\nPreflight: %s  \nBundle: %s  \nPublish: %s' \
             "$GITHUB_RUN_NUMBER" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" \
-            "$RELEASE_SHA" "$PREFLIGHT_RESULT" "$BUNDLE_RESULT" "$PUBLISH_RESULT")"
+            "$RELEASE_CHANNEL" "$RELEASE_SHA" "$PREFLIGHT_RESULT" "$BUNDLE_RESULT" "$PUBLISH_RESULT")"
           issue="$(gh issue list --state open --search 'Release workflow failed in:title' --json number,title \
             --jq '.[] | select(.title == "Release workflow failed") | .number' | head -n 1)"
           if [[ -n "$issue" ]]; then

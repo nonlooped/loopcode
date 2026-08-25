@@ -11,12 +11,15 @@ const checkVersions = readFileSync("scripts/check-versions.mjs", "utf8");
 const toolchain = readFileSync("rust-toolchain.toml", "utf8");
 
 void test("path filters include app, native, dependency, and root files", () => {
-  assert.deepEqual(classifyChangedPaths(".github/workflows/ci.yml\n"), { native: false });
-  assert.deepEqual(classifyChangedPaths("CONTRIBUTING.md\n"), { native: false });
-  assert.deepEqual(classifyChangedPaths("src/app.css\n"), { native: false });
-  assert.deepEqual(classifyChangedPaths("package-lock.json\n"), { native: false });
-  assert.deepEqual(classifyChangedPaths("src-tauri/src/lib.rs\n"), { native: true });
-  assert.deepEqual(classifyChangedPaths("rust-toolchain.toml\n"), { native: true });
+  assert.deepEqual(classifyChangedPaths(".github/workflows/ci.yml\n"), {
+    native: false,
+    app: false,
+  });
+  assert.deepEqual(classifyChangedPaths("CONTRIBUTING.md\n"), { native: false, app: true });
+  assert.deepEqual(classifyChangedPaths("src/app.css\n"), { native: false, app: true });
+  assert.deepEqual(classifyChangedPaths("package-lock.json\n"), { native: false, app: true });
+  assert.deepEqual(classifyChangedPaths("src-tauri/src/lib.rs\n"), { native: true, app: true });
+  assert.deepEqual(classifyChangedPaths("rust-toolchain.toml\n"), { native: true, app: true });
 });
 
 void test("ci-paths writes GitHub output on stdin", () => {
@@ -24,7 +27,7 @@ void test("ci-paths writes GitHub output on stdin", () => {
     input: "src/app.css\n.github/workflows/ci.yml\n",
     encoding: "utf8",
   });
-  assert.equal(output, "native=false\n");
+  assert.equal(output, "native=false\napp=true\n");
 });
 
 void test("CI compiles rust only for native paths and tests Windows and macOS", () => {
@@ -48,14 +51,17 @@ void test("CI compiles rust only for native paths and tests Windows and macOS", 
   assert.equal([...ciWorkflow.matchAll(/rustup toolchain install --no-self-update/g)].length, 3);
   assert.doesNotMatch(ciWorkflow, /dtolnay\/rust-toolchain/);
   assert.match(ciWorkflow, /gh workflow run release\.yml --ref "\$TAG"/);
-  assert.doesNotMatch(ciWorkflow, /nightly|needs\.changes\.outputs\.app/);
+  assert.doesNotMatch(ciWorkflow, /nightly/);
   assert.doesNotMatch(checkVersions, /execFileSync|"cargo"/);
   assert.equal([...ciWorkflow.matchAll(/npm install --global npm@12\.0\.2/g)].length, 1);
   assert.doesNotMatch(ciWorkflow, /npm install --global npm@12\s/);
 });
 
 void test("release workflow uses separate release caches", () => {
-  assert.match(releaseWorkflow, /group: release/);
+  assert.match(
+    releaseWorkflow,
+    /group: release-\$\{\{ github\.event_name == 'workflow_run' && 'nightly' \|\| 'stable' \}\}/,
+  );
   assert.match(releaseWorkflow, /cancel-in-progress: false/);
   assert.match(releaseWorkflow, /cache-key: linux-rust-release/);
   assert.match(releaseWorkflow, /cache-key: windows-rust-release/);

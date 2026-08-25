@@ -18,9 +18,12 @@ Squash-merge after `CI / gate` passes and review threads are resolved. GitHub de
 
 ## Releases
 
-LoopCode releases stable SemVer builds. `0.Y.0` is a feature release. `0.Y.Z` is fixes only. Breaking changes before `1.0.0` ship in `0.Y.0` and must be called out in the release note. After `1.0.0`, incompatible changes bump the major version, backward-compatible features bump the minor version, and fixes bump the patch version.
+LoopCode has two channels:
 
-Batch user-visible work into stable releases instead of publishing a minor for every merged feature. Patch releases may ship as soon as a fix is ready.
+- **Nightly** is a GitHub pre-release. The release workflow triggers itself when master CI completes, and publishes a nightly if the run succeeded, the commit is not a stable version bump, no release tag points at it yet, and `src/`, `src-tauri/`, or any root-level file changed since the most recent release tag. Changes confined to nested non-app paths such as `.github/` or `docs/` skip it. A newer nightly does not cancel an in-flight nightly or stable release. The app version is `{current-stable}-nightly.{date}.{run}`, for example `0.8.0-nightly.20260825.12`. Nightlies do not become GitHub Latest and do not bump `package.json` on `master`.
+- **Stable** is a SemVer GitHub Release. `0.Y.0` is a feature release. `0.Y.Z` is fixes only. Breaking changes before `1.0.0` ship in `0.Y.0` and must be called out in the release note. After `1.0.0`, incompatible changes bump the major version, backward-compatible features bump the minor version, and fixes bump the patch version.
+
+Install Stable for daily use. Nightly is for trying `master` without building from source. Batch user-visible work into stable releases instead of publishing a minor for every merged feature. Patch releases may ship as soon as a fix is ready. Windows may treat successive nightlies as the same installer version after the prerelease suffix is stripped, so uninstall the previous nightly if the installer refuses.
 
 ### Prepare a stable release
 
@@ -29,7 +32,7 @@ Batch user-visible work into stable releases instead of publishing a minor for e
 3. Push the branch and open a pull request titled exactly `chore(release): vX.Y.Z`.
 4. Review the generated changelog and version diff, then squash-merge after `CI / gate` passes.
 
-Master CI creates the protected tag only after the merged release commit passes again. The release workflow runs from that tag, verifies the version, preceding stable release, source commit, and top changelog entry, then builds the Windows, Linux, and universal macOS installers. It creates checksums and a draft GitHub Release from the changelog. Review the title, notes, expected assets, and unsigned-package warning before publishing the draft. A failed release run opens or updates the `Release workflow failed` issue and assigns it to the repository owner.
+Master CI creates the protected tag only after the merged release commit passes again. The release workflow runs from that tag, verifies the version, preceding stable release, source commit, and top changelog entry, then builds the Windows, Linux, and universal macOS installers. It creates checksums and a draft GitHub Release from the changelog. Review the title, notes, expected assets, and unsigned-package warning before publishing the draft. Nightlies of that same commit are skipped. A failed release run opens or updates the `Release workflow failed` issue and assigns it to the repository owner.
 
 ### Recover a release
 

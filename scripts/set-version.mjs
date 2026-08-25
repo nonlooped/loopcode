@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const version = process.argv[2];
-if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
+if (!version || !/^\d+\.\d+\.\d+(-nightly\.\d{8}\.\d+)?$/.test(version)) {
   console.error("usage: node scripts/set-version.mjs X.Y.Z");
   process.exit(1);
 }
