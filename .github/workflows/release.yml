@@ -135,6 +135,7 @@ jobs:
         with:
           workspaces: src-tauri -> target
           shared-key: ${{ matrix.cache-key }}
+          cache-on-failure: true
       - name: Stamp nightly version
         if: env.RELEASE_CHANNEL == 'nightly'
         run: |
@@ -164,7 +165,7 @@ jobs:
           a45d3e227bc7f397e9cf6bfa4c9507494efa2293357b6e86690a3de2ca992e79  linuxdeploy-plugin-appimage.AppImage
           SHA256
           chmod +x ./*
-      - run: npm run tauri -- build --ci ${{ runner.os == 'macOS' && '--target universal-apple-darwin' || '' }} -- --locked
+      - run: npm run tauri -- build --ci ${{ runner.os == 'macOS' && '--target universal-apple-darwin' || '' }} ${{ runner.os == 'Windows' && env.RELEASE_CHANNEL == 'nightly' && '--bundles nsis' || '' }} -- --locked
       - name: Verify macOS bundle
         if: runner.os == 'macOS'
         shell: bash
@@ -269,10 +270,12 @@ jobs:
           body="$(printf '[Release run %s](%s/%s/actions/runs/%s) failed for `%s` at `%s`.\n\nPreflight: %s  \nBundle: %s  \nPublish: %s' \
             "$GITHUB_RUN_NUMBER" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" \
             "$RELEASE_CHANNEL" "$RELEASE_SHA" "$PREFLIGHT_RESULT" "$BUNDLE_RESULT" "$PUBLISH_RESULT")"
-          issue="$(gh issue list --state open --search 'Release workflow failed in:title' --json number,title \
+          issue="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search 'Release workflow failed in:title' --json number,title \
             --jq '.[] | select(.title == "Release workflow failed") | .number' | head -n 1)"
           if [[ -n "$issue" ]]; then
-            gh issue comment "$issue" --body "$body"
+            gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body "$body"
           else
-            gh issue create --title "$title" --body "$body" --assignee "$GITHUB_REPOSITORY_OWNER"
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" \
+              --assignee "$GITHUB_REPOSITORY_OWNER"
           fi

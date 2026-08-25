@@ -66,6 +66,7 @@ void test("release workflow uses separate release caches", () => {
   assert.match(releaseWorkflow, /cache-key: linux-rust-release/);
   assert.match(releaseWorkflow, /cache-key: windows-rust-release/);
   assert.match(releaseWorkflow, /cache-key: macos-rust-release/);
+  assert.match(releaseWorkflow, /cache-on-failure: true/);
   assert.match(releaseWorkflow, /platform: macos-latest/);
   assert.match(releaseWorkflow, /rustup target add aarch64-apple-darwin x86_64-apple-darwin/);
   assert.match(releaseWorkflow, /--target universal-apple-darwin/);
