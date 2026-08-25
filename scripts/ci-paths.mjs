@@ -7,13 +7,10 @@ export function classifyChangedPaths(changed) {
     (path) =>
       path.startsWith("src-tauri/") || path === "rust-toolchain.toml" || path === "rust-toolchain",
   );
-  const app = paths.some(
-    (path) => !path.includes("/") || path.startsWith("src/") || path.startsWith("src-tauri/"),
-  );
-  return { native, app };
+  return { native };
 }
 
 if (import.meta.main) {
-  const { native, app } = classifyChangedPaths(readFileSync(0, "utf8"));
-  process.stdout.write(`native=${native}\napp=${app}\n`);
+  const { native } = classifyChangedPaths(readFileSync(0, "utf8"));
+  process.stdout.write(`native=${native}\n`);
 }

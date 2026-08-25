@@ -2,10 +2,6 @@ import type { ThreadState, TimelineMessage } from "../types/index.ts";
 import type { TimelineActivityEntry, TimelineDisplayEntry } from "../types/timeline.ts";
 import { threadStatus } from "./threads.ts";
 
-export function shouldFollowTranscript(threadChanged: boolean, pinnedToBottom: boolean) {
-  return threadChanged || pinnedToBottom;
-}
-
 export function timelineEntries(thread: ThreadState): TimelineDisplayEntry[] {
   const entries: TimelineActivityEntry[] = [
     ...thread.messages.map((message) => ({

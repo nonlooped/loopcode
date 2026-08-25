@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import type { HarnessProfile, ModelOption, PermissionMode } from "../types/index.ts";
 
 const PERMISSION_MODE_KEY = "loopcode.permission-mode";
@@ -87,11 +89,6 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   terminalScrollback: 5_000,
   sendShortcut: "enter",
 };
-
-const LEGACY_PREFERENCE_KEYS = [
-  "loopcode.auto-follow-output",
-  "loopcode.composer-autocomplete",
-] as const;
 
 const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
   colorMode: "loopcode.color-mode",
@@ -213,7 +210,6 @@ export function resetAppSettings(storage: Pick<Storage, "removeItem"> = localSto
   try {
     for (const key of [
       ...Object.values(PREFERENCE_KEYS),
-      ...LEGACY_PREFERENCE_KEYS,
       PERMISSION_MODE_KEY,
       LEFT_SIDEBAR_WIDTH_KEY,
       RIGHT_SIDEBAR_WIDTH_KEY,
@@ -291,69 +287,44 @@ function saveSetting(storage: Pick<Storage, "setItem">, key: string, value: stri
   }
 }
 
-function storedStringRecord(value: string | null) {
-  if (!value) return {};
+const storedString = (maximum: number) =>
+  z
+    .string()
+    .transform((value) => value.trim().slice(0, maximum))
+    .pipe(z.string().min(1));
+
+const storedStringRecordSchema = z.record(z.string().min(1), storedString(4096));
+const providerPreferenceSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    command: storedString(4096).optional(),
+    models: z
+      .array(z.object({ id: storedString(256), name: storedString(256) }))
+      .transform((models) => models.slice(0, 100))
+      .optional(),
+  })
+  .transform(({ enabled, command, models }) => ({
+    ...(enabled === undefined ? {} : { enabled }),
+    ...(command ? { command } : {}),
+    ...(models?.length ? { models } : {}),
+  }));
+const providerSettingsSchema = z.record(z.string().min(1), providerPreferenceSchema);
+
+function storedJson<T>(value: string | null, schema: z.ZodType<T>): T | undefined {
+  if (!value) return;
   try {
-    const parsed: unknown = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, string] =>
-          entry[0].length > 0 &&
-          entry[0] !== "__proto__" &&
-          entry[0] !== "constructor" &&
-          entry[0] !== "prototype" &&
-          typeof entry[1] === "string" &&
-          entry[1].length > 0,
-      ),
-    );
+    return schema.safeParse(JSON.parse(value)).data;
   } catch {
-    return {};
+    return;
   }
 }
 
+function storedStringRecord(value: string | null) {
+  return storedJson(value, storedStringRecordSchema) ?? {};
+}
+
 function storedProviderSettings(value: string | null): Record<string, ProviderPreference> {
-  if (!value) return {};
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return Object.fromEntries(
-      Object.entries(parsed).flatMap(([profileId, candidate]) => {
-        if (
-          !profileId ||
-          profileId === "__proto__" ||
-          profileId === "constructor" ||
-          profileId === "prototype" ||
-          !candidate ||
-          typeof candidate !== "object" ||
-          Array.isArray(candidate)
-        )
-          return [];
-        const setting: ProviderPreference = {};
-        if ("enabled" in candidate && typeof candidate.enabled === "boolean") {
-          setting.enabled = candidate.enabled;
-        }
-        if ("command" in candidate && typeof candidate.command === "string") {
-          const command = candidate.command.trim().slice(0, 4096);
-          if (command) setting.command = command;
-        }
-        if ("models" in candidate && Array.isArray(candidate.models)) {
-          const models = candidate.models.slice(0, 100).flatMap((model: unknown) => {
-            if (!model || typeof model !== "object" || Array.isArray(model)) return [];
-            const id = "id" in model && typeof model.id === "string" ? model.id.trim() : "";
-            const name = "name" in model && typeof model.name === "string" ? model.name.trim() : "";
-            return id && name
-              ? [{ id: id.slice(0, 256), name: name.slice(0, 256) } satisfies ModelOption]
-              : [];
-          });
-          if (models.length > 0) setting.models = models;
-        }
-        return Object.keys(setting).length > 0 ? [[profileId, setting] as const] : [];
-      }),
-    );
-  } catch {
-    return {};
-  }
+  return storedJson(value, providerSettingsSchema) ?? {};
 }
 
 export function configuredProviderProfiles(

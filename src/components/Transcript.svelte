@@ -11,7 +11,7 @@
   import type { TimelineDisplayEntry } from '../types/timeline';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
-  import { formatElapsedDuration, isStreamingMessage, shouldFollowTranscript } from '../utils/timeline';
+  import { formatElapsedDuration, isStreamingMessage } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -81,7 +81,7 @@
         ? userMessageId
         : undefined;
       if (promptAnchorId) pinnedToBottom = false;
-      const shouldFollow = !promptAnchorId && shouldFollowTranscript(threadChanged, pinnedToBottom);
+      const shouldFollow = !promptAnchorId && (threadChanged || pinnedToBottom);
       renderedThreadId = threadId;
       renderedUserMessageId = userMessageId;
       void tick().then(() => {

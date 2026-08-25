@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   formatElapsedDuration,
   isStreamingMessage,
-  shouldFollowTranscript,
   timelineEntries,
 } from "../src/utils/timeline.ts";
 
@@ -86,12 +85,6 @@ void test("formats work duration labels", () => {
   assert.equal(formatElapsedDuration(8_000), "8s");
   assert.equal(formatElapsedDuration(62_000), "1m 2s");
   assert.equal(formatElapsedDuration(120_000), "2m");
-});
-
-void test("follows output only for a newly opened thread or while pinned", () => {
-  assert.equal(shouldFollowTranscript(false, true), true);
-  assert.equal(shouldFollowTranscript(false, false), false);
-  assert.equal(shouldFollowTranscript(true, false), true);
 });
 
 void test("does not mark the previous turn's response as streaming while the next turn starts", () => {

@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { nightlyVersion } from "../scripts/nightly-version.mjs";
-import { nightlyNotes, releaseNotes } from "../scripts/release-notes.mjs";
+import { releaseNotes } from "../scripts/release-notes.mjs";
 
 const version = JSON.parse(readFileSync("package.json", "utf8")).version;
 const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
@@ -19,9 +18,10 @@ void test("release version check accepts the matching tag and rejects another ta
   );
 });
 
-void test("version setter updates package metadata without platform command wrappers", () => {
+void test("version setter updates stable package metadata without platform wrappers", () => {
   assert.match(versionSetter, /\["package\.json", "package-lock\.json"\]/);
-  assert.doesNotMatch(versionSetter, /npm\.cmd|execFileSync\(npm/);
+  assert.match(versionSetter, /^if \(!version \|\| !\/\^\\d\+\\.\\d\+\\.\\d\+\$\//m);
+  assert.doesNotMatch(versionSetter, /npm\.cmd|execFileSync\(npm|nightly/);
 });
 
 void test("release notes use the matching top changelog section", () => {
@@ -30,41 +30,17 @@ void test("release notes use the matching top changelog section", () => {
   assert.throws(() => releaseNotes(changelog, "v1.2.2"));
 });
 
-void test("nightly version is the stable base plus date and run", () => {
-  assert.equal(nightlyVersion("0.8.0", "20260825", "12"), "0.8.0-nightly.20260825.12");
-  assert.throws(() => nightlyVersion("0.8.0-nightly.1", "20260825", "12"));
-});
-
-void test("nightly notes list commits since the previous tag", () => {
-  assert.equal(
-    nightlyNotes({
-      tag: "v0.8.0-nightly.20260825.12",
-      shortSha: "abc1234",
-      previousTag: "v0.8.0",
-      commits: ["feat(ui): restore acrylic chrome", "fix(ui): keep web preview shell opaque"],
-    }),
-    "Nightly `v0.8.0-nightly.20260825.12` (abc1234). Not a stable release.\n\n## Changes since v0.8.0\n\n- feat(ui): restore acrylic chrome\n- fix(ui): keep web preview shell opaque\n",
-  );
-});
-
-void test("release workflow only publishes successful master commits and recovers nightlies", () => {
-  assert.match(
-    releaseWorkflow,
-    /RELEASE_SHA: \$\{\{ inputs\.channel == 'nightly' && inputs\.sha \|\| github\.sha \}\}/,
-  );
+void test("release workflow is stable-only and reports failures", () => {
+  assert.match(releaseWorkflow, /RELEASE_SHA: \$\{\{ github\.sha \}\}/);
   assert.match(releaseWorkflow, /\[\[ "\$RELEASE_SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
   assert.match(releaseWorkflow, /git merge-base --is-ancestor "\$RELEASE_SHA" origin\/master/);
   assert.match(
     releaseWorkflow,
     /gh run list --workflow ci\.yml --branch master --commit "\$RELEASE_SHA"[\s\S]*--event push --status success/,
   );
-  assert.match(
-    releaseWorkflow,
-    /git tag -l 'v\*-nightly\.\*' --sort=-creatordate \| grep -vxF "\$tag"/,
-  );
-  assert.match(releaseWorkflow, /edit_args=\(--draft=false --prerelease --latest=false\)/);
-  assert.match(releaseWorkflow, /^  cleanup-nightly-tag:/m);
+  assert.match(releaseWorkflow, /group: release/);
   assert.match(releaseWorkflow, /^  report-failure:/m);
   assert.match(releaseWorkflow, /gh issue create[\s\S]*--assignee "\$GITHUB_REPOSITORY_OWNER"/);
+  assert.doesNotMatch(releaseWorkflow, /nightly|RELEASE_CHANNEL/);
   assert.doesNotMatch(releaseWorkflow.split("  bundle:")[0], /rustup toolchain install/);
 });

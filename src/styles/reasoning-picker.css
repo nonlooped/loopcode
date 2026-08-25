@@ -1,8 +1,3 @@
-.reasoning-picker-wrap {
-  position: relative;
-  flex: 0 0 auto;
-}
-
 .reasoning-picker-trigger {
   display: flex;
   height: 28px;

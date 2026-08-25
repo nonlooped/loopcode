@@ -2,17 +2,13 @@ import { z } from "zod";
 
 import { providerDefinitionById, providerDefinitions } from "../config/provider-definitions.ts";
 import type {
-  ComposerReference,
-  MessageImage,
   PersistedWorkspace,
-  PromptPart,
   ProjectState,
   ProviderModelCatalog,
   ThreadState,
-  TimelineMessage,
-  ToolActivity,
 } from "../types/index.ts";
-import { finiteNumber, isObject, stringValue, type JsonValue } from "./json.ts";
+import type { JsonValue } from "./json.ts";
+import { copyPromptPart } from "./messages.ts";
 import { createThread } from "./threads.ts";
 
 export interface RestoredWorkspace {
@@ -22,6 +18,76 @@ export interface RestoredWorkspace {
   selectedProjectId: string | null;
   providerRepairs: { threadId: string; persistedProfileId: string; profileId: string }[];
 }
+
+const nonEmptyString = z.string().min(1);
+const referenceSchema = z.object({
+  id: nonEmptyString,
+  kind: z.enum(["file", "folder", "skill"]),
+  name: nonEmptyString,
+  path: nonEmptyString,
+  relativePath: nonEmptyString,
+  uri: nonEmptyString,
+});
+const promptPartSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("text"), text: z.string() }),
+  z.object({ type: z.literal("reference"), reference: referenceSchema }),
+]);
+const messageSchema = z.object({
+  id: nonEmptyString,
+  role: z.enum(["user", "agent", "thought", "notice", "error"]),
+  text: z.string(),
+  content: z.array(promptPartSchema).optional(),
+  images: z
+    .array(
+      z.object({
+        data: nonEmptyString,
+        mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/i),
+        name: z
+          .string()
+          .optional()
+          .transform((name) => name || "Attached image"),
+      }),
+    )
+    .optional(),
+  createdAt: z.number().finite(),
+});
+const toolSchema = z.object({
+  id: nonEmptyString,
+  title: nonEmptyString,
+  kind: nonEmptyString,
+  status: nonEmptyString,
+  detail: z.string().optional(),
+  locations: z.array(z.string()).catch([]),
+  createdAt: z.number().finite(),
+});
+const projectSchema = z.object({
+  id: nonEmptyString,
+  name: nonEmptyString,
+  path: nonEmptyString,
+  createdAt: z.number().finite(),
+});
+const threadSchema = z.object({
+  id: nonEmptyString,
+  title: nonEmptyString,
+  profileId: z.string().catch(""),
+  cwd: nonEmptyString.catch(""),
+  messages: z.array(messageSchema).catch([]),
+  tools: z.array(toolSchema).catch([]),
+  draft: z.string().catch(""),
+  draftReferences: z.array(referenceSchema).catch([]),
+  updatedAt: z.number().finite(),
+  settled: z.boolean().optional().catch(undefined),
+  projectId: nonEmptyString.nullable().optional().catch(undefined),
+  managedWorktree: z.boolean().optional().catch(undefined),
+  providerSessionIds: z.record(z.string(), nonEmptyString).catch({}),
+});
+const workspaceSchema = z.object({
+  version: z.literal(2),
+  selectedThreadId: nonEmptyString.optional(),
+  selectedProjectId: nonEmptyString.nullable().optional(),
+  threads: z.array(z.unknown()),
+  projects: z.array(z.unknown()),
+});
 
 export function workspaceSnapshot(
   threads: ThreadState[],
@@ -61,14 +127,13 @@ export function restoreWorkspace(
   defaultWorkingFolder: string,
   catalogs: Record<string, ProviderModelCatalog>,
 ): RestoredWorkspace | undefined {
-  if (!isObject(value) || !Array.isArray(value.threads)) return undefined;
-  const version = value.version === 2 ? 2 : value.version === 1 ? 1 : undefined;
-  if (!version) return undefined;
+  const workspace = workspaceSchema.safeParse(value).data;
+  if (!workspace) return undefined;
 
   const restoredThreads: ThreadState[] = [];
   const providerRepairs: RestoredWorkspace["providerRepairs"] = [];
   const seenIds = new Set<string>();
-  for (const item of value.threads) {
+  for (const item of workspace.threads) {
     const thread = restoreThread(item, defaultWorkingFolder, catalogs, providerRepairs);
     if (!thread || seenIds.has(thread.id)) continue;
     seenIds.add(thread.id);
@@ -76,35 +141,29 @@ export function restoreWorkspace(
   }
   if (restoredThreads.length === 0) return undefined;
 
-  const persistedSelection = stringValue(value.selectedThreadId);
   const restoredProjects: ProjectState[] = [];
-  let restoredSelectedProjectId: string | null = null;
-  if (version === 2 && Array.isArray(value.projects)) {
-    const seenProjectIds = new Set<string>();
-    for (const item of value.projects) {
-      const project = restoreProject(item);
-      if (!project || seenProjectIds.has(project.id)) continue;
-      seenProjectIds.add(project.id);
-      restoredProjects.push(project);
-    }
-    const selection = stringValue(value.selectedProjectId);
-    if (selection && restoredProjects.some((project) => project.id === selection)) {
-      restoredSelectedProjectId = selection;
-    }
-    for (const thread of restoredThreads) {
-      if (
-        thread.projectId &&
-        !restoredProjects.some((project) => project.id === thread.projectId)
-      ) {
-        thread.projectId = null;
-      }
+  const seenProjectIds = new Set<string>();
+  for (const item of workspace.projects) {
+    const project = projectSchema.safeParse(item).data;
+    if (!project || seenProjectIds.has(project.id)) continue;
+    seenProjectIds.add(project.id);
+    restoredProjects.push(project);
+  }
+  const restoredSelectedProjectId =
+    workspace.selectedProjectId &&
+    restoredProjects.some((project) => project.id === workspace.selectedProjectId)
+      ? workspace.selectedProjectId
+      : null;
+  for (const thread of restoredThreads) {
+    if (thread.projectId && !restoredProjects.some((project) => project.id === thread.projectId)) {
+      thread.projectId = null;
     }
   }
 
   return {
     threads: restoredThreads,
-    selectedThreadId: restoredThreads.some((thread) => thread.id === persistedSelection)
-      ? persistedSelection!
+    selectedThreadId: restoredThreads.some((thread) => thread.id === workspace.selectedThreadId)
+      ? workspace.selectedThreadId!
       : restoredThreads[0].id,
     projects: restoredProjects,
     selectedProjectId: restoredSelectedProjectId,
@@ -112,70 +171,43 @@ export function restoreWorkspace(
   };
 }
 
-function restoreProject(value: JsonValue): ProjectState | undefined {
-  if (!isObject(value)) return undefined;
-  const id = stringValue(value.id);
-  const name = stringValue(value.name);
-  const path = stringValue(value.path);
-  const createdAt = finiteNumber(value.createdAt);
-  if (!id || !name || !path || createdAt === undefined) return undefined;
-  return { id, name, path, createdAt };
-}
-
 function restoreThread(
-  value: JsonValue,
+  value: unknown,
   defaultWorkingFolder: string,
   catalogs: Record<string, ProviderModelCatalog>,
   providerRepairs: RestoredWorkspace["providerRepairs"],
 ): ThreadState | undefined {
-  if (!isObject(value)) return undefined;
-  const id = stringValue(value.id);
-  const title = stringValue(value.title);
-  if (!id || !title) return undefined;
+  const persisted = threadSchema.safeParse(value).data;
+  if (!persisted) return undefined;
 
-  const persistedProfileId = stringValue(value.profileId) ?? "";
   const profile =
-    providerDefinitionById(persistedProfileId) ??
+    providerDefinitionById(persisted.profileId) ??
     providerDefinitions.find((candidate) => catalogs[candidate.id]?.status === "ready") ??
     providerDefinitions[0];
-  if (profile.id !== persistedProfileId) {
-    providerRepairs.push({ threadId: id, persistedProfileId, profileId: profile.id });
+  if (profile.id !== persisted.profileId) {
+    providerRepairs.push({
+      threadId: persisted.id,
+      persistedProfileId: persisted.profileId,
+      profileId: profile.id,
+    });
   }
-  const messages = Array.isArray(value.messages)
-    ? value.messages.map(restoreMessage).filter((message) => message !== undefined)
-    : [];
-  const tools = Array.isArray(value.tools)
-    ? value.tools.map(restoreTool).filter((tool) => tool !== undefined)
-    : [];
-  const updatedAt =
-    finiteNumber(value.updatedAt) ??
-    Math.max(
-      0,
-      ...messages.map((message) => message.createdAt),
-      ...tools.map((tool) => tool.createdAt),
-    );
   const thread = {
     ...createThread(defaultWorkingFolder, null, catalogs),
-    id,
-    title,
+    id: persisted.id,
+    title: persisted.title,
     profileId: profile.id,
-    cwd: stringValue(value.cwd) ?? defaultWorkingFolder,
-    messages,
-    tools,
-    draft: z.string().safeParse(value.draft).data ?? "",
-    draftReferences: restoreReferences(value.draftReferences),
-    updatedAt,
-    settled: value.settled === true,
-    projectId: stringValue(value.projectId) ?? null,
-    managedWorktree: value.managedWorktree === true,
+    cwd: persisted.cwd || defaultWorkingFolder,
+    messages: persisted.messages,
+    tools: persisted.tools,
+    draft: persisted.draft,
+    draftReferences: persisted.draftReferences,
+    updatedAt: persisted.updatedAt,
+    settled: persisted.settled === true,
+    projectId: persisted.projectId ?? null,
+    managedWorktree: persisted.managedWorktree === true,
   };
-  if (isObject(value.providerSessionIds)) {
-    for (const [profileId, sessionId] of Object.entries(value.providerSessionIds)) {
-      const restoredSessionId = stringValue(sessionId);
-      if (thread.providers[profileId] && restoredSessionId) {
-        thread.providers[profileId].sessionId = restoredSessionId;
-      }
-    }
+  for (const [profileId, sessionId] of Object.entries(persisted.providerSessionIds)) {
+    if (thread.providers[profileId]) thread.providers[profileId].sessionId = sessionId;
   }
   return thread;
 }
@@ -185,109 +217,4 @@ function providerSessionIds(thread: ThreadState) {
     provider.sessionId ? [[profileId, provider.sessionId] as const] : [],
   );
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
-
-function restoreMessage(value: JsonValue): TimelineMessage | undefined {
-  if (!isObject(value)) return undefined;
-  const id = stringValue(value.id);
-  const text = z.string().safeParse(value.text).data;
-  const createdAt = finiteNumber(value.createdAt);
-  const role = value.role;
-  if (
-    !id ||
-    text === undefined ||
-    createdAt === undefined ||
-    (role !== "user" &&
-      role !== "agent" &&
-      role !== "thought" &&
-      role !== "notice" &&
-      role !== "error")
-  ) {
-    return undefined;
-  }
-  return {
-    id,
-    role,
-    text,
-    content: restorePromptParts(value.content),
-    images: restoreMessageImages(value.images),
-    createdAt,
-  };
-}
-
-function copyPromptPart(part: PromptPart): PromptPart {
-  return part.type === "text"
-    ? { ...part }
-    : { type: "reference", reference: { ...part.reference } };
-}
-
-function restorePromptParts(value: JsonValue | undefined): PromptPart[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const parts = value.flatMap((part): PromptPart[] => {
-    if (!isObject(part)) return [];
-    const text = z.string().safeParse(part.text).data;
-    if (part.type === "text" && text !== undefined) return [{ type: "text", text }];
-    const reference = part.type === "reference" ? restoreReference(part.reference) : undefined;
-    return reference ? [{ type: "reference", reference }] : [];
-  });
-  return parts.length > 0 ? parts : undefined;
-}
-
-function restoreReferences(value: JsonValue | undefined): ComposerReference[] {
-  return Array.isArray(value)
-    ? value.flatMap((item) => {
-        const reference = restoreReference(item);
-        return reference ? [reference] : [];
-      })
-    : [];
-}
-
-function restoreReference(value: JsonValue): ComposerReference | undefined {
-  if (!isObject(value)) return undefined;
-  const { kind } = value;
-  if (kind !== "file" && kind !== "folder" && kind !== "skill") return undefined;
-  const id = stringValue(value.id);
-  const name = stringValue(value.name);
-  const path = stringValue(value.path);
-  const relativePath = stringValue(value.relativePath);
-  const uri = stringValue(value.uri);
-  return id && name && path && relativePath && uri
-    ? { id, kind, name, path, relativePath, uri }
-    : undefined;
-}
-
-function restoreMessageImages(value: JsonValue | undefined): MessageImage[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const images = value.filter(isObject).flatMap((image) => {
-    const data = stringValue(image.data);
-    const mimeType = stringValue(image.mimeType);
-    const name = stringValue(image.name);
-    if (!data || !mimeType?.match(/^image\/[a-z0-9.+-]+$/i)) return [];
-    return [{ data, mimeType, name: name ?? "Attached image" }];
-  });
-  return images.length > 0 ? images : undefined;
-}
-
-function restoreTool(value: JsonValue): ToolActivity | undefined {
-  if (!isObject(value)) return undefined;
-  const id = stringValue(value.id);
-  const title = stringValue(value.title);
-  const kind = stringValue(value.kind);
-  const status = stringValue(value.status);
-  const createdAt = finiteNumber(value.createdAt);
-  if (!id || !title || !kind || !status || createdAt === undefined) return undefined;
-  return {
-    id,
-    title,
-    kind,
-    status,
-    detail: z.string().safeParse(value.detail).data,
-    locations: Array.isArray(value.locations)
-      ? value.locations.flatMap((location) => {
-          const restored = z.string().safeParse(location).data;
-          return restored === undefined ? [] : [restored];
-        })
-      : [],
-    createdAt,
-  };
 }

@@ -130,8 +130,9 @@ void test("unavailable providers cannot become active and restored providers fal
 
   const restored = restoreWorkspace(
     {
-      version: 1,
+      version: 2,
       selectedThreadId: "restored-thread",
+      projects: [],
       threads: [
         {
           id: "restored-thread",

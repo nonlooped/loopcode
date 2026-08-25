@@ -1,7 +1,6 @@
 import { providerDefinitionById, providerDefinitions } from "../config/provider-definitions.ts";
 import { applyFastModeForSelectedModel } from "./fast-mode.ts";
 import { applyReasoningForSelectedModel } from "./reasoning-options.ts";
-import { newThreadTitle } from "./thread-title.ts";
 import type {
   HarnessProfile,
   ProviderModelCatalog,
@@ -39,7 +38,7 @@ export function createThread(
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
-    title: newThreadTitle(),
+    title: "New Thread",
     profileId: providerDefinitions[0].id,
     cwd,
     messages: [],

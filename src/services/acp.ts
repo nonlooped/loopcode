@@ -11,7 +11,6 @@ import type {
   PermissionRequest,
   QuestionAnswer,
   QuestionRequest,
-  ThreadStatus,
   TurnStatus,
 } from "../types/index.ts";
 import type { JsonValue } from "../utils/json.ts";
@@ -54,21 +53,15 @@ const nativeTransport: AcpTransport = {
   stop: stopHarness,
 };
 
-function isTextPrompt(value: string | PromptContent[]): value is string {
-  return typeof value === "string";
-}
-
 function isBooleanConfigValue(value: string | boolean): value is boolean {
   return typeof value === "boolean";
 }
 
-export type PromptImage = acp.ImageContent & { type: "image" };
 export type PromptContent = acp.ContentBlock;
 
 export interface AcpCallbacks {
   connectionStatus?: (status: ConnectionStatus) => void;
   turnStatus?: (status: TurnStatus) => void;
-  status?: (status: ThreadStatus) => void;
   initialized?: (agentInfo?: acp.Implementation | null) => void;
   ready: (session: AcpSessionInfo) => void;
   update: (update: acp.SessionUpdate) => void;
@@ -241,7 +234,7 @@ export class AcpConnection {
     return this.#compatibility.listModels(this.#requireContext());
   }
 
-  async prompt(prompt: string | PromptContent[], images: PromptImage[] = []) {
+  async prompt(prompt: PromptContent[]) {
     if (this.#turnActive) throw new Error("This ACP session already has an active turn");
     const context = this.#requireContext();
     const sessionId = this.#requireSessionId();
@@ -252,9 +245,7 @@ export class AcpConnection {
     try {
       await context.request(acp.methods.agent.session.prompt, {
         sessionId,
-        prompt: isTextPrompt(prompt)
-          ? [...(prompt ? [{ type: "text" as const, text: prompt }] : []), ...images]
-          : prompt,
+        prompt,
       });
       if (this.#activeToolIds.size > 0) {
         const error = new Error(
@@ -411,14 +402,10 @@ export class AcpConnection {
 
   #emitConnectionStatus(status: ConnectionStatus) {
     this.#callbacks.connectionStatus?.(status);
-    this.#callbacks.status?.(status);
   }
 
   #emitTurnStatus(status: TurnStatus) {
     this.#callbacks.turnStatus?.(status);
-    if (status === "running") this.#callbacks.status?.("running");
-    else if (status === "blocked") this.#callbacks.status?.("error");
-    else this.#callbacks.status?.("ready");
   }
 
   #requireContext() {

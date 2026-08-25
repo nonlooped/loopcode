@@ -1,4 +1,4 @@
-use crate::{diagnostics::Diagnostics, persistence};
+use crate::{diagnostics::Diagnostics, native_command, persistence};
 use serde_json::Value;
 use tauri::Manager;
 
@@ -51,13 +51,9 @@ pub(crate) fn loopcode_data_directory(
 #[tauri::command]
 pub(crate) async fn load_workspace(app: tauri::AppHandle) -> Result<Option<Value>, String> {
     let directory = loopcode_data_directory(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        persistence::load_from_directory(&directory, |contents| {
-            serde_json::from_str(contents).map_err(|error| error.to_string())
-        })
-    })
-    .await
-    .map_err(|error| format!("Could not join the thread-loading task: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || persistence::load_from_directory(&directory))
+        .await
+        .map_err(|error| format!("Could not join the thread-loading task: {error}"))?
 }
 
 #[tauri::command]
@@ -135,12 +131,7 @@ pub(crate) async fn provider_version(
     validate_provider_command(&command, &args)?;
     let command = command.trim();
 
-    let mut process = tokio::process::Command::new(command);
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        process.as_std_mut().creation_flags(0x0800_0000);
-    }
+    let mut process = native_command(command);
     process
         .args(args)
         .stdin(std::process::Stdio::null())
@@ -161,12 +152,7 @@ pub(crate) async fn provider_auth_status(
     args: Vec<String>,
 ) -> Result<Option<bool>, String> {
     validate_provider_command(&command, &args)?;
-    let mut process = tokio::process::Command::new(command.trim());
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        process.as_std_mut().creation_flags(0x0800_0000);
-    }
+    let mut process = native_command(command.trim());
     process
         .args(args)
         .stdin(std::process::Stdio::null())
