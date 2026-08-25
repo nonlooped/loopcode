@@ -1,17 +1,20 @@
-import type { GitChange, GitFileDiff } from "../services/native.ts";
+import type { GitFileDiff } from "../services/native.ts";
 
-export function gitDiffViewData(change: GitChange, diff: GitFileDiff) {
-  const oldFileName =
-    change.status === "added" || change.status === "untracked"
-      ? "/dev/null"
-      : (change.oldPath ?? change.path);
-  const newFileName = change.status === "deleted" ? "/dev/null" : change.path;
-  return {
-    oldFile: { fileName: oldFileName },
-    newFile: { fileName: newFileName },
-    hunks:
-      diff.hunks.length === 0
-        ? []
-        : [`--- ${oldFileName}\n+++ ${newFileName}\n${diff.hunks.join("")}`],
-  };
+export type GitDiffLineKind = "add" | "del" | "hunk" | "ctx";
+
+export function gitDiffLines(diff: GitFileDiff) {
+  const text = diff.hunks.join("");
+  const raw = text.endsWith("\n") ? text.slice(0, -1) : text;
+  if (raw === "") return [];
+  return raw.split("\n").map((line) => ({
+    kind: gitDiffLineKind(line),
+    text: line,
+  }));
+}
+
+function gitDiffLineKind(line: string): GitDiffLineKind {
+  if (line.startsWith("@@")) return "hunk";
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "del";
+  return "ctx";
 }

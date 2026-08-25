@@ -89,7 +89,7 @@
   <header class="file-viewer-toolbar">
     <div class="file-viewer-navigation">
       <button type="button" class="chrome-button" aria-label="Back" title="Back" onclick={back}>
-        <IconArrowLeft size={15} stroke={1.6} />
+        <IconArrowLeft size={15} stroke={1.55} />
       </button>
       <button
         type="button"
@@ -99,7 +99,7 @@
         disabled={!canGoForward}
         onclick={forward}
       >
-        <IconArrowRight size={15} stroke={1.6} />
+        <IconArrowRight size={15} stroke={1.55} />
       </button>
     </div>
     <div class="file-viewer-title" title={path}>
@@ -107,7 +107,7 @@
       {#if !mediaType}<small>{language}</small>{/if}
     </div>
     <button type="button" class="chrome-button" aria-label="Close file viewer" title="Back to conversation" onclick={close}>
-      <IconX size={15} stroke={1.6} />
+      <IconX size={15} stroke={1.55} />
     </button>
   </header>
 

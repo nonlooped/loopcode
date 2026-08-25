@@ -93,7 +93,7 @@ body.resizing-terminal .terminal-drawer {
   flex: 0 0 auto;
   color: var(--text-soft);
   font-size: 11.5px;
-  font-weight: 590;
+  font-weight: 600;
 }
 
 .terminal-header small {
@@ -125,7 +125,7 @@ body.resizing-terminal .terminal-drawer {
   min-height: 0;
   padding: 6px 8px 8px 10px;
   overflow: hidden;
-  font-family: "Cascadia Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .terminal-host .xterm {

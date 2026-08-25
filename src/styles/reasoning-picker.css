@@ -14,7 +14,7 @@
   background: transparent;
   color: var(--muted);
   font-size: 10.5px;
-  font-weight: 560;
+  font-weight: 500;
   transition:
     background-color 150ms ease,
     color 150ms ease;
@@ -36,7 +36,7 @@
 
 .reasoning-picker-trigger svg {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--muted);
 }
 
 .reasoning-picker-trigger:disabled {
@@ -50,10 +50,8 @@
   padding: 4px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow:
-    0 22px 58px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  border-radius: var(--overlay-radius);
+  box-shadow: var(--overlay-shadow);
   color: var(--text);
   text-align: left;
   white-space: normal;

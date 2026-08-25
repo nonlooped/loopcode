@@ -926,7 +926,6 @@
     {compactLayout}
     bind:projectExplorerCollapsed
     {defaultWorkingFolder}
-    colorMode={resolvedColorMode}
     attachImages={(files) => { if (selectedThread) void attachImages(files, selectedThread.id); }}
     removeImage={(imageId) => { if (selectedThread) removeComposerImage(selectedThread.id, imageId); }}
     clearAttachments={() => {

@@ -38,7 +38,7 @@
   overflow-wrap: anywhere;
   color: var(--text);
   font-size: 22px;
-  font-weight: 560;
+  font-weight: 500;
   letter-spacing: -0.025em;
   line-height: 1.25;
   text-align: center;
@@ -90,7 +90,7 @@
 }
 
 .settings-row:hover {
-  background: var(--panel);
+  background: var(--panel-hover);
 }
 
 .settings-row-separated {
@@ -126,7 +126,7 @@
 .settings-row-copy strong {
   color: var(--text);
   font-size: 13.5px;
-  font-weight: 550;
+  font-weight: 500;
   line-height: 1.2;
 }
 
@@ -194,7 +194,7 @@
   overflow: hidden;
   padding: 0 2px;
   font-size: 11px;
-  font-weight: 550;
+  font-weight: 500;
   line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -231,24 +231,28 @@
 }
 
 .settings-mode-light {
-  --mode-shell: rgb(239 240 243);
-  --mode-sidebar: rgb(252 252 253);
-  --mode-ink: rgb(73 75 81 / 0.38);
-  --mode-accent: rgb(54 56 62);
+  --mode-shell: rgb(var(--theme-light-shell-rgb));
+  --mode-sidebar: rgb(var(--theme-light-surface-rgb));
+  --mode-ink: rgb(var(--theme-light-accent-rgb) / 0.38);
+  --mode-accent: rgb(var(--theme-light-accent-rgb));
 }
 
 .settings-mode-dark {
-  --mode-shell: rgb(23 24 27);
-  --mode-sidebar: rgb(30 31 35);
-  --mode-ink: rgb(210 211 214 / 0.3);
-  --mode-accent: rgb(236 236 238);
+  --mode-shell: rgb(var(--theme-dark-shell-rgb));
+  --mode-sidebar: rgb(var(--theme-dark-surface-rgb));
+  --mode-ink: rgb(var(--theme-dark-accent-rgb) / 0.3);
+  --mode-accent: rgb(var(--theme-dark-accent-rgb));
 }
 
 .settings-mode-system {
-  --mode-shell: linear-gradient(90deg, rgb(239 240 243) 50%, rgb(23 24 27) 50%);
-  --mode-sidebar: rgb(252 252 253);
-  --mode-ink: rgb(136 138 144 / 0.48);
-  --mode-accent: rgb(182 190 238);
+  --mode-shell: linear-gradient(
+    90deg,
+    rgb(var(--theme-light-shell-rgb)) 50%,
+    rgb(var(--theme-dark-shell-rgb)) 50%
+  );
+  --mode-sidebar: rgb(var(--theme-light-surface-rgb));
+  --mode-ink: rgb(var(--theme-light-accent-rgb) / 0.42);
+  --mode-accent: rgb(var(--theme-dark-accent-rgb));
 }
 
 .settings-mode-sidebar {
@@ -438,7 +442,7 @@
   background: transparent;
   color: var(--muted);
   font-size: 11px;
-  font-weight: 550;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -465,9 +469,9 @@
   border-radius: 4px;
   background: var(--panel);
   color: inherit;
-  font-family: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 550;
+  font-weight: 500;
   line-height: 14px;
 }
 
@@ -480,7 +484,7 @@
   background: var(--panel);
   color: var(--text-soft);
   font-size: 11px;
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .settings-select {
@@ -515,7 +519,7 @@
 }
 
 .settings-path-input {
-  font-family: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+  font-family: var(--font-mono);
 }
 
 .settings-text-input:hover {
@@ -637,7 +641,7 @@
 .provider-model-heading strong {
   color: var(--text);
   font-size: 13.5px;
-  font-weight: 550;
+  font-weight: 500;
 }
 
 .provider-model-heading small,
@@ -712,8 +716,8 @@
 }
 
 .settings-code-preview code {
-  font-family: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
-  font-size: 8.5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
   line-height: 1.45;
   white-space: nowrap;
 }
@@ -739,7 +743,7 @@
   border-radius: 6px;
   background: var(--recessed-surface);
   color: var(--text-soft);
-  font-family: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
+  font-family: var(--font-mono);
   line-height: 1;
   white-space: nowrap;
 }
@@ -784,7 +788,7 @@
   height: 14px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: var(--floating-solid);
+  background: var(--floating-surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
   cursor: grab;
 }

@@ -121,24 +121,24 @@
 }
 
 .title-context {
-  display: grid;
-  gap: 7px;
+  min-width: 0;
   overflow: hidden;
-  padding: 0 14px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0 46px 0 14px;
   white-space: nowrap;
 }
 
 .title-context-motion {
   display: flex;
   min-width: 0;
-  grid-area: 1 / 1;
   align-items: center;
   gap: 7px;
 }
 
 .title-terminal-toggle {
-  grid-area: 1 / 2;
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 3;
 }
 
 .title-terminal-toggle.active {
@@ -182,7 +182,7 @@
   overflow: hidden;
   color: var(--text-soft);
   font-size: 11.5px;
-  font-weight: 590;
+  font-weight: 600;
   text-overflow: ellipsis;
 }
 
@@ -203,10 +203,12 @@
   --project-explorer-width: 0px;
 }
 
-@media (min-width: 881px) {
-  .app-shell.project-explorer-collapsed .title-terminal-toggle {
-    margin-right: 31px;
-  }
+.app-shell.project-explorer-collapsed .title-context {
+  padding-right: 72px;
+}
+
+.app-shell.project-explorer-collapsed .title-terminal-toggle {
+  right: 37px;
 }
 
 .app-shell.sidebar-collapsed .titlebar {

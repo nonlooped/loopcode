@@ -7,10 +7,8 @@
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 13px;
-  box-shadow:
-    0 24px 65px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  border-radius: var(--overlay-radius);
+  box-shadow: var(--overlay-shadow);
   color: var(--text);
   text-align: left;
   white-space: normal;
@@ -189,7 +187,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 11px;
-  font-weight: 570;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -202,7 +200,7 @@
   overflow: hidden;
   color: var(--faint);
   font-size: 9px;
-  font-weight: 520;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

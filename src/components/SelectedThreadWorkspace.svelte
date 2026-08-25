@@ -48,7 +48,6 @@
     compactLayout: boolean;
     projectExplorerCollapsed: boolean;
     defaultWorkingFolder: string;
-    colorMode: 'light' | 'dark';
     attachImages: (files: File[]) => void;
     removeImage: (imageId: string) => void;
     clearAttachments: () => void;
@@ -86,7 +85,6 @@
     compactLayout,
     projectExplorerCollapsed = $bindable(),
     defaultWorkingFolder,
-    colorMode,
     attachImages,
     removeImage,
     clearAttachments,
@@ -428,7 +426,6 @@
         {activeFilePath}
         {currentBranch}
         branches={gitBranches}
-        {colorMode}
         toggle={toggleProjectExplorer}
         {openFile}
         filesChanged={projectFilesChanged}

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { DiffModeEnum, DiffView } from '@git-diff-view/svelte';
-  import '@git-diff-view/svelte/styles/diff-view-pure.css';
   import { IconChevronRight, IconGitBranch } from '@tabler/icons-svelte';
 
   import {
@@ -9,7 +7,7 @@
     type GitChange,
     type GitFileDiff,
   } from '../services/native';
-  import { gitDiffViewData } from '../utils/git-diff';
+  import { gitDiffLines } from '../utils/git-diff';
   import { materialFileIcon } from '../utils/material-file-icons';
 
   interface Props {
@@ -17,13 +15,12 @@
     currentBranch: string | null | undefined;
     branches: string[] | null | undefined;
     revision: number;
-    colorMode: 'light' | 'dark';
   }
 
   type ComparisonMode = 'working' | 'branch';
   type DiffState =
     | { kind: 'loading' }
-    | { kind: 'ready'; diff: GitFileDiff; data: ReturnType<typeof gitDiffViewData> }
+    | { kind: 'ready'; diff: GitFileDiff }
     | { kind: 'error'; message: string };
 
   const props: Props = $props();
@@ -134,7 +131,7 @@
       const diff = await getGitFileDiff(props.cwd, activeBase, change.path, change.oldPath);
       if (token !== generation || !expanded.includes(key)) return;
       if (!showLoading && previous?.kind === 'ready' && sameDiff(previous.diff, diff)) return;
-      diffs = { ...diffs, [key]: { kind: 'ready', diff, data: gitDiffViewData(change, diff) } };
+      diffs = { ...diffs, [key]: { kind: 'ready', diff } };
     } catch (error) {
       if (token !== generation || !expanded.includes(key)) return;
       diffs = { ...diffs, [key]: { kind: 'error', message: errorMessage(error) } };
@@ -240,7 +237,7 @@
           aria-controls={`git-change-diff-${index}`}
           onclick={() => toggleChange(change)}
         >
-          <IconChevronRight class="git-change-chevron" size={12} stroke={1.65} />
+          <IconChevronRight class="git-change-chevron" size={12} stroke={1.55} />
           <img src={materialFileIcon(change.path.split('/').at(-1) ?? change.path)} alt="" />
           <span class="git-change-path">
             {#if change.oldPath}<small>{change.oldPath} →</small>{/if}
@@ -261,15 +258,11 @@
             {:else if state.diff.hunks.length === 0}
               <p class="git-change-state">No text diff to display.</p>
             {:else}
-              <DiffView
-                data={state.data}
-                diffViewMode={DiffModeEnum.Unified}
-                diffViewTheme={props.colorMode}
-                diffViewFontSize={11}
-                diffViewWrap
-                diffViewHighlight
-                diffViewAddWidget={false}
-              />
+              <div class="git-unified-diff">
+                {#each gitDiffLines(state.diff) as line, lineIndex (`${lineIndex}:${line.kind}`)}
+                  <span class={`git-diff-line ${line.kind}`}>{line.text || ' '}</span>
+                {/each}
+              </div>
             {/if}
           </div>
         {/if}

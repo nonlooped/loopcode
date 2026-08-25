@@ -205,9 +205,9 @@
                 <span>Worked for {formatElapsedDuration(entry.durationMs ?? 0)}</span>
                 <span class="work-chevron">
                   {#if workGroupExpanded}
-                    <IconChevronDown size={14} stroke={1.8} />
+                    <IconChevronDown size={14} stroke={1.55} />
                   {:else}
-                    <IconChevronRight size={14} stroke={1.8} />
+                    <IconChevronRight size={14} stroke={1.55} />
                   {/if}
                 </span>
               </button>
@@ -230,7 +230,7 @@
                     >
                       <div in:fly={{ y: entryMotion ? 3 : 0, duration: entryMotion ? 160 : 0 }}>
                         <Collapsible.Trigger class="tool-item-trigger">
-                          <span class="tool-icon"><IconTool size={16} stroke={1.8} /></span>
+                          <span class="tool-icon"><IconTool size={16} stroke={1.55} /></span>
                           <span class="tool-title"><strong>{tool.title}</strong><small>{toolStatus(tool.status)}</small></span>
                         </Collapsible.Trigger>
                         <Collapsible.Content>
@@ -284,7 +284,7 @@
             class="notice-message"
             in:fly={{ y: entryMotion ? 4 : 0, duration: entryMotion ? 170 : 0 }}
           >
-            {#if message.role === 'error'}<IconAlertTriangle size={15} stroke={1.8} />{/if}
+            {#if message.role === 'error'}<IconAlertTriangle size={15} stroke={1.55} />{/if}
             <span>{message.text}</span>
           </div>
         {:else}
@@ -375,7 +375,7 @@
       onclick={() => scrollToBottom()}
       transition:fade={{ duration: reducedMotion ? 0 : 120 }}
     >
-      <IconChevronDown size={13} stroke={1.8} />
+      <IconChevronDown size={13} stroke={1.55} />
       <span>Scroll to bottom</span>
     </button>
   {/if}

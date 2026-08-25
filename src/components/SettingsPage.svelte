@@ -213,7 +213,7 @@
     <header class="settings-page-header">
       {#if category === 'providers' && selectedProvider}
         <button class="provider-detail-back" onclick={hideProvider}>
-          <IconArrowLeft size={13} stroke={1.7} /> All providers
+          <IconArrowLeft size={13} stroke={1.55} /> All providers
         </button>
       {/if}
       <h1 id="settings-title" tabindex="-1">{pageCopy[0]}</h1>
@@ -591,7 +591,7 @@
                 <strong>Custom models</strong>
                 <small>Add models that are not advertised by the provider.</small>
               </span>
-              <button class="settings-action" onclick={addCustomModel}><IconPlus size={13} stroke={1.7} /> Add model</button>
+              <button class="settings-action" onclick={addCustomModel}><IconPlus size={13} stroke={1.55} /> Add model</button>
             </div>
             {#if (setting.models ?? []).length === 0}
               <p class="provider-model-empty">No custom models.</p>
@@ -623,7 +623,7 @@
                       aria-label={`Remove ${model.name}`}
                       title={`Remove ${model.name}`}
                       onclick={() => removeCustomModel(index)}
-                    ><IconTrash size={14} stroke={1.7} /></button>
+                    ><IconTrash size={14} stroke={1.55} /></button>
                   </div>
                 {/each}
               </div>

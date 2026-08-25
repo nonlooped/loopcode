@@ -58,7 +58,7 @@
   flex: 1 1 auto;
   color: var(--muted);
   font-size: 12.5px;
-  font-weight: 520;
+  font-weight: 500;
 }
 
 .tool-title small {
@@ -71,7 +71,7 @@
 .tool-item pre {
   margin: 0;
   overflow: auto;
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-height: 260px;
@@ -90,7 +90,7 @@
   margin: 2px 5px 5px 27px;
   gap: 4px;
   color: var(--muted);
-  font-family: "Cascadia Mono", Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 9.5px;
 }
 
