@@ -1,3 +1,14 @@
+## [0.9.0] - 2026-08-25
+
+### 🚀 Features
+
+- _(ui)_ Restore acrylic chrome and simplify change diffs (#73)
+- Add macOS platform support (#81)
+
+### 🐛 Bug Fixes
+
+- _(release)_ Support Windows nightlies (#89)
+
 ## [0.8.0] - 2026-08-24
 
 ### 🚀 Features
