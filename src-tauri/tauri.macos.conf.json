@@ -1,0 +1,23 @@
+{
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "LoopCode",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 480,
+        "minHeight": 600,
+        "center": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "backgroundColor": "#00000000",
+        "windowEffects": {
+          "effects": ["underWindowBackground"]
+        }
+      }
+    ]
+  }
+}

@@ -19,15 +19,15 @@ Agent CLIs work well for one task. They get messy when you juggle projects, prov
 
 ## Supported agents
 
-| Agent    | Install                                                                                                                                             | Login                         |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Codex    | `npm install --global @openai/codex`                                                                                                                | `codex login`                 |
-| Claude   | `npm install --global @anthropic-ai/claude-code`                                                                                                    | `claude auth login`           |
-| Cursor   | Linux: `curl https://cursor.com/install -fsS \| bash`<br>Windows: `irm 'https://cursor.com/install?win32=true' \| iex`                              | `agent login`                 |
-| OpenCode | `npm install --global opencode-ai`                                                                                                                  | `opencode auth login`         |
-| Grok     | Linux: `curl -fsSL https://x.ai/cli/install.sh \| bash -s 1.0.5`<br>Windows: `irm https://x.ai/cli/install.ps1 \| iex; grok update --version 1.0.5` | `grok login`                  |
-| Pi       | `npm install --global @earendil-works/pi-coding-agent@0.84.2`                                                                                       | Run `pi`, then enter `/login` |
-| fx       | `curl -fsSL https://fx.sh/setup.sh \| bash` on Linux                                                                                                | `fx login` or `fx setup`      |
+| Agent    | Install                                                                                                                                                       | Login                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| Codex    | `npm install --global @openai/codex`                                                                                                                          | `codex login`                 |
+| Claude   | `npm install --global @anthropic-ai/claude-code`                                                                                                              | `claude auth login`           |
+| Cursor   | Linux and macOS: `curl https://cursor.com/install -fsS \| bash`<br>Windows: `irm 'https://cursor.com/install?win32=true' \| iex`                              | `agent login`                 |
+| OpenCode | `npm install --global opencode-ai`                                                                                                                            | `opencode auth login`         |
+| Grok     | Linux and macOS: `curl -fsSL https://x.ai/cli/install.sh \| bash -s 1.0.5`<br>Windows: `irm https://x.ai/cli/install.ps1 \| iex; grok update --version 1.0.5` | `grok login`                  |
+| Pi       | `npm install --global @earendil-works/pi-coding-agent@0.84.2`                                                                                                 | Run `pi`, then enter `/login` |
+| fx       | `curl -fsSL https://fx.sh/setup.sh \| bash` on Linux and macOS                                                                                                | `fx login` or `fx setup`      |
 
 LoopCode downloads the pinned Codex, Claude, and Pi ACP adapters on first use. fx is visible but unavailable on Windows because its official release supports Linux and macOS only.
 
@@ -35,7 +35,7 @@ Models, reasoning levels, and fast modes come from each agent, so every thread g
 
 ## Build from source
 
-LoopCode supports Windows 10 or 11 and Linux. Release packages are currently unsigned.
+LoopCode supports Windows 10 or 11, Linux, and macOS. Release packages are currently unsigned.
 
 ```sh
 git clone https://github.com/nonlooped/loopcode.git

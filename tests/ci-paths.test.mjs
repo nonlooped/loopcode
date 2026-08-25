@@ -30,7 +30,7 @@ void test("ci-paths writes GitHub output on stdin", () => {
   assert.equal(output, "native=false\napp=true\n");
 });
 
-void test("CI compiles rust only for native paths and tests Windows", () => {
+void test("CI compiles rust only for native paths and tests Windows and macOS", () => {
   assert.match(ciWorkflow, /^  node:/m);
   assert.doesNotMatch(ciWorkflow, /^  frontend:/m);
   assert.match(
@@ -41,13 +41,14 @@ void test("CI compiles rust only for native paths and tests Windows", () => {
   assert.match(ciWorkflow, /node scripts\/ci-paths\.mjs/);
   assert.match(ciWorkflow, /shared-key: linux-rust-ci/);
   assert.match(ciWorkflow, /shared-key: windows-rust-ci/);
+  assert.match(ciWorkflow, /shared-key: macos-rust-ci/);
   assert.match(
     ciWorkflow,
     /cargo clippy --locked --all-targets --manifest-path src-tauri\/Cargo\.toml -- -D warnings/,
   );
   assert.match(ciWorkflow, /cargo test --locked --manifest-path src-tauri\/Cargo\.toml/);
   assert.doesNotMatch(ciWorkflow, /cargo check --locked/);
-  assert.equal([...ciWorkflow.matchAll(/rustup toolchain install --no-self-update/g)].length, 2);
+  assert.equal([...ciWorkflow.matchAll(/rustup toolchain install --no-self-update/g)].length, 3);
   assert.doesNotMatch(ciWorkflow, /dtolnay\/rust-toolchain/);
   assert.match(ciWorkflow, /needs\.changes\.outputs\.app == 'true'/);
   assert.match(ciWorkflow, /gh workflow run release\.yml --ref "\$source_tag"/);
@@ -62,6 +63,9 @@ void test("release workflow isolates nightly concurrency and cache from CI", () 
   assert.match(releaseWorkflow, /cancel-in-progress: false/);
   assert.match(releaseWorkflow, /cache-key: linux-rust-release/);
   assert.match(releaseWorkflow, /cache-key: windows-rust-release/);
+  assert.match(releaseWorkflow, /cache-key: macos-rust-release/);
+  assert.match(releaseWorkflow, /platform: macos-latest/);
+  assert.match(releaseWorkflow, /\*\*\/\*\.dmg/);
   assert.equal(
     [...releaseWorkflow.matchAll(/rustup toolchain install --no-self-update/g)].length,
     1,

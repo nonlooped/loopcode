@@ -6,8 +6,15 @@ export const GROK_VERSION = "1.0.5";
 export const PI_VERSION = "0.84.2";
 export const PI_ACP_VERSION = "0.17.1";
 
-export const currentPlatform: DesktopPlatform =
-  import.meta.env?.TAURI_ENV_PLATFORM === "windows" ? "windows" : "linux";
+export function desktopPlatform(
+  tauriPlatform = import.meta.env?.TAURI_ENV_PLATFORM,
+): DesktopPlatform {
+  if (tauriPlatform === "windows") return "windows";
+  if (tauriPlatform === "darwin" || tauriPlatform === "macos") return "macos";
+  return "linux";
+}
+
+export const currentPlatform: DesktopPlatform = desktopPlatform();
 const isWindows = currentPlatform === "windows";
 const npx = isWindows ? "npx.cmd" : "npx";
 
@@ -19,7 +26,7 @@ export const providerDefinitions: ProviderDefinition[] = [
     args: ["--yes", "@agentclientprotocol/codex-acp@1.4.0"],
     versionCommand: isWindows ? "codex.cmd" : "codex",
     versionArgs: ["--version"],
-    platforms: ["linux", "windows"],
+    platforms: ["linux", "macos", "windows"],
     supportsImages: true,
     titleGeneration: true,
     probeModelOptions: true,
@@ -35,7 +42,7 @@ export const providerDefinitions: ProviderDefinition[] = [
     versionArgs: ["--version"],
     authCommand: isWindows ? "claude.cmd" : "claude",
     authArgs: ["auth", "status"],
-    platforms: ["linux", "windows"],
+    platforms: ["linux", "macos", "windows"],
     supportsImages: true,
     titleGeneration: true,
     probeModelOptions: true,
@@ -49,7 +56,7 @@ export const providerDefinitions: ProviderDefinition[] = [
     args: ["acp"],
     versionCommand: "opencode",
     versionArgs: ["--version"],
-    platforms: ["linux", "windows"],
+    platforms: ["linux", "macos", "windows"],
     supportsImages: true,
     titleGeneration: true,
     probeModelOptions: true,
@@ -63,7 +70,7 @@ export const providerDefinitions: ProviderDefinition[] = [
     args: ["acp"],
     versionCommand: isWindows ? "agent.cmd" : "agent",
     versionArgs: ["--version"],
-    platforms: ["linux", "windows"],
+    platforms: ["linux", "macos", "windows"],
     supportsImages: true,
     titleGeneration: true,
     probeModelOptions: true,
@@ -79,7 +86,7 @@ export const providerDefinitions: ProviderDefinition[] = [
     args: ["agent", "stdio"],
     versionCommand: isWindows ? "grok.exe" : "grok",
     versionArgs: ["version"],
-    platforms: ["linux", "windows"],
+    platforms: ["linux", "macos", "windows"],
     supportsImages: false,
     titleGeneration: false,
     probeModelOptions: false,
@@ -95,7 +102,7 @@ export const providerDefinitions: ProviderDefinition[] = [
     args: ["--yes", `@victor-software-house/pi-acp@${PI_ACP_VERSION}`],
     versionCommand: isWindows ? "pi.cmd" : "pi",
     versionArgs: ["--version"],
-    platforms: ["linux", "windows"],
+    platforms: ["linux", "macos", "windows"],
     supportsImages: true,
     titleGeneration: true,
     probeModelOptions: false,
@@ -109,7 +116,7 @@ export const providerDefinitions: ProviderDefinition[] = [
     args: ["acp"],
     versionCommand: "fx",
     versionArgs: ["--version"],
-    platforms: ["linux"],
+    platforms: ["linux", "macos"],
     supportsImages: false,
     titleGeneration: false,
     probeModelOptions: false,
