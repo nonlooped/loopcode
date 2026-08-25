@@ -29,6 +29,10 @@ if (nextCargo === cargo) {
 }
 writeFileSync("src-tauri/Cargo.toml", nextCargo);
 
-execFileSync("cargo", ["metadata", "--manifest-path", "src-tauri/Cargo.toml", "--format-version", "1"], {
-  stdio: "ignore",
-});
+execFileSync(
+  "cargo",
+  ["metadata", "--manifest-path", "src-tauri/Cargo.toml", "--format-version", "1"],
+  {
+    stdio: "ignore",
+  },
+);

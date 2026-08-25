@@ -13,8 +13,10 @@ export function releaseNotes(changelog, tag) {
 }
 
 export function nightlyNotes({ tag, shortSha, previousTag, commits }) {
-  if (!/^v\d+\.\d+\.\d+-nightly\.\d{8}\.\d+$/.test(tag)) throw new Error(`invalid nightly tag: ${tag}`);
-  const list = commits.length > 0 ? commits.map((commit) => `- ${commit}`).join("\n") : "- No new commits.";
+  if (!/^v\d+\.\d+\.\d+-nightly\.\d{8}\.\d+$/.test(tag))
+    throw new Error(`invalid nightly tag: ${tag}`);
+  const list =
+    commits.length > 0 ? commits.map((commit) => `- ${commit}`).join("\n") : "- No new commits.";
   return `Nightly \`${tag}\` (${shortSha}). Not a stable release.\n\n## Changes since ${previousTag}\n\n${list}\n`;
 }
 
@@ -39,4 +41,3 @@ if (import.meta.main) {
     process.exitCode = 1;
   }
 }
-
