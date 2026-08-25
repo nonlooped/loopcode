@@ -4,6 +4,7 @@
   import { IconAlertCircle, IconLayoutSidebarRight, IconRefresh } from '@tabler/icons-svelte';
 
   import ProjectFileNode from './ProjectFileNode.svelte';
+  import ChangesPanel from './ChangesPanel.svelte';
   import {
     readProjectDirectory,
     startProjectFileWatcher,
@@ -18,7 +19,6 @@
     activeFilePath: string | null;
     currentBranch: string | null | undefined;
     branches: string[] | null | undefined;
-    colorMode: 'light' | 'dark';
     toggle: () => void;
     openFile: (path: string) => void;
     filesChanged: (paths: string[]) => void;
@@ -26,7 +26,7 @@
   }
 
   const {
-    open, visible, projectRoot, projectName, activeFilePath, currentBranch, branches, colorMode,
+    open, visible, projectRoot, projectName, activeFilePath, currentBranch, branches,
     toggle, openFile, filesChanged, startResize,
   }: Props = $props();
   let entries = $state<ProjectFileEntry[]>([]);
@@ -39,7 +39,6 @@
   let tree = $state<HTMLUListElement>();
   let focusedPath = $state<string | null>(null);
   let view = $state<'files' | 'changes'>('files');
-  let changesPanel = $state<Promise<typeof import('./ChangesPanel.svelte')>>();
 
   onMount(() => {
     let disposed = false;
@@ -140,7 +139,6 @@
   function setView(value: string) {
     if (value !== 'files' && value !== 'changes') return;
     view = value;
-    if (value === 'changes') changesPanel ??= import('./ChangesPanel.svelte');
   }
 
   function errorMessage(cause: unknown) {
@@ -176,7 +174,7 @@
       title={visible ? 'Collapse right sidebar' : 'Expand right sidebar'}
       onclick={toggle}
     >
-      <IconLayoutSidebarRight size={14} stroke={1.45} />
+      <IconLayoutSidebarRight size={14} stroke={1.55} />
     </button>
   </div>
 
@@ -217,25 +215,20 @@
       {/if}
     </Tabs.Content>
     <Tabs.Content class="project-explorer-scroll project-changes-scroll" value="changes">
-      {#if changesPanel}
-        {#await changesPanel}
-          <p class="project-explorer-empty">Loading changes…</p>
-        {:then { default: ChangesPanel }}
-          <ChangesPanel
-            cwd={projectRoot}
-            {currentBranch}
-            {branches}
-            {revision}
-            {colorMode}
-          />
-        {/await}
+      {#if view === 'changes'}
+        <ChangesPanel
+          cwd={projectRoot}
+          {currentBranch}
+          {branches}
+          {revision}
+        />
       {/if}
     </Tabs.Content>
   </Tabs.Root>
 
   {#if notice}
     <button class="project-explorer-notice" title={notice} onclick={() => { notice = ''; }}>
-      <IconAlertCircle size={13} stroke={1.6} />
+      <IconAlertCircle size={13} stroke={1.55} />
       <span>{notice}</span>
     </button>
   {/if}

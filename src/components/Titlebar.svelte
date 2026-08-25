@@ -58,7 +58,7 @@
           <button class="traffic-maximize" aria-label="Maximize" title="Maximize" onclick={toggleMaximize}></button>
         </div>
         <button class="chrome-button" aria-label="Toggle sidebar" title="Toggle sidebar" onclick={toggleSidebar}>
-          <IconLayoutSidebar size={14} stroke={1.45} />
+          <IconLayoutSidebar size={14} stroke={1.55} />
         </button>
         <button class="chrome-button" aria-label="New thread" title="New thread" onclick={addThread}>
           <IconPlus size={15} stroke={1.55} />
@@ -82,19 +82,19 @@
             {/if}
           </span>
         {/key}
-        {#if !settingsOpen && selectedThread}
-          <button
-            class:active={terminalOpen}
-            class="chrome-button title-terminal-toggle"
-            aria-label={terminalOpen ? 'Close terminal drawer' : 'Open terminal drawer'}
-            aria-pressed={terminalOpen}
-            title={`${terminalOpen ? 'Close' : 'Open'} terminal (Ctrl/Cmd+\`)`}
-            onclick={toggleTerminal}
-          >
-            <IconTerminal2 size={14} stroke={1.55} />
-          </button>
-        {/if}
       </div>
+      {#if !settingsOpen && selectedThread}
+        <button
+          class:active={terminalOpen}
+          class="chrome-button title-terminal-toggle"
+          aria-label={terminalOpen ? 'Close terminal drawer' : 'Open terminal drawer'}
+          aria-pressed={terminalOpen}
+          title={`${terminalOpen ? 'Close' : 'Open'} terminal (Ctrl/Cmd+\`)`}
+          onclick={toggleTerminal}
+        >
+          <IconTerminal2 size={14} stroke={1.55} />
+        </button>
+      {/if}
     </header>
   {/snippet}
 </ContextMenu>

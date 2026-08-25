@@ -86,7 +86,7 @@
   >
     <img class:brand-color-icon={selectedProfile.iconMode === 'brand'} src={selectedProfile.icon} alt="" />
     <span>{props.label}</span>
-    <IconChevronDown size={11} stroke={1.7} />
+    <IconChevronDown size={11} stroke={1.55} />
   </Popover.Trigger>
   <Popover.Portal>
     <Popover.Content
@@ -133,7 +133,7 @@
             allowDeselect={false}
           >
             <label class="model-search">
-              <IconSearch size={13} stroke={1.7} />
+              <IconSearch size={13} stroke={1.55} />
               <Combobox.Input
                 oninput={(event) => { modelSearch = event.currentTarget.value; }}
                 aria-label="Search models"

@@ -117,12 +117,12 @@
       >
         <span class="project-file-chevron" aria-hidden="true">
           {#if entry.isDirectory}
-            {#if expanded}<IconChevronDown size={13} stroke={1.65} />{:else}<IconChevronRight size={13} stroke={1.65} />{/if}
+            {#if expanded}<IconChevronDown size={13} stroke={1.55} />{:else}<IconChevronRight size={13} stroke={1.55} />{/if}
           {/if}
         </span>
         {#if icon}<img class="project-file-icon" src={icon} alt="" />{/if}
         <span class="project-file-name">{entry.name}</span>
-        {#if entry.isSymlink}<IconLink class="project-file-link" size={11} stroke={1.6} />{/if}
+        {#if entry.isSymlink}<IconLink class="project-file-link" size={11} stroke={1.55} />{/if}
       </button>
     {/snippet}
   </ContextMenu>

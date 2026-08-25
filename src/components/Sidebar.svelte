@@ -155,7 +155,7 @@
     <div class="sidebar-heading">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger class="workspace-identity" title="Choose folder">
-          <IconFolder size={15} stroke={1.6} />
+          <IconFolder size={15} stroke={1.55} />
           <strong>{props.activeProject ? props.activeProject.name : 'All projects'}</strong>
           <IconChevronDown class="workspace-chevron" size={12} stroke={1.55} />
         </DropdownMenu.Trigger>
@@ -174,7 +174,7 @@
             >
               <DropdownMenu.RadioItem class="workspace-option" value="__all-projects__">
                 {#snippet children({ checked })}
-                  <IconFolder size={13} stroke={1.6} />
+                  <IconFolder size={13} stroke={1.55} />
                   <span class="workspace-option-main">
                     <strong>All projects</strong>
                     <small title={props.defaultWorkingFolder}>{props.defaultWorkingFolder || 'local'} · default</small>
@@ -187,7 +187,7 @@
                   {#snippet children({ props: triggerProps })}
                     <DropdownMenu.RadioItem {...triggerProps} class="workspace-option" value={project.id}>
                       {#snippet children({ checked })}
-                        <IconFolder size={13} stroke={1.6} />
+                        <IconFolder size={13} stroke={1.55} />
                         <span class="workspace-option-main">
                           <strong>{project.name}</strong>
                           <small title={project.path}>{project.path}</small>
@@ -201,14 +201,14 @@
             </DropdownMenu.RadioGroup>
             <DropdownMenu.Separator class="workspace-dropdown-separator" />
             <DropdownMenu.Item class="workspace-add-folder" onSelect={props.addProject}>
-              <IconFolderPlus size={13} stroke={1.7} /> Add folder…
+              <IconFolderPlus size={13} stroke={1.55} /> Add folder…
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       <div class="heading-actions">
         <button class="icon-button" aria-label="New thread" title="New thread" onclick={props.addThread}>
-          <IconPlus size={14} stroke={1.7} />
+          <IconPlus size={14} stroke={1.55} />
         </button>
       </div>
     </div>
@@ -286,14 +286,14 @@
                             aria-label={`Archive ${thread.title}`}
                             title="Archive"
                             onclick={(event) => { event.stopPropagation(); props.toggleSettled(thread.id); }}
-                          ><IconArchive size={13} stroke={1.7} /></button>
+                          ><IconArchive size={13} stroke={1.55} /></button>
                           <button
                             type="button"
                             class="remove-thread"
                             aria-label={`Delete ${thread.title}`}
                             title="Delete thread"
                             onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
-                          ><IconTrash size={13} stroke={1.7} /></button>
+                          ><IconTrash size={13} stroke={1.55} /></button>
                         </span>
                         </div>
                       {/snippet}
@@ -314,7 +314,7 @@
         <Collapsible.Trigger class="section-header">
           <span class="section-title">Archived{#if !props.showSettled} ({props.settledThreads.length}){/if}</span>
           <span class="section-rule"></span>
-          <IconChevronRight class="section-chevron" size={11} stroke={1.7} />
+          <IconChevronRight class="section-chevron" size={11} stroke={1.55} />
         </Collapsible.Trigger>
         <Collapsible.Content>
           <nav class="thread-list settled" aria-label="Archived threads">
@@ -358,14 +358,14 @@
                         aria-label={`Unarchive ${thread.title}`}
                         title="Unarchive"
                         onclick={(event) => { event.stopPropagation(); props.toggleSettled(thread.id); }}
-                      ><IconInbox size={12} stroke={1.7} /></button>
+                      ><IconInbox size={12} stroke={1.55} /></button>
                       <button
                         type="button"
                         class="remove-thread"
                         aria-label={`Delete ${thread.title}`}
                         title="Delete thread"
                         onclick={(event) => { event.stopPropagation(); props.removeThread(thread.id); }}
-                      ><IconTrash size={12} stroke={1.7} /></button>
+                      ><IconTrash size={12} stroke={1.55} /></button>
                     </span>
                   </div>
                 {/snippet}
@@ -376,7 +376,7 @@
           </nav>
           {#if props.settledThreads.length > 0}
             <button class="clear-archived" onclick={() => { archiveDeletionPending = true; }}>
-              <IconTrash size={12} stroke={1.7} /> Delete all archived
+              <IconTrash size={12} stroke={1.55} /> Delete all archived
             </button>
           {/if}
         </Collapsible.Content>

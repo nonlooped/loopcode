@@ -27,7 +27,7 @@
   background: transparent;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 500;
   letter-spacing: 0;
 }
 
@@ -327,14 +327,14 @@
   color: var(--danger);
 }
 
-.thread-item:hover .thread-updated,
-.thread-item:focus-within .thread-updated {
-  opacity: 0;
+.thread-item:hover:not(.slim) .thread-title-motion,
+.thread-item:focus-within:not(.slim) .thread-title-motion {
+  padding-right: 50px;
 }
 
 .thread-actions {
   position: absolute;
-  top: 4px;
+  top: 22px;
   right: 5px;
   display: flex;
   align-items: center;
@@ -342,6 +342,10 @@
   flex: 0 0 auto;
   opacity: 0;
   pointer-events: none;
+}
+
+.thread-item.slim .thread-actions {
+  top: 7px;
 }
 
 .thread-item:hover .thread-actions,

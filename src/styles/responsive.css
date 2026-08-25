@@ -1,10 +1,3 @@
-@media (max-width: 1100px) {
-  .app-shell {
-    --sidebar-expanded-width: 255px;
-    --project-explorer-expanded-width: 252px;
-  }
-}
-
 @media (max-width: 880px) {
   .titlebar {
     width: 100%;
@@ -20,8 +13,24 @@
     background: transparent;
   }
 
+  .title-terminal-toggle {
+    position: fixed;
+    top: 6px;
+    right: 37px;
+    z-index: 13;
+  }
+
   .title-context {
     padding-left: 160px;
+    padding-right: 72px;
+  }
+
+  .app-shell:has(.project-explorer.open) .title-terminal-toggle {
+    right: calc(8px + var(--project-explorer-expanded-width));
+  }
+
+  .app-shell:has(.project-explorer.open) .title-context {
+    padding-right: calc(46px + var(--project-explorer-expanded-width));
   }
 
   .app-shell.sidebar-collapsed .title-context {
@@ -36,9 +45,9 @@
     position: fixed;
     z-index: 12;
     top: 0;
-    right: -239px;
+    right: calc(31px - var(--project-explorer-expanded-width));
     bottom: 0;
-    width: 270px;
+    width: var(--project-explorer-expanded-width);
     visibility: visible !important;
     background: var(--raised-surface);
     box-shadow: -22px 0 60px rgba(0, 0, 0, 0.4);
@@ -91,7 +100,7 @@
     top: var(--titlebar-height);
     bottom: 0;
     left: 0;
-    width: 270px;
+    width: var(--sidebar-expanded-width);
     padding-top: 0;
     visibility: visible !important;
     transform: translateX(-103%);
@@ -301,7 +310,8 @@
     -webkit-backdrop-filter: none;
   }
 
-  .app-shell {
+  .app-shell,
+  .file-viewer-html {
     background: var(--shell-solid);
   }
 

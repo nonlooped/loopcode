@@ -134,7 +134,7 @@
       >
         {#if props.worktree}<IconGitFork size={12} stroke={1.55} />{:else}<IconFolder size={12} stroke={1.55} />{/if}
         <span>{props.worktree ? 'New worktree' : 'Current checkout'}</span>
-        {#if !props.worktree}<IconChevronDown size={10} stroke={1.7} />{/if}
+        {#if !props.worktree}<IconChevronDown size={10} stroke={1.55} />{/if}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
@@ -151,7 +151,7 @@
           >
             <DropdownMenu.RadioItem class="workspace-option" value="checkout">
               {#snippet children({ checked })}
-                <IconFolder size={13} stroke={1.6} />
+                <IconFolder size={13} stroke={1.55} />
                 <span class="workspace-option-main">
                   <strong>Current checkout</strong>
                   <small>Use this folder directly</small>
@@ -161,7 +161,7 @@
             </DropdownMenu.RadioItem>
             <DropdownMenu.RadioItem class="workspace-option" value="worktree">
               {#snippet children({ checked })}
-                <IconGitFork size={13} stroke={1.6} />
+                <IconGitFork size={13} stroke={1.55} />
                 <span class="workspace-option-main">
                   <strong>New worktree</strong>
                   <small>Create a separate branch and folder</small>
@@ -190,7 +190,7 @@
           : `${props.currentBranch}${props.worktree ? ' · worktree' : ''}`}
     </span>
     {#if props.editable && props.currentBranch !== null}
-      <IconChevronDown size={10} stroke={1.7} />
+      <IconChevronDown size={10} stroke={1.55} />
     {/if}
   </Popover.Trigger>
   <Popover.Portal>
@@ -212,7 +212,7 @@
         allowDeselect={false}
       >
         <label class="model-search">
-          <IconSearch size={13} stroke={1.7} />
+          <IconSearch size={13} stroke={1.55} />
           <Combobox.Input
             oninput={(event) => { branchSearch = event.currentTarget.value; }}
             aria-label="Search branches"

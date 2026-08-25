@@ -549,7 +549,7 @@
                   onclick={() => { imagePreview = { src: image.previewUrl, name: image.name }; }}
                 ><img src={image.previewUrl} alt="" /></button>
                 <button class="image-attachment-remove" type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
-                  <IconX size={10} stroke={2} />
+                  <IconX size={10} stroke={1.55} />
                 </button>
               </div>
             {/snippet}
@@ -569,7 +569,7 @@
       disabled={!canEdit() || !profile.supportsImages}
       onclick={() => imageInput?.click()}
     >
-      <IconPaperclip size={16} stroke={1.7} />
+      <IconPaperclip size={16} stroke={1.55} />
     </button>
     <div
       bind:this={promptEditor}
@@ -586,9 +586,9 @@
       contenteditable={canEdit()}
       spellcheck={props.spellcheck}
       data-placeholder={status === 'running'
-        ? 'Agent is working...'
+        ? 'Agent is working…'
         : status === 'connecting'
-          ? `Starting ${threadHarness(props.thread, props.profiles)}...`
+          ? `Starting ${threadHarness(props.thread, props.profiles)}…`
           : status === 'error'
             ? provider.turnStatus === 'blocked'
               ? 'Turn state is inconsistent — reconnect provider'
@@ -624,7 +624,7 @@
               }}
             >
               {#if entry.kind === 'skill'}
-                <span class="composer-completion-skill"><IconSparkles size={14} stroke={1.7} /></span>
+                <span class="composer-completion-skill"><IconSparkles size={14} stroke={1.55} /></span>
               {:else}
                 {@const icon = entry.kind === 'folder' ? materialFolderIcon(entry.name, false) : materialFileIcon(entry.name)}
                 {#if icon}<img src={icon} alt="" />{/if}
@@ -670,12 +670,12 @@
         {/if}
       </div>
       {#if status === 'running'}
-        <button class="cancel-button" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.5} /></button>
+        <button class="cancel-button" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.55} /></button>
       {:else if status === 'error' || status === 'stopped'}
-        <button class="reconnect-button" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.7} /></button>
+        <button class="reconnect-button" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.55} /></button>
       {:else}
         <button class="send-button" aria-label="Send prompt" title={hasMissingReferences() ? 'Remove missing references before sending' : props.gitBusy ? 'Wait for the Git operation to finish' : 'Send prompt'} disabled={props.gitBusy || (!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
-          <IconArrowUp size={17} stroke={2} />
+          <IconArrowUp size={17} stroke={1.55} />
         </button>
       {/if}
     </div>

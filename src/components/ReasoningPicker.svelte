@@ -30,7 +30,7 @@
     title={`Reasoning: ${selectedName}${fastModeEnabled ? ' · Fast mode' : ''}`}
   >
     <span>{selectedName}</span>
-    {#if fastModeEnabled}<IconBolt class="fast-mode-indicator" size={13} stroke={1.9} aria-hidden="true" />{/if}
+    {#if fastModeEnabled}<IconBolt class="fast-mode-indicator" size={13} stroke={1.55} aria-hidden="true" />{/if}
   </DropdownMenu.Trigger>
   <DropdownMenu.Portal>
     <DropdownMenu.Content
@@ -81,7 +81,7 @@
               >
                 {#snippet children({ checked })}
                   <span>Fast</span>
-                  {#if checked}<IconCheck size={14} stroke={2} />{:else}<IconBolt size={14} stroke={1.9} />{/if}
+                  {#if checked}<IconCheck size={14} stroke={2} />{:else}<IconBolt size={14} stroke={1.55} />{/if}
                 {/snippet}
               </DropdownMenu.RadioItem>
             </DropdownMenu.RadioGroup>
