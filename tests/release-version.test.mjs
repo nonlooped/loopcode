@@ -5,6 +5,7 @@ import test from "node:test";
 import { releaseNotes } from "../scripts/release-notes.mjs";
 
 const version = JSON.parse(readFileSync("package.json", "utf8")).version;
+const releaseScript = readFileSync("scripts/release.sh", "utf8");
 const releaseWorkflow = readFileSync(".github/workflows/release.yml", "utf8");
 const versionSetter = readFileSync("scripts/set-version.mjs", "utf8");
 
@@ -16,6 +17,10 @@ void test("release version check accepts the matching tag and rejects another ta
   assert.throws(() =>
     execFileSync(process.execPath, ["scripts/check-versions.mjs", "v0.0.0-invalid"], options),
   );
+});
+
+void test("release changelog ignores nightly tags", () => {
+  assert.ok(releaseScript.includes("--tag-pattern '^v[0-9]+\\.[0-9]+\\.[0-9]+$'"));
 });
 
 void test("version setter accepts stable and nightly versions without platform wrappers", () => {

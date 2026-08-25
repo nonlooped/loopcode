@@ -20,7 +20,7 @@ git switch -c "$release_branch"
 
 node scripts/set-version.mjs "$ver"
 node scripts/check-versions.mjs "v$ver"
-npx --yes git-cliff@2.13.1 --tag "v$ver" -o CHANGELOG.md
+npx --yes git-cliff@2.13.1 --tag "v$ver" --tag-pattern '^v[0-9]+\.[0-9]+\.[0-9]+$' -o CHANGELOG.md
 npx vp check --fix CHANGELOG.md
 
 git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock CHANGELOG.md
