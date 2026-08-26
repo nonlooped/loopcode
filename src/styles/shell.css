@@ -33,6 +33,38 @@
   pointer-events: none;
 }
 
+.workspace-save-error {
+  position: fixed;
+  z-index: 30;
+  top: calc(var(--titlebar-height) + 10px);
+  right: 12px;
+  display: flex;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 7px 8px 7px 10px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--line-strong));
+  border-radius: 7px;
+  background: var(--floating-solid);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.workspace-save-error button {
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+}
+
+.workspace-save-error button:hover {
+  background: var(--panel-hover);
+}
+
 .titlebar {
   position: relative;
   z-index: 10;
