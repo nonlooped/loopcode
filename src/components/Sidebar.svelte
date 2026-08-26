@@ -306,21 +306,19 @@
         {/if}
       </section>
 
+      {#if props.settledThreads.length > 0}
       <Collapsible.Root
         class="sidebar-section settled-section"
         open={props.showSettled}
         onOpenChange={props.setShowSettled}
       >
         <Collapsible.Trigger class="section-header">
-          <span class="section-title">Archived{#if !props.showSettled} ({props.settledThreads.length}){/if}</span>
+          <span class="section-title">Archived{props.showSettled ? '' : ` (${props.settledThreads.length})`}</span>
           <span class="section-rule"></span>
           <IconChevronRight class="section-chevron" size={11} stroke={1.55} />
         </Collapsible.Trigger>
         <Collapsible.Content>
           <nav class="thread-list settled" aria-label="Archived threads">
-            {#if props.settledThreads.length === 0}
-              <div class="empty-hint">No archived threads</div>
-            {:else}
               {#each props.settledThreads as thread (thread.id)}
                 {@const threadProfile = profileById(thread.profileId)}
                 <div class="thread-motion" animate:flip={{ duration: props.compactMotion ? 0 : 260 }}>
@@ -372,15 +370,13 @@
               </ContextMenu>
               </div>
               {/each}
-            {/if}
           </nav>
-          {#if props.settledThreads.length > 0}
-            <button class="clear-archived" onclick={() => { archiveDeletionPending = true; }}>
-              <IconTrash size={12} stroke={1.55} /> Delete all archived
-            </button>
-          {/if}
+          <button class="clear-archived" onclick={() => { archiveDeletionPending = true; }}>
+            <IconTrash size={12} stroke={1.55} /> Delete all archived
+          </button>
         </Collapsible.Content>
       </Collapsible.Root>
+      {/if}
     </div>
 
     <button class="sidebar-foot" onclick={props.openSettings}>

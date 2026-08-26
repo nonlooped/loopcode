@@ -277,7 +277,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: var(--faint);
+  color: var(--muted);
   font-size: 11px;
 }
 

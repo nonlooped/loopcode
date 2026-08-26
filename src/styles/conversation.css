@@ -33,13 +33,13 @@
 
 .empty-thread-heading {
   width: min(var(--content-width, 720px), calc(100% - 56px));
-  margin: 0 auto 18px;
+  margin: 0 auto 20px;
   padding: 0 14px;
   overflow-wrap: anywhere;
   color: var(--text);
-  font-size: 22px;
-  font-weight: 500;
-  letter-spacing: -0.025em;
+  font-size: 24px;
+  font-weight: 550;
+  letter-spacing: -0.03em;
   line-height: 1.25;
   text-align: center;
 }
@@ -78,7 +78,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--panel);
+  background: var(--raised-surface);
 }
 
 .settings-row {
