@@ -1,6 +1,8 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vite-plus";
 
+import { materialIconMapsFromManifest } from "./src/utils/material-icon-lookup.ts";
+
 const tauriHost = process.env.TAURI_DEV_HOST;
 const ignorePatterns = [
   ".agent/**",
@@ -28,18 +30,7 @@ function materialIconManifest() {
     async load(source: string) {
       if (source !== resolved) return;
       const { generateManifest } = await import("material-icon-theme");
-      const manifest = generateManifest();
-      return `export default ${JSON.stringify({
-        file: manifest.file ?? "file",
-        folder: manifest.folder ?? "folder",
-        folderExpanded: manifest.folderExpanded ?? "folder-open",
-        rootFolder: manifest.rootFolder ?? "folder-root",
-        rootFolderExpanded: manifest.rootFolderExpanded ?? "folder-root-open",
-        fileNames: manifest.fileNames ?? {},
-        fileExtensions: manifest.fileExtensions ?? {},
-        folderNames: manifest.folderNames ?? {},
-        folderNamesExpanded: manifest.folderNamesExpanded ?? {},
-      })};`;
+      return `export default ${JSON.stringify(materialIconMapsFromManifest(generateManifest()))};`;
     },
   };
 }

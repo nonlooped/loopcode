@@ -10,6 +10,48 @@ export type MaterialIconMaps = {
   folderNamesExpanded?: Record<string, string>;
 };
 
+export type MaterialIconManifest = MaterialIconMaps & {
+  iconDefinitions?: Record<string, { iconPath: string }>;
+};
+
+function iconBasename(
+  definitions: Record<string, { iconPath: string }> | undefined,
+  id: string | undefined,
+  fallback: string,
+) {
+  if (!id) return fallback;
+  const iconPath = definitions?.[id]?.iconPath;
+  if (!iconPath) return id;
+  const file = iconPath.slice(iconPath.lastIndexOf("/") + 1);
+  return file.endsWith(".svg") ? file.slice(0, -4) : file || fallback;
+}
+
+function remap(
+  definitions: Record<string, { iconPath: string }> | undefined,
+  values: Record<string, string> | undefined,
+) {
+  const mappedValues: Record<string, string> = {};
+  for (const [key, id] of Object.entries(values ?? {})) {
+    mappedValues[key] = iconBasename(definitions, id, id);
+  }
+  return mappedValues;
+}
+
+export function materialIconMapsFromManifest(manifest: MaterialIconManifest): MaterialIconMaps {
+  const definitions = manifest.iconDefinitions;
+  return {
+    file: iconBasename(definitions, manifest.file, "file"),
+    folder: iconBasename(definitions, manifest.folder, "folder"),
+    folderExpanded: iconBasename(definitions, manifest.folderExpanded, "folder-open"),
+    rootFolder: iconBasename(definitions, manifest.rootFolder, "folder-root"),
+    rootFolderExpanded: iconBasename(definitions, manifest.rootFolderExpanded, "folder-root-open"),
+    fileNames: remap(definitions, manifest.fileNames),
+    fileExtensions: remap(definitions, manifest.fileExtensions),
+    folderNames: remap(definitions, manifest.folderNames),
+    folderNamesExpanded: remap(definitions, manifest.folderNamesExpanded),
+  };
+}
+
 function mapped(values: Record<string, string> | undefined, key: string) {
   if (!values || !Object.hasOwn(values, key)) return undefined;
   // SAFETY: Object.hasOwn established that key is present in values.
