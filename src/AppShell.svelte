@@ -432,7 +432,12 @@
   }
 
   function toggleSettled(threadId: string) {
-    workspace.toggleSettled(threadId);
+    const replacement = workspace.toggleSettled(
+      threadId,
+      defaultWorkingFolder,
+      preferences.newThreadProject === 'selected' ? selectedProjectId : null,
+    );
+    if (replacement) applyNewThreadDefaults(replacement);
   }
 
   function requestThreadRemoval(threadId: string) {
