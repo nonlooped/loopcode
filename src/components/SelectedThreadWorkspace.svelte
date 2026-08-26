@@ -46,6 +46,8 @@
     preferences: AppPreferences;
     reducedMotion: boolean;
     compactLayout: boolean;
+    projectExplorerOpen: boolean;
+    setProjectExplorerOpen: (open: boolean) => void;
     projectExplorerCollapsed: boolean;
     defaultWorkingFolder: string;
     attachImages: (files: File[]) => void;
@@ -83,6 +85,8 @@
     preferences,
     reducedMotion,
     compactLayout,
+    projectExplorerOpen,
+    setProjectExplorerOpen,
     projectExplorerCollapsed = $bindable(),
     defaultWorkingFolder,
     attachImages,
@@ -99,7 +103,6 @@
     setGitBusy,
   }: Props = $props();
 
-  let projectExplorerOpen = $state(false);
   let currentBranch = $state<string | null | undefined>(undefined);
   let gitBranches = $state<string[] | null | undefined>(undefined);
   let gitOperationThreadId = $state<string>();
@@ -136,7 +139,7 @@
   $effect(() => {
     if (selectedThreadId === fileViewerThreadId) return;
     fileViewerThreadId = selectedThreadId;
-    projectExplorerOpen = false;
+    setProjectExplorerOpen(false);
     fileHistory = [];
     fileHistoryIndex = -1;
     fileRevision = 0;
@@ -247,7 +250,7 @@
     fileHistory = [...fileHistory.slice(0, fileHistoryIndex + 1), path];
     fileHistoryIndex = fileHistory.length - 1;
     fileRevision += 1;
-    if (compactLayout) projectExplorerOpen = false;
+    if (compactLayout) setProjectExplorerOpen(false);
   }
 
   function projectFilesChanged(paths: string[]) {
@@ -300,11 +303,15 @@
   }
 
   function toggleProjectExplorer() {
-    if (compactLayout) projectExplorerOpen = !projectExplorerOpen;
+    if (compactLayout) setProjectExplorerOpen(!projectExplorerOpen);
     else projectExplorerCollapsed = !projectExplorerCollapsed;
   }
 
 </script>
+
+{#if compactLayout && projectExplorerOpen}
+  <button type="button" class="compact-drawer-backdrop" tabindex="-1" aria-label="Close project explorer" onclick={() => setProjectExplorerOpen(false)}></button>
+{/if}
 
 <div class="workspace-grid">
   <main class="conversation">

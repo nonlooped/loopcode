@@ -125,6 +125,7 @@
   let sidebarCollapsed = $state(false);
   let showSettled = $state(false);
   let projectExplorerCollapsed = $state(true);
+  let projectExplorerOpen = $state(false);
   let terminalOpen = $state(false);
   let terminalThreadIds = $state<string[]>([]);
   let terminalHeight = $state(loadTerminalHeight());
@@ -305,6 +306,14 @@
   });
 
   function handleAppKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && compactLayout) {
+      if (sidebarOpen) sidebarOpen = false;
+      else if (projectExplorerOpen) projectExplorerOpen = false;
+      else return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     if (event.code === 'Backquote' && selectedThread && !settingsOpen) {
       event.preventDefault();
@@ -327,6 +336,7 @@
 
   function closeThreadSurfaces() {
     sidebarOpen = false;
+    projectExplorerOpen = false;
   }
 
   function focusComposer() {
@@ -459,8 +469,16 @@
   }
 
   function toggleSidebar() {
-    if (window.matchMedia('(max-width: 880px)').matches) sidebarOpen = !sidebarOpen;
-    else sidebarCollapsed = !sidebarCollapsed;
+    if (window.matchMedia('(max-width: 880px)').matches) {
+      sidebarCollapsed = false;
+      sidebarOpen = !sidebarOpen;
+      if (sidebarOpen) projectExplorerOpen = false;
+    } else sidebarCollapsed = !sidebarCollapsed;
+  }
+
+  function setProjectExplorerOpen(open: boolean) {
+    projectExplorerOpen = open;
+    if (open) sidebarOpen = false;
   }
 
   function toggleTerminal() {
@@ -570,12 +588,14 @@
     settingsOpen = true;
     sidebarCollapsed = false;
     sidebarOpen = false;
+    projectExplorerOpen = false;
     void Promise.all(profiles.map(loadProviderMetadata));
   }
 
   function closeSettings() {
     settingsOpen = false;
     sidebarOpen = false;
+    projectExplorerOpen = false;
   }
 
   function setSettingsCategory(category: SettingsCategory) {
@@ -887,6 +907,9 @@
       <button type="button" onclick={() => { workspaceSaveError = ''; }}>Dismiss</button>
     </div>
   {/if}
+  {#if compactLayout && sidebarOpen}
+    <button type="button" class="compact-drawer-backdrop" tabindex="-1" aria-label="Close sidebar" onclick={() => { sidebarOpen = false; }}></button>
+  {/if}
   <Sidebar
       open={sidebarOpen}
       {settingsOpen}
@@ -941,6 +964,8 @@
     {preferences}
     {reducedMotion}
     {compactLayout}
+    {projectExplorerOpen}
+    {setProjectExplorerOpen}
     bind:projectExplorerCollapsed
     {defaultWorkingFolder}
     attachImages={(files) => { if (selectedThread) void attachImages(files, selectedThread.id); }}
@@ -982,7 +1007,7 @@
   </SelectedThreadWorkspace>
 </div>
 
-<svelte:window onkeydown={(event) => {
+<svelte:window onkeydowncapture={(event) => {
   handleAppKeydown(event);
 }} />
 
