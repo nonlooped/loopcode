@@ -95,8 +95,11 @@ export function providerCanToggle(
   profileId: string,
   catalog: ProviderModelCatalog | undefined,
   authenticated?: boolean,
+  enabled = true,
 ) {
-  return catalog?.status === "ready" && (profileId !== "claude" || authenticated === true);
+  return (
+    !enabled || (catalog?.status === "ready" && (profileId !== "claude" || authenticated === true))
+  );
 }
 
 export function providerDisplayStatus(

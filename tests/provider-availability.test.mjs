@@ -108,4 +108,5 @@ void test("only connected or authenticated providers can be toggled", () => {
   assert.equal(providerCanToggle("claude", ready("claude-model"), true), true);
   assert.equal(providerCanToggle("pi", ready("pi-model")), true);
   assert.equal(providerCanToggle("grok", undefined), false);
+  assert.equal(providerCanToggle("grok", undefined, undefined, false), true);
 });
