@@ -1,6 +1,8 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vite-plus";
 
+import { materialIconMapsFromManifest } from "./src/utils/material-icon-lookup.ts";
+
 const tauriHost = process.env.TAURI_DEV_HOST;
 const ignorePatterns = [
   ".agent/**",
@@ -17,9 +19,25 @@ const ignorePatterns = [
   "src-tauri/gen/**",
 ];
 
+function materialIconManifest() {
+  const id = "virtual:material-icon-manifest";
+  const resolved = `\0${id}`;
+  return {
+    name: "material-icon-manifest",
+    resolveId(source: string) {
+      if (source === id) return resolved;
+    },
+    async load(source: string) {
+      if (source !== resolved) return;
+      const { generateManifest } = await import("material-icon-theme");
+      return `export default ${JSON.stringify(materialIconMapsFromManifest(generateManifest()))};`;
+    },
+  };
+}
+
 export default defineConfig({
   // SAFETY: vite-plus currently bundles a different Vite plugin type version than Svelte.
-  plugins: svelte() as never,
+  plugins: [svelte() as never, materialIconManifest()],
   clearScreen: false,
   server: {
     port: 1420,
