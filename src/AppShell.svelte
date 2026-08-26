@@ -329,6 +329,10 @@
     sidebarOpen = false;
   }
 
+  function focusComposer() {
+    void tick().then(() => document.querySelector<HTMLElement>('.prompt-editor')?.focus());
+  }
+
   function applyNewThreadDefaults(thread: ThreadState) {
     const defaultProviderId = readyProviderId(
       preferences.defaultProviderId,
@@ -349,8 +353,10 @@
       preferences.newThreadProject === 'selected' ? selectedProjectId : null,
       hasComposerImages,
     );
-    if (thread) applyNewThreadDefaults(thread);
+    if (!thread) return;
+    applyNewThreadDefaults(thread);
     closeThreadSurfaces();
+    focusComposer();
   }
 
   function addThreadToProject(projectId: string) {
@@ -359,10 +365,10 @@
       projectId,
       hasComposerImages,
     );
-    if (thread) {
-      applyNewThreadDefaults(thread);
-      closeThreadSurfaces();
-    }
+    if (!thread) return;
+    applyNewThreadDefaults(thread);
+    closeThreadSurfaces();
+    focusComposer();
   }
 
   async function openAddProject() {
