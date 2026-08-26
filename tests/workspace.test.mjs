@@ -198,6 +198,35 @@ void test("reserves a checkout for conversation history and connected providers"
   assert.equal(threadReservesCheckout(thread), true);
 });
 
+void test("archiving the selected thread selects an inbox thread or starts a new one", () => {
+  const { state, workspace } = setup();
+  const first = state.threads[0];
+  first.draft = "keep this";
+  const second = workspace.addThread("C:\\default");
+  assert.ok(second);
+
+  assert.equal(workspace.toggleSettled(second.id, "C:\\default"), undefined);
+  assert.equal(state.selectedThreadId, first.id);
+
+  const replacement = workspace.toggleSettled(first.id, "C:\\default");
+  assert.ok(replacement);
+  assert.equal(state.selectedThreadId, replacement.id);
+  assert.equal(replacement.settled, false);
+});
+
+void test("archiving the final inbox thread honors the default-folder setting", () => {
+  const { state, workspace } = setup();
+  const project = workspace.ensureProject("C:\\loopcode");
+  workspace.selectProject(project.id);
+  const thread = state.threads[0];
+
+  const replacement = workspace.toggleSettled(thread.id, "C:\\default", null);
+
+  assert.ok(replacement);
+  assert.equal(replacement.projectId, null);
+  assert.equal(replacement.cwd, "C:\\default");
+});
+
 void test("keeps project, selection, and deletion invariants behind one interface", () => {
   const { state, workspace } = setup();
   const project = workspace.ensureProject("C:\\loopcode");

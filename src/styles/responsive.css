@@ -94,6 +94,18 @@
     visibility: visible;
   }
 
+  .compact-drawer-backdrop {
+    position: fixed;
+    z-index: 11;
+    top: var(--titlebar-height);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
   .thread-sidebar {
     position: fixed;
     z-index: 12;
@@ -102,13 +114,16 @@
     left: 0;
     width: var(--sidebar-expanded-width);
     padding-top: 0;
-    visibility: visible !important;
+    visibility: hidden !important;
+    pointer-events: none;
     transform: translateX(-103%);
     background: var(--raised-surface);
     box-shadow: 22px 0 60px rgba(0, 0, 0, 0.4);
   }
 
   .thread-sidebar.open {
+    visibility: visible !important;
+    pointer-events: auto;
     transform: translateX(0);
   }
 
