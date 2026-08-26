@@ -15,8 +15,6 @@ cargo test --manifest-path src-tauri/Cargo.toml
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-Please follow the [code of conduct](CODE_OF_CONDUCT.md).
-
 ## Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `perf:`, with an optional scope, such as `feat(provider): add retry`. Pull request titles follow the same format because LoopCode squash-merges pull requests and generates `CHANGELOG.md` from those commits.
