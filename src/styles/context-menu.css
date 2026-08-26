@@ -78,7 +78,7 @@
   place-items: center;
 }
 
-.image-preview-close {
+.image-preview .image-preview-close {
   position: absolute;
   top: 8px;
   right: 8px;
@@ -87,8 +87,9 @@
   box-shadow: var(--overlay-shadow);
 }
 
-.image-preview-close:hover {
+.image-preview .image-preview-close:hover {
   border-color: var(--line-strong);
+  background: var(--floating-surface);
 }
 
 .image-preview .visually-hidden-title {
