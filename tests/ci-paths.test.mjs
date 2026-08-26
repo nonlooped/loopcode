@@ -60,7 +60,7 @@ void test("CI compiles rust only for native paths and tests Windows and macOS", 
 void test("release workflow uses separate release caches", () => {
   assert.match(
     releaseWorkflow,
-    /group: release-\$\{\{ github\.event_name == 'workflow_run' && 'nightly' \|\| 'stable' \}\}/,
+    /group: release-\$\{\{ github\.event_name == 'schedule' && 'nightly' \|\| 'stable' \}\}/,
   );
   assert.match(releaseWorkflow, /cancel-in-progress: false/);
   assert.match(releaseWorkflow, /cache-key: linux-rust-release/);
