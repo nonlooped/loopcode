@@ -28,7 +28,6 @@
   type TerminalStatus =
     | { kind: 'starting' }
     | { kind: 'running' }
-    | { kind: 'exited'; code: number }
     | { kind: 'error'; message: string };
 
   const { thread, active, ready, fontSize, scrollback, reducedMotion, close, exited }: Props = $props();
@@ -155,7 +154,6 @@
         break;
       case 'exited':
         terminalId = undefined;
-        status = { kind: 'exited', code: event.data.code };
         exited();
         break;
       case 'error':
@@ -214,9 +212,9 @@
       aria-live="polite"
       title={status.kind === 'error' ? status.message : undefined}
     >
-      {#if status.kind === 'starting'}Starting…{:else if status.kind === 'exited'}Exited {status.code}{:else if status.kind === 'error'}{status.message}{/if}
+      {#if status.kind === 'starting'}Starting…{:else if status.kind === 'error'}{status.message}{/if}
     </span>
-    {#if status.kind === 'exited' || status.kind === 'error'}
+    {#if status.kind === 'error'}
       <button class="chrome-button" aria-label="Restart terminal" title="Restart terminal" onclick={() => { void restart(); }}>
         <IconRefresh size={14} stroke={1.55} />
       </button>
