@@ -37,10 +37,30 @@
     toggleMaximize,
   }: Props = $props();
 
+  const macOS = ['darwin', 'macos'].includes(document.documentElement.dataset.platform ?? '');
+
   function profileById(profileId: string) {
     return profiles.find((profile) => profile.id === profileId) ?? officialProfileById(profileId) ?? officialProfiles[0];
   }
 </script>
+
+{#snippet closeControl()}
+  <button class="traffic-close" aria-label="Close" title="Close" onclick={closeApp}></button>
+{/snippet}
+
+{#snippet minimizeControl()}
+  <button class="traffic-minimize" aria-label="Minimize" title="Minimize" onclick={minimize}></button>
+{/snippet}
+
+{#snippet maximizeControl()}
+  <button
+    class:restore={windowMaximized}
+    class="traffic-maximize"
+    aria-label={windowMaximized ? 'Restore' : 'Maximize'}
+    title={windowMaximized ? 'Restore' : 'Maximize'}
+    onclick={toggleMaximize}
+  ></button>
+{/snippet}
 
 <ContextMenu
   items={[
@@ -53,9 +73,15 @@
     <header {...props} class="titlebar" role="presentation" data-tauri-drag-region>
       <div class="window-chrome" data-tauri-drag-region>
         <div class="traffic-controls">
-          <button class="traffic-close" aria-label="Close" title="Close" onclick={closeApp}></button>
-          <button class="traffic-minimize" aria-label="Minimize" title="Minimize" onclick={minimize}></button>
-          <button class="traffic-maximize" aria-label="Maximize" title="Maximize" onclick={toggleMaximize}></button>
+          {#if macOS}
+            {@render closeControl()}
+            {@render minimizeControl()}
+            {@render maximizeControl()}
+          {:else}
+            {@render minimizeControl()}
+            {@render maximizeControl()}
+            {@render closeControl()}
+          {/if}
         </div>
         <button class="chrome-button" aria-label="Toggle sidebar" title="Toggle sidebar" onclick={toggleSidebar}>
           <IconLayoutSidebar size={14} stroke={1.55} />

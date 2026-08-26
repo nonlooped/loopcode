@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, tick, type Snippet } from 'svelte';
 
+  import appIcon from '../../assets/loopcode-mark.png';
+
   import Composer from './Composer.svelte';
   import FileViewer from './FileViewer.svelte';
   import ProjectExplorer from './ProjectExplorer.svelte';
@@ -339,6 +341,7 @@
           {/if}
           <div bind:this={threadViewElement} class:empty={selectedThreadEmpty} class="thread-view">
             {#if selectedThreadEmpty}
+              <img class="empty-thread-logo" src={appIcon} alt="" aria-hidden="true" />
               <h1 class="empty-thread-heading">
                 What should we build in {workspace.projectNameForThread(selectedThread)}?
               </h1>

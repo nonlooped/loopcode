@@ -1,0 +1,205 @@
+:root {
+  --window-controls-width: 104px;
+}
+
+:root[data-platform="windows"] {
+  --window-controls-width: 138px;
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .titlebar,
+:root:not([data-platform="darwin"], [data-platform="macos"]) .window-chrome {
+  z-index: auto;
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-controls {
+  position: fixed;
+  z-index: 15;
+  top: 0;
+  right: 0;
+  width: var(--window-controls-width);
+  height: var(--titlebar-height);
+  margin: 0;
+  justify-content: center;
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-controls button {
+  color: var(--text-soft);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-controls button::before,
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-controls button::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  content: "";
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-minimize::before {
+  width: 9px;
+  height: 1px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-maximize::before,
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-maximize.restore::after {
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border: 1px solid currentColor;
+  transform: translate(-50%, -50%);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-maximize.restore::before {
+  transform: translate(-65%, -35%);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-maximize.restore::after {
+  transform: translate(-35%, -65%);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-close::before,
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-close::after {
+  width: 11px;
+  height: 1px;
+  background: currentColor;
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-close::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .traffic-close::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+:root[data-platform="windows"] .traffic-controls {
+  gap: 0;
+}
+
+:root[data-platform="windows"] .traffic-controls button {
+  width: 46px;
+  height: var(--titlebar-height);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-platform="windows"] .traffic-controls button:hover {
+  background: rgba(127, 127, 127, 0.18);
+}
+
+:root[data-platform="windows"] .traffic-controls .traffic-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"], [data-platform="windows"])
+  .traffic-controls {
+  gap: 6px;
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"], [data-platform="windows"])
+  .traffic-controls
+  button {
+  width: 24px;
+  height: 24px;
+  background: var(--panel-hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"], [data-platform="windows"])
+  .traffic-controls
+  button:hover {
+  background: var(--panel-active);
+  color: var(--text);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .window-chrome .chrome-button {
+  position: relative;
+  z-index: 10;
+}
+
+@media (min-width: 881px) {
+  :root:not([data-platform="darwin"], [data-platform="macos"])
+    .app-shell:not(.sidebar-collapsed)
+    .thread-sidebar:has(.sidebar-heading) {
+    padding-top: 0;
+  }
+
+  :root:not([data-platform="darwin"], [data-platform="macos"])
+    .app-shell:not(.sidebar-collapsed)
+    .sidebar-heading {
+    height: var(--titlebar-height);
+    padding: 4px 8px 4px 43px;
+  }
+
+  :root:not([data-platform="darwin"], [data-platform="macos"])
+    .app-shell:not(.sidebar-collapsed):has(.sidebar-heading)
+    .window-chrome
+    .chrome-button:last-child {
+    display: none;
+  }
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"]) .project-explorer-actions {
+  right: calc(var(--window-controls-width) + 6px);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"])
+  .app-shell:not(.project-explorer-collapsed)
+  .project-explorer {
+  padding-top: calc(var(--titlebar-height) + 32px);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"])
+  .app-shell:not(.project-explorer-collapsed)
+  .project-explorer-tab-list {
+  top: calc(var(--titlebar-height) + 7px);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"])
+  .app-shell.project-explorer-collapsed
+  .title-terminal-toggle {
+  right: calc(var(--window-controls-width) + 37px);
+}
+
+:root:not([data-platform="darwin"], [data-platform="macos"])
+  .app-shell.project-explorer-collapsed
+  .title-context {
+  padding-right: calc(var(--window-controls-width) + 72px);
+}
+
+@media (max-width: 880px) {
+  :root:not([data-platform="darwin"], [data-platform="macos"]) .title-terminal-toggle {
+    right: calc(var(--window-controls-width) + 37px);
+  }
+
+  :root:not([data-platform="darwin"], [data-platform="macos"]) .title-context {
+    padding-right: calc(var(--window-controls-width) + 72px);
+  }
+
+  :root:not([data-platform="darwin"], [data-platform="macos"])
+    .app-shell:has(.project-explorer.open)
+    .title-terminal-toggle {
+    right: calc(8px + var(--project-explorer-expanded-width));
+  }
+
+  :root:not([data-platform="darwin"], [data-platform="macos"])
+    .app-shell:has(.project-explorer.open)
+    .title-context {
+    padding-right: calc(46px + var(--project-explorer-expanded-width));
+  }
+
+  :root:not([data-platform="darwin"], [data-platform="macos"]) .project-explorer:not(.open) {
+    right: calc(31px + var(--window-controls-width) - var(--project-explorer-expanded-width));
+  }
+
+  :root:not([data-platform="darwin"], [data-platform="macos"])
+    .project-explorer:not(.open)
+    .project-explorer-actions {
+    right: auto;
+    left: 3px;
+    width: 25px;
+  }
+}

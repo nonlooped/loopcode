@@ -31,6 +31,15 @@
   padding: 24px 0;
 }
 
+.empty-thread-logo {
+  width: 96px;
+  height: 96px;
+  margin: 0 auto 14px;
+  flex: 0 0 auto;
+  filter: var(--provider-filter);
+  object-fit: contain;
+}
+
 .empty-thread-heading {
   width: min(var(--content-width, 720px), calc(100% - 56px));
   margin: 0 auto 20px;
