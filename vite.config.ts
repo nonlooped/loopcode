@@ -17,9 +17,36 @@ const ignorePatterns = [
   "src-tauri/gen/**",
 ];
 
+function materialIconManifest() {
+  const id = "virtual:material-icon-manifest";
+  const resolved = `\0${id}`;
+  return {
+    name: "material-icon-manifest",
+    resolveId(source: string) {
+      if (source === id) return resolved;
+    },
+    async load(source: string) {
+      if (source !== resolved) return;
+      const { generateManifest } = await import("material-icon-theme");
+      const manifest = generateManifest();
+      return `export default ${JSON.stringify({
+        file: manifest.file ?? "file",
+        folder: manifest.folder ?? "folder",
+        folderExpanded: manifest.folderExpanded ?? "folder-open",
+        rootFolder: manifest.rootFolder ?? "folder-root",
+        rootFolderExpanded: manifest.rootFolderExpanded ?? "folder-root-open",
+        fileNames: manifest.fileNames ?? {},
+        fileExtensions: manifest.fileExtensions ?? {},
+        folderNames: manifest.folderNames ?? {},
+        folderNamesExpanded: manifest.folderNamesExpanded ?? {},
+      })};`;
+    },
+  };
+}
+
 export default defineConfig({
   // SAFETY: vite-plus currently bundles a different Vite plugin type version than Svelte.
-  plugins: svelte() as never,
+  plugins: [svelte() as never, materialIconManifest()],
   clearScreen: false,
   server: {
     port: 1420,
