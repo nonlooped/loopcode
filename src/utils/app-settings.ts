@@ -206,11 +206,18 @@ export function saveAppPreference<K extends keyof AppPreferences>(
   );
 }
 
-export function resetAppSettings(storage: Pick<Storage, "removeItem"> = localStorage) {
+export function resetInterfaceSettings(storage: Pick<Storage, "removeItem"> = localStorage) {
   try {
     for (const key of [
-      ...Object.values(PREFERENCE_KEYS),
-      PERMISSION_MODE_KEY,
+      PREFERENCE_KEYS.colorMode,
+      PREFERENCE_KEYS.theme,
+      PREFERENCE_KEYS.compactSessionRows,
+      PREFERENCE_KEYS.motionMode,
+      PREFERENCE_KEYS.interfaceZoom,
+      PREFERENCE_KEYS.transcriptDensity,
+      PREFERENCE_KEYS.contentWidth,
+      PREFERENCE_KEYS.wrapCode,
+      PREFERENCE_KEYS.showMessageTimestamps,
       LEFT_SIDEBAR_WIDTH_KEY,
       RIGHT_SIDEBAR_WIDTH_KEY,
       TERMINAL_HEIGHT_KEY,
