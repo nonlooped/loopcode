@@ -110,6 +110,16 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
   assert.equal(state.title, "Implement this @src/Composer.svelte");
 });
 
+void test("a running turn prevents switching providers", () => {
+  const state = thread();
+  state.providers.codex.turnStatus = "running";
+  const runtime = new ProviderRuntime({ ...catalogs, claude: catalogs.codex }, hooks);
+
+  runtime.activate(state, "claude", false);
+
+  assert.equal(state.profileId, "codex");
+});
+
 void test("unavailable providers cannot become active and restored providers fall back", () => {
   const unavailableCatalogs = {
     ...catalogs,
