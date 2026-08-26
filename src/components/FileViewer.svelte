@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { IconArrowLeft, IconArrowRight, IconX } from '@tabler/icons-svelte';
 
   import { readProjectFile } from '../services/native';
@@ -31,7 +31,8 @@
   const documentType = $derived(documentTypeForPath(path));
 
   $effect(() => {
-    void loadFile(projectRoot, path, revision);
+    const request = [projectRoot, path, revision] as const;
+    untrack(() => { void loadFile(...request); });
   });
 
   onDestroy(clearImage);

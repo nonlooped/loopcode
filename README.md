@@ -1,10 +1,21 @@
+<p align="center">
+  <img src="assets/loopcode-icon.svg" width="96" height="96" alt="LoopCode">
+</p>
+
 # LoopCode
 
 **Your coding agents, one desktop workspace.**
 
-Run Codex, Claude, Cursor, OpenCode, Grok, Pi, and fx with project-bound threads, visible tool activity, and permission controls.
+[![CI](https://github.com/nonlooped/loopcode/actions/workflows/ci.yml/badge.svg)](https://github.com/nonlooped/loopcode/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/nonlooped/loopcode)](https://github.com/nonlooped/loopcode/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-[Releases](https://github.com/nonlooped/loopcode/releases) · [Build from source](#build-from-source) · [Contribute](CONTRIBUTING.md)
+Run Codex, Claude, Cursor, OpenCode, Grok, Pi, and fx with project-bound threads, visible tool activity, and permission controls. LoopCode is a local desktop workspace for ACP coding agents, not a CLI task orchestrator.
+
+![LoopCode workspace with an agent thread](assets/screenshot.png)
+
+[Latest release](https://github.com/nonlooped/loopcode/releases/latest) · [Build from source](#build-from-source) · [Contribute](CONTRIBUTING.md)
 
 ## Why LoopCode?
 
@@ -35,7 +46,9 @@ Models, reasoning levels, and fast modes come from each agent, so every thread g
 
 ## Install a release
 
-Download packages and `SHA256SUMS.txt` from the [Releases](https://github.com/nonlooped/loopcode/releases) page. Windows and Linux packages are unsigned. The macOS app has an ad-hoc signature but is not Developer ID signed or notarized. Verify the checksum before bypassing an operating-system warning.
+Download the latest **stable** packages and `SHA256SUMS.txt` from the [latest release](https://github.com/nonlooped/loopcode/releases/latest). Nightly builds are GitHub pre-releases of `master`. Use Stable for daily use.
+
+Windows and Linux packages are unsigned. The macOS app has an ad-hoc signature but is not Developer ID signed or notarized. Verify the checksum before bypassing an operating-system warning.
 
 The macOS DMG supports Apple Silicon and Intel Macs. If macOS reports that LoopCode is damaged, move it to Applications and remove the quarantine attribute:
 
@@ -53,7 +66,7 @@ LoopCode supports Windows 10 or 11, Linux, and macOS.
 git clone https://github.com/nonlooped/loopcode.git
 cd loopcode
 npm install
-npm run tauri -- dev
+npx tauri dev
 ```
 
 You will need Node.js 24+, npm 12+, Rust, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your operating system.
@@ -74,15 +87,10 @@ The preview persists workspace state in local storage and exposes deterministic 
 
 LoopCode uses the [Agent Client Protocol](https://agentclientprotocol.com/) to talk to each provider while preserving provider-specific models, tools, and authentication. It currently targets stable ACP v1.
 
-Development checks
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks, code conventions, commits, and releases.
 
-```sh
-npm run check
-npm test
-npm run build
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo test --manifest-path src-tauri/Cargo.toml
-cargo check --manifest-path src-tauri/Cargo.toml
-```
+## License
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for code conventions, commits, and releases.
+LoopCode is [MIT](LICENSE) licensed.
+
+It is not affiliated with OpenAI, Anthropic, Cursor, OpenCode, xAI, or the other agents it can run. Those names are their trademarks.
