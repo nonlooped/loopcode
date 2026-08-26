@@ -34,6 +34,7 @@ void test("composer send shortcuts preserve a newline path", () => {
   assert.equal(composerEnterAction("enter", { ...key, shiftKey: true }), "newline");
   assert.equal(composerEnterAction("modifier-enter", key), "newline");
   assert.equal(composerEnterAction("modifier-enter", { ...key, ctrlKey: true }), "send");
+  assert.equal(composerEnterAction("enter", { ...key, isComposing: true }), undefined);
 });
 
 void test("fuzzy matching accepts ordered path characters", () => {
