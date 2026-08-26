@@ -9,7 +9,7 @@ import {
   loadSidebarWidths,
   loadTerminalHeight,
   providerVersionFromOutput,
-  resetAppSettings,
+  resetInterfaceSettings,
   saveAppPreference,
   savePermissionMode,
   saveSidebarWidth,
@@ -168,17 +168,18 @@ void test("provider versions are read from common CLI output", () => {
   assert.equal(providerVersionFromOutput("unknown"), undefined);
 });
 
-void test("reset removes preferences without touching workspace history", () => {
+void test("interface reset preserves provider and permission settings", () => {
   const removed = [];
-  resetAppSettings({ removeItem: (key) => removed.push(key) });
+  resetInterfaceSettings({ removeItem: (key) => removed.push(key) });
 
   assert.ok(removed.includes("loopcode.color-mode"));
-  assert.ok(removed.includes("loopcode.theme"));
-  assert.ok(removed.includes("loopcode.default-provider"));
-  assert.ok(removed.includes("loopcode.title-provider"));
-  assert.ok(removed.includes("loopcode.permission-mode"));
+  assert.ok(removed.includes("loopcode.interface-zoom"));
   assert.ok(removed.includes("loopcode.terminal-height"));
-  assert.ok(!removed.includes("loopcode.workspace"));
+  assert.ok(!removed.includes("loopcode.default-provider"));
+  assert.ok(!removed.includes("loopcode.provider-model-defaults"));
+  assert.ok(!removed.includes("loopcode.provider-settings"));
+  assert.ok(!removed.includes("loopcode.title-provider"));
+  assert.ok(!removed.includes("loopcode.permission-mode"));
 });
 
 void test("sidebar widths retain CSS defaults until resized and persist valid sizes", () => {

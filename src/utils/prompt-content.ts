@@ -33,9 +33,9 @@ export function hasPromptContent(draft: string, references: ComposerReference[] 
 
 export function composerEnterAction(
   shortcut: SendShortcut,
-  event: Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey">,
+  event: Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey" | "isComposing">,
 ) {
-  if (event.key !== "Enter") return undefined;
+  if (event.isComposing || event.key !== "Enter") return undefined;
   if (event.shiftKey) return "newline";
   if (shortcut === "modifier-enter" && !event.ctrlKey && !event.metaKey) return "newline";
   return "send";

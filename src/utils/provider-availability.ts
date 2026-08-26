@@ -95,8 +95,11 @@ export function providerCanToggle(
   profileId: string,
   catalog: ProviderModelCatalog | undefined,
   authenticated?: boolean,
+  enabled = true,
 ) {
-  return catalog?.status === "ready" && (profileId !== "claude" || authenticated === true);
+  return (
+    enabled || (catalog?.status === "ready" && (profileId !== "claude" || authenticated === true))
+  );
 }
 
 export function providerDisplayStatus(
@@ -109,7 +112,9 @@ export function providerDisplayStatus(
   if (catalog?.status === "unavailable" && catalog.unavailableReason === "missing-executable") {
     return "Not installed";
   }
-  if (!providerCanToggle(profileId, catalog, authenticated)) return "Not logged in";
+  if (catalog?.status !== "ready" || (profileId === "claude" && authenticated !== true)) {
+    return "Not logged in";
+  }
   return profileId === "fx" || profileId === "opencode" || profileId === "pi"
     ? "Connected"
     : "Authenticated";

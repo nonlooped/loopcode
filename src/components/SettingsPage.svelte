@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import { fly } from 'svelte/transition';
   import { IconArrowLeft, IconCheck, IconPlus, IconTrash } from '@tabler/icons-svelte';
-  import { RadioGroup, Slider, Switch } from 'bits-ui';
+  import { AlertDialog, RadioGroup, Slider, Switch } from 'bits-ui';
 
   import { exportDiagnostics } from '../services/native';
   import type { HarnessProfile, PermissionMode, ProviderModelCatalog } from '../types';
@@ -57,6 +57,7 @@
     resetSettings,
   }: Props = $props();
   let exportState = $state<'idle' | 'exporting' | 'exported' | 'error'>('idle');
+  let resetPending = $state(false);
   let selectedProviderId = $state('');
   const selectedProvider = $derived(profiles.find((profile) => profile.id === selectedProviderId));
   const selectedBaseProvider = $derived(baseProfiles.find((profile) => profile.id === selectedProviderId));
@@ -684,7 +685,7 @@
                 class="toggle-control"
                 aria-label={`${enabled ? 'Disable' : 'Enable'} ${profile.label}`}
                 checked={enabled}
-                disabled={!providerCanToggle(profile.id, catalogs[profile.id], providerAuthStatuses[profile.id])}
+                disabled={!providerCanToggle(profile.id, catalogs[profile.id], providerAuthStatuses[profile.id], enabled)}
                 onCheckedChange={(value) => setProviderPreference(profile.id, { ...providerPreference(profile.id), enabled: value })}
               >
                 <span class="toggle-track" aria-hidden="true"><Switch.Thumb class="toggle-thumb" /></span>
@@ -754,11 +755,30 @@
         <div class="settings-row settings-row-separated">
           <span class="settings-row-copy">
             <strong>Reset interface settings</strong>
-            <small>Restore settings, panel sizes, terminal size, and zoom without deleting projects or threads.</small>
+            <small>Restore the theme, layout, transcript display, panel sizes, terminal height, and zoom.</small>
           </span>
-          <button class="settings-action" onclick={resetSettings}>Reset</button>
+          <button class="settings-action" onclick={() => { resetPending = true; }}>Reset</button>
         </div>
       </div>
     {/if}
   </div>
 </section>
+
+<AlertDialog.Root open={resetPending} onOpenChange={(open) => { resetPending = open; }}>
+  <AlertDialog.Portal>
+    <AlertDialog.Overlay class="modal-overlay" />
+    <AlertDialog.Content class="permission-modal confirmation-modal">
+      <AlertDialog.Title>Reset interface settings?</AlertDialog.Title>
+      <AlertDialog.Description>
+        This restores the theme, layout, transcript display, panel sizes, terminal height, and zoom. Provider, title, and permission settings will not change.
+      </AlertDialog.Description>
+      <footer class="confirmation-actions">
+        <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+        <button onclick={() => {
+          resetPending = false;
+          resetSettings();
+        }}>Reset</button>
+      </footer>
+    </AlertDialog.Content>
+  </AlertDialog.Portal>
+</AlertDialog.Root>

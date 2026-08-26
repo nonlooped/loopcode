@@ -31,6 +31,9 @@
   );
   const pickerProvider = $derived(props.thread.providers[pickerProfile.id]);
   const pickerCatalog = $derived(props.catalogs[pickerProfile.id]);
+  const providerSwitchLocked = $derived(Object.values(props.thread.providers).some(
+    (provider) => provider.turnStatus === 'running' || provider.turnStatus === 'blocked',
+  ));
   const visibleModels = $derived(matchingModels(pickerCatalog.models));
 
   function matchingModels(models: ModelOption[]) {
@@ -111,6 +114,7 @@
               value={profile.id}
               aria-label={`${profile.label}, ${providerStatusLabel(profile.id)}`}
               title={`${profile.label}, ${providerStatusLabel(profile.id)}`}
+              disabled={providerSwitchLocked && profile.id !== props.thread.profileId}
             >
               <span class="provider-icon"><img class:brand-color-icon={profile.iconMode === 'brand'} src={profile.icon} alt="" /></span>
               <span
@@ -129,7 +133,11 @@
             open={modelListOpen}
             onOpenChange={(open) => { modelListOpen = open; }}
             inputValue={modelSearch}
-            disabled={pickerCatalog.status !== 'ready' || pickerCatalog.models.length === 0}
+            disabled={
+              pickerCatalog.status !== 'ready'
+              || pickerCatalog.models.length === 0
+              || (providerSwitchLocked && pickerProfile.id !== props.thread.profileId)
+            }
             allowDeselect={false}
           >
             <label class="model-search">

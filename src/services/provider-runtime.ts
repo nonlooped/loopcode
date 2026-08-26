@@ -165,7 +165,10 @@ export class ProviderRuntime {
     if (
       profileId === thread.profileId ||
       this.#disabledProfiles.has(profileId) ||
-      this.#catalogs[profileId]?.status === "unavailable"
+      this.#catalogs[profileId]?.status === "unavailable" ||
+      Object.values(thread.providers).some(
+        (provider) => provider.turnStatus === "running" || provider.turnStatus === "blocked",
+      )
     )
       return;
     const profile = this.#profileById(profileId);

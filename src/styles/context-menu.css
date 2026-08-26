@@ -78,6 +78,20 @@
   place-items: center;
 }
 
+.image-preview .image-preview-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 1px solid var(--line);
+  background: var(--floating-surface);
+  box-shadow: var(--overlay-shadow);
+}
+
+.image-preview .image-preview-close:hover {
+  border-color: var(--line-strong);
+  background: var(--floating-surface);
+}
+
 .image-preview .visually-hidden-title {
   position: absolute;
   width: 1px;

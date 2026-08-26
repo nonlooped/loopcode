@@ -3,13 +3,18 @@ import type { PersistedWorkspace } from "../types/index.ts";
 
 export class WorkspacePersistence {
   readonly #saveWorkspace: typeof saveWorkspace;
+  readonly #reportFailure: (cause: unknown) => void;
   #ready = false;
   #timer?: ReturnType<typeof setTimeout>;
   #pending?: PersistedWorkspace;
   #save?: Promise<void>;
 
-  constructor(save = saveWorkspace) {
+  constructor(
+    save = saveWorkspace,
+    reportFailure = (cause: unknown) => console.error("Could not persist LoopCode threads", cause),
+  ) {
     this.#saveWorkspace = save;
+    this.#reportFailure = reportFailure;
   }
 
   setReady() {
@@ -21,9 +26,7 @@ export class WorkspacePersistence {
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
-      void this.flush().catch((cause: unknown) => {
-        console.error("Could not persist LoopCode threads", cause);
-      });
+      void this.flush().catch(() => {});
     }, 200);
   }
 
@@ -43,6 +46,7 @@ export class WorkspacePersistence {
     } catch (error) {
       this.#pending ??= workspace;
       this.queue(this.#pending);
+      this.#reportFailure(error);
       throw error;
     } finally {
       this.#save = undefined;
