@@ -432,7 +432,11 @@
   }
 
   function toggleSettled(threadId: string) {
-    const replacement = workspace.toggleSettled(threadId, defaultWorkingFolder);
+    const replacement = workspace.toggleSettled(
+      threadId,
+      defaultWorkingFolder,
+      preferences.newThreadProject === 'selected' ? selectedProjectId : null,
+    );
     if (replacement) applyNewThreadDefaults(replacement);
   }
 
