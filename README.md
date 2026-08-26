@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/loopcode-icon.svg" width="96" height="96" alt="LoopCode">
+  <img src="assets/LoopCode.png" width="96" height="96" alt="LoopCode">
 </p>
 
 # LoopCode
