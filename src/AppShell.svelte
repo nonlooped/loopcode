@@ -22,12 +22,14 @@
     pickFolder,
     registerFrontend,
     revealProjectPath,
+    saveWorkspace,
     stopAllHarnesses,
     stopAllTerminals,
     stopTerminalForThread,
   } from './services/native';
   import { ProviderRuntime } from './services/provider-runtime';
   import { createWorkspaceState, Workspace } from './services/workspace';
+  import { WorkspacePersistence } from './services/workspace-persistence';
   import type {
     ComposerImage,
     HarnessProfile,
@@ -53,7 +55,7 @@
     loadSidebarWidths,
     loadTerminalHeight,
     providerVersionFromOutput,
-    resetAppSettings as resetStoredAppSettings,
+    resetInterfaceSettings as resetStoredInterfaceSettings,
     saveAppPreference,
     savePermissionMode,
     saveSidebarWidth,
@@ -123,6 +125,7 @@
   let sidebarCollapsed = $state(false);
   let showSettled = $state(false);
   let projectExplorerCollapsed = $state(true);
+  let projectExplorerOpen = $state(false);
   let terminalOpen = $state(false);
   let terminalThreadIds = $state<string[]>([]);
   let terminalHeight = $state(loadTerminalHeight());
@@ -142,6 +145,7 @@
   let attachmentErrorsByThread = $state<Record<string, string>>({});
   let gitOperationBusy = $state(false);
   let zoomPercent = $state<number>();
+  let workspaceSaveError = $state('');
   let zoomNoticeTimer: number | undefined;
   let closing = false;
   const providerVersionGenerations = new Map<string, number>();
@@ -169,7 +173,11 @@
     `--content-width: ${preferences.contentWidth}px`,
   ].filter(Boolean).join('; '));
 
-  const workspace = new Workspace(workspaceState, providerCatalogs);
+  const workspace = new Workspace(
+    workspaceState,
+    providerCatalogs,
+    new WorkspacePersistence(saveWorkspace, reportWorkspaceSaveFailure),
+  );
   const providers = new ProviderRuntime(providerCatalogs, {
     permission: (value) => { interactions[interactionKey(value.threadId, value.profileId)] = value; },
     clearPermission: (threadId, profileId) => {
@@ -298,6 +306,14 @@
   });
 
   function handleAppKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && compactLayout) {
+      if (sidebarOpen) sidebarOpen = false;
+      else if (projectExplorerOpen) projectExplorerOpen = false;
+      else return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     if (event.code === 'Backquote' && selectedThread && !settingsOpen) {
       event.preventDefault();
@@ -320,6 +336,11 @@
 
   function closeThreadSurfaces() {
     sidebarOpen = false;
+    projectExplorerOpen = false;
+  }
+
+  function focusComposer() {
+    void tick().then(() => document.querySelector<HTMLElement>('.prompt-editor')?.focus());
   }
 
   function applyNewThreadDefaults(thread: ThreadState) {
@@ -342,8 +363,10 @@
       preferences.newThreadProject === 'selected' ? selectedProjectId : null,
       hasComposerImages,
     );
-    if (thread) applyNewThreadDefaults(thread);
+    if (!thread) return;
+    applyNewThreadDefaults(thread);
     closeThreadSurfaces();
+    focusComposer();
   }
 
   function addThreadToProject(projectId: string) {
@@ -352,10 +375,10 @@
       projectId,
       hasComposerImages,
     );
-    if (thread) {
-      applyNewThreadDefaults(thread);
-      closeThreadSurfaces();
-    }
+    if (!thread) return;
+    applyNewThreadDefaults(thread);
+    closeThreadSurfaces();
+    focusComposer();
   }
 
   async function openAddProject() {
@@ -447,8 +470,16 @@
   }
 
   function toggleSidebar() {
-    if (window.matchMedia('(max-width: 880px)').matches) sidebarOpen = !sidebarOpen;
-    else sidebarCollapsed = !sidebarCollapsed;
+    if (window.matchMedia('(max-width: 880px)').matches) {
+      sidebarCollapsed = false;
+      sidebarOpen = !sidebarOpen;
+      if (sidebarOpen) projectExplorerOpen = false;
+    } else sidebarCollapsed = !sidebarCollapsed;
+  }
+
+  function setProjectExplorerOpen(open: boolean) {
+    projectExplorerOpen = open;
+    if (open) sidebarOpen = false;
   }
 
   function toggleTerminal() {
@@ -558,12 +589,14 @@
     settingsOpen = true;
     sidebarCollapsed = false;
     sidebarOpen = false;
+    projectExplorerOpen = false;
     void Promise.all(profiles.map(loadProviderMetadata));
   }
 
   function closeSettings() {
     settingsOpen = false;
     sidebarOpen = false;
+    projectExplorerOpen = false;
   }
 
   function setSettingsCategory(category: SettingsCategory) {
@@ -748,28 +781,23 @@
   }
 
   function resetSettings() {
-    resetStoredAppSettings();
+    resetStoredInterfaceSettings();
     preferences = {
-      ...DEFAULT_APP_PREFERENCES,
-      defaultProviderId: profileById(DEFAULT_APP_PREFERENCES.defaultProviderId)?.id ?? officialProfiles[0].id,
-      providerModelDefaults: {},
-      providerSettings: {},
-      titleProviderId: profileById(DEFAULT_APP_PREFERENCES.titleProviderId)?.id ?? officialProfiles[0].id,
-      titleModelId: '',
+      ...preferences,
+      colorMode: DEFAULT_APP_PREFERENCES.colorMode,
+      theme: DEFAULT_APP_PREFERENCES.theme,
+      compactSessionRows: DEFAULT_APP_PREFERENCES.compactSessionRows,
+      motionMode: DEFAULT_APP_PREFERENCES.motionMode,
+      interfaceZoom: DEFAULT_APP_PREFERENCES.interfaceZoom,
+      transcriptDensity: DEFAULT_APP_PREFERENCES.transcriptDensity,
+      contentWidth: DEFAULT_APP_PREFERENCES.contentWidth,
+      wrapCode: DEFAULT_APP_PREFERENCES.wrapCode,
+      showMessageTimestamps: DEFAULT_APP_PREFERENCES.showMessageTimestamps,
     };
-    defaultWorkingFolder = initialWorkingFolder;
     projectExplorerCollapsed = true;
     terminalHeight = DEFAULT_TERMINAL_HEIGHT;
     leftSidebarWidth = null;
     rightSidebarWidth = null;
-    permissionMode = 'restricted';
-    const resetProfiles = configuredProviderProfiles(officialProfiles, {});
-    configureProviderRuntime(resetProfiles, {});
-    void (async () => {
-      if (!webPreview) await providers.discoverAll(defaultWorkingFolder, threads);
-      await Promise.all(resetProfiles.map(loadProviderMetadata));
-    })();
-    providers.setPermissionMode('restricted');
   }
 
   function setPermissionMode(mode: PermissionMode) {
@@ -825,9 +853,12 @@
       await appWindow.destroy();
     } catch (error) {
       closing = false;
-      const thread = selectedThread ?? threads[0];
-      if (thread) addMessage(thread, 'error', `Could not save threads before closing: ${errorMessage(error)}`);
+      workspaceSaveError = `Could not close LoopCode: ${errorMessage(error)}`;
     }
+  }
+
+  function reportWorkspaceSaveFailure(error: unknown) {
+    workspaceSaveError = `Could not save workspace: ${errorMessage(error)}`;
   }
 
   function interactionKey(threadId: string, profileId: string) {
@@ -870,6 +901,15 @@
     <div class="zoom-indicator" role="status" transition:fade={{ duration: reducedMotion ? 0 : 120 }}>
       {zoomPercent}%
     </div>
+  {/if}
+  {#if workspaceSaveError}
+    <div class="workspace-save-error" role="alert">
+      <span>{workspaceSaveError}</span>
+      <button type="button" onclick={() => { workspaceSaveError = ''; }}>Dismiss</button>
+    </div>
+  {/if}
+  {#if compactLayout && sidebarOpen}
+    <button type="button" class="compact-drawer-backdrop" tabindex="-1" aria-label="Close sidebar" onclick={() => { sidebarOpen = false; }}></button>
   {/if}
   <Sidebar
       open={sidebarOpen}
@@ -925,6 +965,8 @@
     {preferences}
     {reducedMotion}
     {compactLayout}
+    {projectExplorerOpen}
+    {setProjectExplorerOpen}
     bind:projectExplorerCollapsed
     {defaultWorkingFolder}
     attachImages={(files) => { if (selectedThread) void attachImages(files, selectedThread.id); }}
@@ -966,7 +1008,7 @@
   </SelectedThreadWorkspace>
 </div>
 
-<svelte:window onkeydown={(event) => {
+<svelte:window onkeydowncapture={(event) => {
   handleAppKeydown(event);
 }} />
 

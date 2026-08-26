@@ -455,6 +455,7 @@
   }
 
   function handleEditorKeydown(event: KeyboardEvent) {
+    if (event.isComposing) return;
     if (completionPrefix) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
