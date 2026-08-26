@@ -409,7 +409,8 @@
   }
 
   function toggleSettled(threadId: string) {
-    workspace.toggleSettled(threadId);
+    const replacement = workspace.toggleSettled(threadId, defaultWorkingFolder);
+    if (replacement) applyNewThreadDefaults(replacement);
   }
 
   function requestThreadRemoval(threadId: string) {
