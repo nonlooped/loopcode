@@ -9,11 +9,15 @@ void test("retries the latest workspace after a transient save failure", async (
   const retry = new Promise((resolve) => {
     retried = resolve;
   });
-  const persistence = new WorkspacePersistence(async () => {
-    attempts += 1;
-    if (attempts === 1) throw new Error("temporary failure");
-    retried();
-  });
+  const failures = [];
+  const persistence = new WorkspacePersistence(
+    async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("temporary failure");
+      retried();
+    },
+    (error) => failures.push(error),
+  );
   const workspace = { version: 2, selectedThreadId: "thread", projects: [], threads: [] };
 
   persistence.setReady();
@@ -25,4 +29,6 @@ void test("retries the latest workspace after a transient save failure", async (
   ]);
 
   assert.equal(attempts, 2);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].message, /temporary failure/);
 });

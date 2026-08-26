@@ -133,11 +133,23 @@ export class Workspace {
     return true;
   }
 
-  toggleSettled(threadId: string) {
+  toggleSettled(
+    threadId: string,
+    defaultWorkingFolder: string,
+    replacementProjectId = this.state.selectedProjectId,
+  ) {
     const thread = this.state.threads.find((item) => item.id === threadId);
     if (!thread) return;
     thread.settled = !thread.settled;
     thread.updatedAt = Date.now();
+    if (!thread.settled || thread.id !== this.state.selectedThreadId) return;
+
+    const replacement = this.state.threads.find((item) => !item.settled);
+    if (replacement) {
+      this.state.selectedThreadId = replacement.id;
+      return;
+    }
+    return this.addThread(defaultWorkingFolder, replacementProjectId);
   }
 
   ensureProject(path: string) {
