@@ -16,7 +16,7 @@ import yaml from "shiki/langs/yaml.mjs";
 import { createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import githubDark from "shiki/themes/github-dark.mjs";
-import githubLight from "shiki/themes/github-light.mjs";
+import githubLightHighContrast from "shiki/themes/github-light-high-contrast.mjs";
 import { escapeHtml, type ShikiHighlighter } from "@humanspeak/svelte-markdown/extensions/shiki";
 
 const highlighter = createHighlighterCoreSync({
@@ -38,7 +38,7 @@ const highlighter = createHighlighterCoreSync({
     typescript,
     yaml,
   ],
-  themes: [githubDark, githubLight],
+  themes: [githubDark, githubLightHighContrast],
 });
 const loadedLanguages = new Set(highlighter.getLoadedLanguages());
 
@@ -51,7 +51,7 @@ export const syntaxHighlighter: ShikiHighlighter = {
     try {
       return highlighter.codeToHtml(code, {
         lang: language,
-        themes: { light: "github-light", dark: "github-dark" },
+        themes: { light: "github-light-high-contrast", dark: "github-dark" },
         defaultColor: false,
       });
     } catch {

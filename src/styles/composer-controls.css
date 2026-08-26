@@ -23,9 +23,8 @@
 }
 
 .send-button:disabled {
-  background: color-mix(in srgb, var(--accent) 78%, transparent);
-  color: var(--accent-contrast-soft);
-  opacity: 0.9;
+  background: var(--panel-active);
+  color: var(--faint);
 }
 
 .reconnect-button {

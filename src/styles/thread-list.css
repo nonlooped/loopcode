@@ -25,9 +25,9 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -104,14 +104,6 @@
 
 .thread-motion {
   width: 100%;
-}
-
-.thread-list.settled .thread-item {
-  opacity: 0.72;
-}
-
-.thread-list.settled .thread-item:hover {
-  opacity: 1;
 }
 
 .thread-item {
@@ -204,8 +196,12 @@
 }
 
 .thread-item.active {
-  background: var(--selection);
-  box-shadow: none;
+  background: var(--row-selected);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.thread-item.active :is(.thread-location span, .thread-details, .slim-updated) {
+  color: var(--muted);
 }
 
 .thread-copy {

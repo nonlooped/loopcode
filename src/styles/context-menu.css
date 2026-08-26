@@ -41,10 +41,11 @@
   color: color-mix(in srgb, var(--danger) 88%, var(--text-soft));
 }
 
+/* Keeps the resting blend: pure --danger over a --danger wash reads worse than the
+   unhighlighted row, so highlighting would cost legibility instead of adding emphasis. */
 .context-menu-item.danger:hover,
 .context-menu-item.danger[data-highlighted] {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
-  color: var(--danger);
 }
 
 .context-menu-item[data-disabled] {
