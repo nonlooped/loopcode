@@ -55,7 +55,7 @@
     loadSidebarWidths,
     loadTerminalHeight,
     providerVersionFromOutput,
-    resetAppSettings as resetStoredAppSettings,
+    resetInterfaceSettings as resetStoredInterfaceSettings,
     saveAppPreference,
     savePermissionMode,
     saveSidebarWidth,
@@ -754,28 +754,23 @@
   }
 
   function resetSettings() {
-    resetStoredAppSettings();
+    resetStoredInterfaceSettings();
     preferences = {
-      ...DEFAULT_APP_PREFERENCES,
-      defaultProviderId: profileById(DEFAULT_APP_PREFERENCES.defaultProviderId)?.id ?? officialProfiles[0].id,
-      providerModelDefaults: {},
-      providerSettings: {},
-      titleProviderId: profileById(DEFAULT_APP_PREFERENCES.titleProviderId)?.id ?? officialProfiles[0].id,
-      titleModelId: '',
+      ...preferences,
+      colorMode: DEFAULT_APP_PREFERENCES.colorMode,
+      theme: DEFAULT_APP_PREFERENCES.theme,
+      compactSessionRows: DEFAULT_APP_PREFERENCES.compactSessionRows,
+      motionMode: DEFAULT_APP_PREFERENCES.motionMode,
+      interfaceZoom: DEFAULT_APP_PREFERENCES.interfaceZoom,
+      transcriptDensity: DEFAULT_APP_PREFERENCES.transcriptDensity,
+      contentWidth: DEFAULT_APP_PREFERENCES.contentWidth,
+      wrapCode: DEFAULT_APP_PREFERENCES.wrapCode,
+      showMessageTimestamps: DEFAULT_APP_PREFERENCES.showMessageTimestamps,
     };
-    defaultWorkingFolder = initialWorkingFolder;
     projectExplorerCollapsed = true;
     terminalHeight = DEFAULT_TERMINAL_HEIGHT;
     leftSidebarWidth = null;
     rightSidebarWidth = null;
-    permissionMode = 'restricted';
-    const resetProfiles = configuredProviderProfiles(officialProfiles, {});
-    configureProviderRuntime(resetProfiles, {});
-    void (async () => {
-      if (!webPreview) await providers.discoverAll(defaultWorkingFolder, threads);
-      await Promise.all(resetProfiles.map(loadProviderMetadata));
-    })();
-    providers.setPermissionMode('restricted');
   }
 
   function setPermissionMode(mode: PermissionMode) {
