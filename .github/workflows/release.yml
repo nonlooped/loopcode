@@ -2,23 +2,19 @@ name: Release
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [master]
+  schedule:
+    - cron: "17 * * * *"
 
 env:
-  RELEASE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-  RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'nightly' || 'stable' }}
+  RELEASE_SHA: ${{ github.sha }}
+  RELEASE_CHANNEL: ${{ github.event_name == 'schedule' && 'nightly' || 'stable' }}
 
 concurrency:
-  group: release-${{ github.event_name == 'workflow_run' && 'nightly' || 'stable' }}
+  group: release-${{ github.event_name == 'schedule' && 'nightly' || 'stable' }}
   cancel-in-progress: false
 
 jobs:
   preflight:
-    if: github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
@@ -38,18 +34,28 @@ jobs:
           ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Require successful master CI for this commit
+      - id: ci
+        name: Require successful master CI for this commit
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           git merge-base --is-ancestor "$RELEASE_SHA" origin/master
-          test -n "$(gh run list --workflow ci.yml --branch master --commit "$RELEASE_SHA" \
+          ci_run="$(gh run list --workflow ci.yml --branch master --commit "$RELEASE_SHA" \
             --event push --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [[ -z "$ci_run" ]]; then
+            if [[ "$RELEASE_CHANNEL" == nightly ]]; then
+              echo "master CI has not succeeded for $RELEASE_SHA; skipping nightly"
+              exit 0
+            fi
+            exit 1
+          fi
+          echo "passed=true" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           package-manager-cache: false
       - id: meta
+        if: steps.ci.outputs.passed == 'true'
         name: Resolve release metadata
         env:
           GH_TOKEN: ${{ github.token }}

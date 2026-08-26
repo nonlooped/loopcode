@@ -36,25 +36,22 @@ void test("release notes use the matching top changelog section", () => {
 });
 
 void test("release workflow publishes both channels and reports failures", () => {
+  assert.match(releaseWorkflow, /RELEASE_SHA: \$\{\{ github\.sha \}\}/);
   assert.match(
     releaseWorkflow,
-    /RELEASE_SHA: \$\{\{ github\.event_name == 'workflow_run' && github\.event\.workflow_run\.head_sha \|\| github\.sha \}\}/,
+    /RELEASE_CHANNEL: \$\{\{ github\.event_name == 'schedule' && 'nightly' \|\| 'stable' \}\}/,
   );
-  assert.match(
-    releaseWorkflow,
-    /RELEASE_CHANNEL: \$\{\{ github\.event_name == 'workflow_run' && 'nightly' \|\| 'stable' \}\}/,
-  );
-  assert.match(releaseWorkflow, /workflow_run:[\s\S]*workflows: \[CI\][\s\S]*branches: \[master\]/);
-  assert.match(
-    releaseWorkflow,
-    /github\.event\.workflow_run\.conclusion == 'success' && github\.event\.workflow_run\.event == 'push'/,
-  );
+  assert.match(releaseWorkflow, /schedule:\n\s+- cron: "17 \* \* \* \*"/);
+  assert.doesNotMatch(releaseWorkflow, /workflow_run/);
   assert.match(releaseWorkflow, /\[\[ "\$RELEASE_SHA" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
   assert.match(releaseWorkflow, /git merge-base --is-ancestor "\$RELEASE_SHA" origin\/master/);
   assert.match(
     releaseWorkflow,
     /gh run list --workflow ci\.yml --branch master --commit "\$RELEASE_SHA"[\s\S]*--event push --status success/,
   );
+  assert.match(releaseWorkflow, /master CI has not succeeded for \$RELEASE_SHA; skipping nightly/);
+  assert.match(releaseWorkflow, /echo "passed=true" >> "\$GITHUB_OUTPUT"/);
+  assert.match(releaseWorkflow, /if: steps\.ci\.outputs\.passed == 'true'/);
   assert.match(releaseWorkflow, /group: release-/);
   assert.match(releaseWorkflow, /grep -qx 'app=true'/);
   assert.match(releaseWorkflow, /-nightly\.\$\(date -u \+%Y%m%d\)\.\$GITHUB_RUN_NUMBER/);
