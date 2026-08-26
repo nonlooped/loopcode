@@ -22,12 +22,14 @@
     pickFolder,
     registerFrontend,
     revealProjectPath,
+    saveWorkspace,
     stopAllHarnesses,
     stopAllTerminals,
     stopTerminalForThread,
   } from './services/native';
   import { ProviderRuntime } from './services/provider-runtime';
   import { createWorkspaceState, Workspace } from './services/workspace';
+  import { WorkspacePersistence } from './services/workspace-persistence';
   import type {
     ComposerImage,
     HarnessProfile,
@@ -142,6 +144,7 @@
   let attachmentErrorsByThread = $state<Record<string, string>>({});
   let gitOperationBusy = $state(false);
   let zoomPercent = $state<number>();
+  let workspaceSaveError = $state('');
   let zoomNoticeTimer: number | undefined;
   let closing = false;
   const providerVersionGenerations = new Map<string, number>();
@@ -169,7 +172,11 @@
     `--content-width: ${preferences.contentWidth}px`,
   ].filter(Boolean).join('; '));
 
-  const workspace = new Workspace(workspaceState, providerCatalogs);
+  const workspace = new Workspace(
+    workspaceState,
+    providerCatalogs,
+    new WorkspacePersistence(saveWorkspace, reportWorkspaceSaveFailure),
+  );
   const providers = new ProviderRuntime(providerCatalogs, {
     permission: (value) => { interactions[interactionKey(value.threadId, value.profileId)] = value; },
     clearPermission: (threadId, profileId) => {
@@ -824,9 +831,12 @@
       await appWindow.destroy();
     } catch (error) {
       closing = false;
-      const thread = selectedThread ?? threads[0];
-      if (thread) addMessage(thread, 'error', `Could not save threads before closing: ${errorMessage(error)}`);
+      workspaceSaveError = `Could not close LoopCode: ${errorMessage(error)}`;
     }
+  }
+
+  function reportWorkspaceSaveFailure(error: unknown) {
+    workspaceSaveError = `Could not save workspace: ${errorMessage(error)}`;
   }
 
   function interactionKey(threadId: string, profileId: string) {
@@ -868,6 +878,12 @@
   {#if zoomPercent}
     <div class="zoom-indicator" role="status" transition:fade={{ duration: reducedMotion ? 0 : 120 }}>
       {zoomPercent}%
+    </div>
+  {/if}
+  {#if workspaceSaveError}
+    <div class="workspace-save-error" role="alert">
+      <span>{workspaceSaveError}</span>
+      <button type="button" onclick={() => { workspaceSaveError = ''; }}>Dismiss</button>
     </div>
   {/if}
   <Sidebar
