@@ -2,7 +2,20 @@
 
 ## Getting started
 
-The [README](README.md) covers prerequisites, setup, and the development commands (`npm run dev`, checks, tests).
+The [README](README.md) covers prerequisites and setup. Run the desktop app with `npx tauri dev`.
+
+Development checks:
+
+```sh
+npm run check
+npm test
+npm run build
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
+```
+
+Please follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Commit messages
 
@@ -20,7 +33,7 @@ Squash-merge after `CI / gate` passes and review threads are resolved. GitHub de
 
 LoopCode has two channels:
 
-- **Nightly** is a GitHub pre-release. At 17 minutes past each hour, the release workflow checks the latest `master` commit and publishes a nightly if its push CI succeeded, it is not a stable version bump, no release tag points at it yet, and `src/`, `src-tauri/`, or any root-level file changed since the most recent release tag. Changes confined to nested non-app paths such as `.github/` or `docs/` skip it. The app version is `{current-stable}-nightly.{date}.{run}`, for example `0.8.0-nightly.20260825.12`. Nightlies do not become GitHub Latest and do not bump `package.json` on `master`.
+- **Nightly** is a GitHub pre-release. At 17 minutes past each hour, the release workflow checks the latest `master` commit and publishes a nightly if its push CI succeeded, it is not a stable version bump, no release tag points at it yet, and `src/`, `src-tauri/`, or any root-level file changed since the most recent release tag. Changes confined to nested non-app paths such as `.github/` skip it. The app version is `{current-stable}-nightly.{date}.{run}`, for example `0.8.0-nightly.20260825.12`. Nightlies do not become GitHub Latest and do not bump `package.json` on `master`.
 - **Stable** is a SemVer GitHub Release. `0.Y.0` is a feature release. `0.Y.Z` is fixes only. Breaking changes before `1.0.0` ship in `0.Y.0` and must be called out in the release note. After `1.0.0`, incompatible changes bump the major version, backward-compatible features bump the minor version, and fixes bump the patch version.
 
 Install Stable for daily use. Nightly is for trying `master` without building from source. Batch user-visible work into stable releases instead of publishing a minor for every merged feature. Patch releases may ship as soon as a fix is ready. Windows releases use the NSIS installer because MSI versions only accept numeric prerelease identifiers.

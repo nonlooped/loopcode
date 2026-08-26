@@ -1,7 +1,8 @@
 [package]
 name = "loopcode"
 version = "0.9.0"
-description = "A local desktop workspace for Codex, Claude, Cursor, and OpenCode"
+description = "A local desktop workspace for ACP coding agents."
+license = "MIT"
 authors = ["LoopCode contributors"]
 homepage = "https://github.com/nonlooped/loopcode"
 repository = "https://github.com/nonlooped/loopcode"

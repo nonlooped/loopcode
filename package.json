@@ -20,6 +20,7 @@
   ],
   "homepage": "https://github.com/nonlooped/loopcode",
   "bugs": "https://github.com/nonlooped/loopcode/issues",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nonlooped/loopcode.git"

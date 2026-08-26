@@ -197,7 +197,6 @@
 
 .thread-item.active {
   background: var(--row-selected);
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .thread-item.active :is(.thread-location span, .thread-details, .slim-updated) {

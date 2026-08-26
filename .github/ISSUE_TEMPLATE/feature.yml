@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest something LoopCode should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is missing
+      description: The job you want to do that LoopCode does not cover yet.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Optional. A concrete shape if you already have one.
