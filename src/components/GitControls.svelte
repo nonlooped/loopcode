@@ -29,6 +29,7 @@
   let actionPending = $state(false);
   let actionError = $state('');
   let worktreeOpen = $state(false);
+  let worktreeDialogRequested = false;
   let baseBranch = $state('');
   let newBranch = $state('');
   let newBranchInput = $state<HTMLInputElement>();
@@ -43,6 +44,7 @@
     workspaceOpen = false;
     pickerOpen = false;
     worktreeOpen = false;
+    worktreeDialogRequested = false;
     actionError = '';
     worktreeError = '';
   });
@@ -82,14 +84,20 @@
     }
   }
 
-  function openWorktreeDialog() {
+  function requestWorktreeDialog() {
     baseBranch = props.branches?.includes(props.currentBranch ?? '')
       ? (props.currentBranch ?? '')
       : (props.branches?.[0] ?? '');
     newBranch = '';
     worktreeError = '';
+    worktreeDialogRequested = true;
     workspaceOpen = false;
     pickerOpen = false;
+  }
+
+  function finishWorkspaceClose(open: boolean) {
+    if (open || !worktreeDialogRequested) return;
+    worktreeDialogRequested = false;
     worktreeOpen = true;
   }
 
@@ -126,7 +134,11 @@
 
 <div class="git-controls">
   {#if props.editable && props.currentBranch !== null}
-    <DropdownMenu.Root open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
+    <DropdownMenu.Root
+      open={workspaceOpen}
+      onOpenChange={setWorkspaceOpen}
+      onOpenChangeComplete={finishWorkspaceClose}
+    >
       <DropdownMenu.Trigger
         class="git-picker-trigger git-workspace-trigger"
         title={workspaceTitle()}
@@ -147,7 +159,7 @@
         >
           <DropdownMenu.RadioGroup
             value={props.worktree ? 'worktree' : 'checkout'}
-            onValueChange={(value) => { if (value === 'worktree') openWorktreeDialog(); }}
+            onValueChange={(value) => { if (value === 'worktree') requestWorktreeDialog(); }}
           >
             <DropdownMenu.RadioItem class="workspace-option" value="checkout">
               {#snippet children({ checked })}

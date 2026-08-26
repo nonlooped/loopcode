@@ -12,7 +12,6 @@
 
   const { request, answer, decline }: Props = $props();
   let dialogElement = $state<HTMLElement>();
-
   const primaryOptionId = $derived(
     request.options.find((option) => option.kind === 'allow_once')?.optionId ??
       request.options.find((option) => option.kind?.startsWith('allow'))?.optionId,
