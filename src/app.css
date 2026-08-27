@@ -156,6 +156,21 @@
   -webkit-backdrop-filter: var(--overlay-filter);
 }
 
+@utility backdrop-blur-shell {
+  backdrop-filter: var(--shell-filter);
+  -webkit-backdrop-filter: var(--shell-filter);
+}
+
+@utility backdrop-blur-scrim {
+  backdrop-filter: var(--scrim-filter);
+  -webkit-backdrop-filter: var(--scrim-filter);
+}
+
+@utility backdrop-blur-scrim-strong {
+  backdrop-filter: var(--scrim-strong-filter);
+  -webkit-backdrop-filter: var(--scrim-strong-filter);
+}
+
 :root[data-theme="graphite"],
 .theme-preview-graphite {
   --theme-dark-shell-rgb: 15 16 18;
@@ -360,6 +375,9 @@
   --window-controls-width: 104px;
   --overlay-radius: 12px;
   --overlay-filter: blur(20px) saturate(115%);
+  --shell-filter: blur(44px) saturate(118%);
+  --scrim-filter: blur(3px);
+  --scrim-strong-filter: blur(14px);
 }
 
 :root[data-platform="windows"] {
@@ -714,48 +732,21 @@
   }
 }
 
+/* Surfaces get their translucency from these tokens rather than per-component
+   classes, so reduced transparency stays correct as components are restyled. */
 @media (prefers-reduced-transparency: reduce) {
-  .app-shell {
-    @apply bg-shell-solid backdrop-blur-none;
-  }
-
-  .thread-sidebar,
-  .project-explorer {
-    @apply bg-sidebar-solid backdrop-blur-none;
-  }
-
-  .workspace-dropdown,
-  .model-picker,
-  .git-picker,
-  .reasoning-menu,
-  .composer,
-  .question-composer,
-  .composer-autocomplete,
-  .context-menu,
-  .modal-overlay,
-  .scroll-to-bottom {
-    @apply backdrop-blur-none;
-  }
-
-  .file-viewer-html {
-    @apply bg-shell-solid;
-  }
-
-  .workspace-dropdown,
-  .model-picker,
-  .git-picker,
-  .reasoning-menu,
-  .composer,
-  .question-composer,
-  .composer-autocomplete,
-  .context-menu,
-  .permission-modal,
-  .scroll-to-bottom {
-    @apply bg-floating-solid;
-  }
-
-  .modal-overlay {
-    @apply bg-overlay-solid;
+  :root {
+    --overlay-filter: none;
+    --shell-filter: none;
+    --scrim-filter: none;
+    --scrim-strong-filter: none;
+    --shell-tint: var(--shell-solid);
+    --sidebar-tint: var(--sidebar-solid);
+    --raised-surface: var(--raised-solid);
+    --floating-surface: var(--floating-solid);
+    --decision-surface: var(--floating-solid);
+    --overlay: var(--overlay-solid);
+    --overlay-strong: var(--overlay-solid);
   }
 }
 

@@ -42,7 +42,7 @@
     'flex h-[22px] min-w-0 max-w-[220px] items-center gap-[5px] overflow-hidden rounded-[5px] border border-transparent bg-transparent px-1 text-[11px] text-muted hover:border-line hover:bg-panel-hover hover:text-text-soft disabled:text-faint [&>svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate';
   const workspaceTrigger = 'max-w-[180px]';
   const pickerShell =
-    'z-40 flex max-h-[min(310px,calc(100vh-150px))] w-[min(300px,calc(100vw-42px))] flex-col overflow-hidden rounded-overlay border border-line bg-floating p-[7px] text-text shadow-overlay backdrop-blur-[20px] backdrop-saturate-[115%]';
+    'z-40 flex max-h-[min(310px,calc(100vh-150px))] w-[min(300px,calc(100vw-42px))] flex-col overflow-hidden rounded-overlay border border-line bg-floating p-[7px] text-text shadow-overlay backdrop-blur-overlay';
   const workspaceShell = 'w-[min(260px,calc(100vw-42px))]';
   const searchField =
     'mx-0.5 mb-[7px] mt-px flex h-8 shrink-0 items-center gap-[7px] rounded-lg border border-line bg-panel px-[9px] text-faint focus-within:border-line-strong focus-within:bg-panel-hover focus-within:text-muted [&_input]:h-full [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:bg-transparent [&_input]:p-0 [&_input]:text-[11px] [&_input]:text-text-soft [&_input]:outline-0 [&_input::placeholder]:text-faint';
@@ -51,7 +51,7 @@
   const workspaceOption =
     'flex min-h-[38px] w-full items-center gap-2 rounded-[7px] border border-transparent bg-transparent px-2 py-1.5 text-left text-muted hover:bg-panel-hover hover:text-text-soft data-[state=checked]:border-line data-[state=checked]:bg-panel-active data-[state=checked]:text-text-soft';
   const modalShell =
-    'fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-[20px] backdrop-saturate-[115%] [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-dialog-description]]:mt-[5px] [&_[data-dialog-description]]:text-xs [&_[data-dialog-description]]:leading-snug [&_[data-dialog-description]]:text-muted';
+    'fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-overlay [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-dialog-description]]:mt-[5px] [&_[data-dialog-description]]:text-xs [&_[data-dialog-description]]:leading-snug [&_[data-dialog-description]]:text-muted';
   const actionFooter =
     'mt-[18px] flex flex-wrap justify-end gap-[7px] [&_button]:rounded-[7px] [&_button]:border [&_button]:border-line [&_button]:bg-transparent [&_button]:px-3 [&_button]:py-[7px] [&_button]:text-text-soft hover:[&_button]:border-line-strong hover:[&_button]:bg-panel-hover hover:[&_button]:text-text [&_button[type=submit]]:border-transparent [&_button[type=submit]]:bg-accent [&_button[type=submit]]:font-semibold [&_button[type=submit]]:text-accent-contrast hover:[&_button[type=submit]]:bg-accent-hover [&_button[type=submit]:disabled]:opacity-50';
   const fieldLabel =
@@ -276,7 +276,7 @@
 
 <Dialog.Root open={worktreeOpen} onOpenChange={(open) => { if (!busy) worktreeOpen = open; }}>
   <Dialog.Portal>
-    <Dialog.Overlay class="fixed inset-0 z-[90] bg-overlay backdrop-blur-[3px]" />
+    <Dialog.Overlay class="fixed inset-0 z-[90] bg-overlay backdrop-blur-scrim" />
     <Dialog.Content
       class={modalShell}
       onOpenAutoFocus={(event) => {

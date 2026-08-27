@@ -31,7 +31,7 @@
   }).loose();
 
   const modalShell =
-    'fixed top-1/2 left-1/2 z-[91] w-[min(520px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-[20px] backdrop-saturate-[115%]';
+    'fixed top-1/2 left-1/2 z-[91] w-[min(520px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-overlay';
   const modalHeading =
     '[&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text';
   const modalDescription =
@@ -88,7 +88,7 @@
 
 <AlertDialog.Root open onOpenChange={(open) => { if (!open) decline(); }}>
   <AlertDialog.Portal>
-    <AlertDialog.Overlay class="fixed inset-0 z-[90] bg-overlay backdrop-blur-[3px]" />
+    <AlertDialog.Overlay class="fixed inset-0 z-[90] bg-overlay backdrop-blur-scrim" />
     <AlertDialog.Content
       bind:ref={dialogElement}
       class="{modalShell} {modalHeading} {modalDescription}"

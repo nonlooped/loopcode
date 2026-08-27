@@ -918,7 +918,7 @@
 <svelte:head><title>{settingsOpen ? 'Settings' : (selectedThread?.title ?? 'LoopCode')} | LoopCode</title></svelte:head>
 
 <div
-  class="app-shell relative isolate h-dvh w-full overflow-hidden rounded-xl bg-shell shadow-app backdrop-blur-[44px] backdrop-saturate-[118%] shell-maximized:rounded-none"
+  class="app-shell relative isolate h-dvh w-full overflow-hidden rounded-xl bg-shell shadow-app backdrop-blur-shell shell-maximized:rounded-none"
   class:maximized={windowMaximized}
   class:sidebar-collapsed={sidebarCollapsed}
   class:project-explorer-collapsed={!selectedThread?.cwd || settingsOpen || (!compactLayout && projectExplorerCollapsed)}

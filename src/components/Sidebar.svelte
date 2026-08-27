@@ -85,9 +85,9 @@
   const threadSelect = 'block w-full border-0 bg-transparent p-0 text-left text-inherit group-[.slim]/thread:flex group-[.slim]/thread:min-w-0 group-[.slim]/thread:flex-1 group-[.slim]/thread:items-center group-[.slim]/thread:gap-2.5';
   const threadActionBtn =
     'grid size-[22px] place-items-center rounded-[5px] border-0 bg-panel-active p-0 text-muted hover:bg-panel-active hover:text-text-soft [&.remove-thread]:hover:text-danger';
-  const confirmationOverlay = 'fixed inset-0 z-[90] bg-overlay backdrop-blur-[3px]';
+  const confirmationOverlay = 'fixed inset-0 z-[90] bg-overlay backdrop-blur-scrim';
   const confirmationModal =
-    'fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-[20px] backdrop-saturate-[115%] [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-alert-dialog-description]]:mt-[5px] [&_[data-alert-dialog-description]]:text-xs [&_[data-alert-dialog-description]]:leading-snug [&_[data-alert-dialog-description]]:text-muted';
+    'fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-overlay [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-alert-dialog-description]]:mt-[5px] [&_[data-alert-dialog-description]]:text-xs [&_[data-alert-dialog-description]]:leading-snug [&_[data-alert-dialog-description]]:text-muted';
   const confirmationActions =
     'mt-[18px] flex flex-wrap justify-end gap-[7px] [&_button]:rounded-[7px] [&_button]:border [&_button]:border-line [&_button]:bg-transparent [&_button]:px-3 [&_button]:py-[7px] [&_button]:text-text-soft hover:[&_button]:border-line-strong hover:[&_button]:bg-panel-hover hover:[&_button]:text-text [&_button.danger]:border-[color-mix(in_srgb,var(--danger)_30%,transparent)] [&_button.danger]:text-danger hover:[&_button.danger]:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)]';
 

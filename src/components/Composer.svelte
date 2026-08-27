@@ -548,7 +548,7 @@
   >
   <div
     bind:this={composerElement}
-    class="relative mx-auto grid min-h-[49px] w-[min(var(--content-width,720px),100%)] grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-[7px] rounded-[18px] border border-line-strong bg-raised p-[7px] shadow-overlay backdrop-blur-overlay backdrop-saturate-[115%] focus-within:border-focus-ring"
+    class="relative mx-auto grid min-h-[49px] w-[min(var(--content-width,720px),100%)] grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-[7px] rounded-[18px] border border-line-strong bg-raised p-[7px] shadow-overlay backdrop-blur-overlay focus-within:border-focus-ring"
     class:expanded={expanded}
   >
     {#if props.images.length > 0 || props.attachmentError || imageSupportError}
@@ -621,7 +621,7 @@
       onblur={() => { window.setTimeout(closeCompletion, 100); }}
     ></div>
     {#if completionPrefix}
-      <div id="composer-autocomplete" class="absolute bottom-[calc(100%+6px)] left-[38px] z-20 max-h-[min(280px,42vh)] w-[min(380px,calc(100%-52px))] overflow-y-auto rounded-overlay border border-line-strong bg-floating p-1 shadow-overlay backdrop-blur-overlay backdrop-saturate-[115%]" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : 'Workspace files'}>
+      <div id="composer-autocomplete" class="absolute bottom-[calc(100%+6px)] left-[38px] z-20 max-h-[min(280px,42vh)] w-[min(380px,calc(100%-52px))] overflow-y-auto rounded-overlay border border-line-strong bg-floating p-1 shadow-overlay backdrop-blur-overlay" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : 'Workspace files'}>
         {#if completionStatus === 'loading'}
           <p class="m-0 p-[9px] text-[11px] text-muted">Loading…</p>
         {:else if completionStatus === 'error'}

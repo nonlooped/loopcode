@@ -25,7 +25,7 @@
   const { items, children }: Props = $props();
 
   const menuShell =
-    'z-[91] grid w-max min-w-[186px] max-w-[min(280px,calc(100vw-16px))] rounded-overlay border border-line-strong bg-floating p-[5px] shadow-overlay backdrop-blur-[20px] backdrop-saturate-[115%]';
+    'z-[91] grid w-max min-w-[186px] max-w-[min(280px,calc(100vw-16px))] rounded-overlay border border-line-strong bg-floating p-[5px] shadow-overlay backdrop-blur-overlay';
   const menuItem =
     'flex min-h-[29px] w-full items-center justify-between gap-[22px] rounded-md px-2 text-left text-xs whitespace-nowrap text-text-soft outline-0 data-[highlighted]:bg-panel-active data-[highlighted]:text-text hover:bg-panel-active hover:text-text data-[disabled]:opacity-[0.42]';
   const menuItemDanger =

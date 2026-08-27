@@ -24,7 +24,7 @@
   const hasAnswer = $derived(selectedOptionIds.length > 0 || customAnswer.trim().length > 0);
 
   const composerShell =
-    'mx-auto w-[min(var(--content-width,720px),100%)] rounded-[18px] border border-line-strong bg-raised p-3.5 shadow-overlay backdrop-blur-overlay backdrop-saturate-[115%]';
+    'mx-auto w-[min(var(--content-width,720px),100%)] rounded-[18px] border border-line-strong bg-raised p-3.5 shadow-overlay backdrop-blur-overlay';
   const optionClass =
     'grid rounded-lg border border-line bg-panel p-[9px_10px] text-left text-text-soft hover:border-line-strong hover:bg-panel-hover focus-visible:border-line-strong focus-visible:bg-panel-hover data-[state=on]:border-line-strong data-[state=on]:bg-panel-hover';
 

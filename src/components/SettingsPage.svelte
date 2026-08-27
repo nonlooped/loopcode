@@ -144,9 +144,9 @@
   const settingsTerminalSizeControl = settingsRangeControl;
   const settingsTerminalSample =
     'flex min-h-[30px] items-center overflow-hidden rounded-md border border-line bg-recessed px-2 py-[5px] font-mono leading-none whitespace-nowrap text-text-soft';
-  const confirmationOverlay = 'fixed inset-0 z-[90] bg-overlay backdrop-blur-[3px]';
+  const confirmationOverlay = 'fixed inset-0 z-[90] bg-overlay backdrop-blur-scrim';
   const confirmationModal =
-    'fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-[20px] backdrop-saturate-[115%] [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-alert-dialog-description]]:mt-[5px] [&_[data-alert-dialog-description]]:text-xs [&_[data-alert-dialog-description]]:leading-snug [&_[data-alert-dialog-description]]:text-muted max-[680px]:w-[min(400px,calc(100vw-24px))] max-[680px]:p-4';
+    'fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-overlay [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-alert-dialog-description]]:mt-[5px] [&_[data-alert-dialog-description]]:text-xs [&_[data-alert-dialog-description]]:leading-snug [&_[data-alert-dialog-description]]:text-muted max-[680px]:w-[min(400px,calc(100vw-24px))] max-[680px]:p-4';
   const confirmationActions =
     'mt-[18px] flex flex-wrap justify-end gap-[7px] [&_button]:rounded-[7px] [&_button]:border [&_button]:border-line [&_button]:bg-transparent [&_button]:px-3 [&_button]:py-[7px] [&_button]:text-text-soft hover:[&_button]:border-line-strong hover:[&_button]:bg-panel-hover hover:[&_button]:text-text max-[680px]:[&_button]:flex-1 max-[680px]:[&_button]:text-center';
 

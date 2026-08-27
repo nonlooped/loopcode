@@ -18,7 +18,7 @@
 
 <Dialog.Root open onOpenChange={(open) => { if (!open) close(); }}>
   <Dialog.Portal>
-    <Dialog.Overlay class="fixed inset-0 z-[90] bg-overlay-strong backdrop-blur-[14px]" />
+    <Dialog.Overlay class="fixed inset-0 z-[90] bg-overlay-strong backdrop-blur-scrim-strong" />
     <Dialog.Content
       class="fixed top-1/2 left-1/2 z-[91] grid -translate-x-1/2 -translate-y-1/2 place-items-center border-0 bg-transparent p-11 outline-0"
     >

@@ -28,9 +28,9 @@
 
 <Dialog.Root open onOpenChange={(open) => { if (!open) cancel(); }}>
   <Dialog.Portal>
-    <Dialog.Overlay class="fixed inset-0 z-[90] bg-overlay backdrop-blur-[3px]" />
+    <Dialog.Overlay class="fixed inset-0 z-[90] bg-overlay backdrop-blur-scrim" />
     <Dialog.Content
-      class="fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-[20px] backdrop-saturate-[115%] [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-dialog-description]]:mt-[5px] [&_[data-dialog-description]]:text-xs [&_[data-dialog-description]]:leading-snug [&_[data-dialog-description]]:text-muted"
+      class="fixed top-1/2 left-1/2 z-[91] w-[min(400px,calc(100vw-40px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-overlay border border-line-strong bg-decision p-[18px] shadow-overlay outline-0 backdrop-blur-overlay [&_[role=heading]]:text-[15px] [&_[role=heading]]:leading-snug [&_[role=heading]]:font-semibold [&_[role=heading]]:tracking-tight [&_[role=heading]]:text-text [&_[data-dialog-description]]:mt-[5px] [&_[data-dialog-description]]:text-xs [&_[data-dialog-description]]:leading-snug [&_[data-dialog-description]]:text-muted"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         inputElement?.focus();
