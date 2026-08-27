@@ -16,15 +16,58 @@ export function promptParts(draft: string, references: ComposerReference[]): Pro
   return parts;
 }
 
+export function referenceToken(reference: ComposerReference) {
+  return reference.kind === "skill" ? `$${reference.name}` : `@${reference.relativePath}`;
+}
+
 export function promptText(parts: PromptPart[]) {
   return parts
-    .map((part) => {
-      if (part.type === "text") return part.text;
-      return part.reference.kind === "skill"
-        ? `$${part.reference.name}`
-        : `@${part.reference.relativePath}`;
-    })
+    .map((part) => (part.type === "text" ? part.text : referenceToken(part.reference)))
     .join("");
+}
+
+/**
+ * Rebuild structured parts from prompt text that was edited as plain text, so an edited
+ * prompt still sends `resource_link` blocks instead of a bare `@path` string. Tokens the
+ * edit removed are dropped; tokens it kept resolve back to their original reference.
+ */
+export function promptPartsFromText(
+  text: string,
+  references: ComposerReference[] = [],
+): PromptPart[] {
+  if (references.length === 0) return text ? [{ type: "text", text }] : [];
+  // Longest first so `@src/foo.test.ts` wins over `@src/foo.ts` at the same position.
+  const tokens = references
+    .map((reference) => ({ reference, token: referenceToken(reference) }))
+    .sort((left, right) => right.token.length - left.token.length);
+
+  // Almost any character can appear in a file path or skill name, so a token boundary is
+  // whitespace/punctuation that plausibly ends a token, not a fixed set of "path" characters
+  // — `@src/foo.ts` must not match `@src/foo.tsx` or `@src/foo.ts` followed by an emoji, etc.
+  const isBoundary = (character: string | undefined) =>
+    character === undefined || /[\s,;:!?"'()[\]{}<>]/.test(character);
+
+  const parts: PromptPart[] = [];
+  let plain = "";
+  let index = 0;
+  while (index < text.length) {
+    const match = tokens.find(
+      ({ token }) => text.startsWith(token, index) && isBoundary(text[index + token.length]),
+    );
+    if (!match) {
+      plain += text[index];
+      index += 1;
+      continue;
+    }
+    if (plain) {
+      parts.push({ type: "text", text: plain });
+      plain = "";
+    }
+    parts.push({ type: "reference", reference: { ...match.reference } });
+    index += match.token.length;
+  }
+  if (plain) parts.push({ type: "text", text: plain });
+  return parts;
 }
 
 export function hasPromptContent(draft: string, references: ComposerReference[] = []) {
