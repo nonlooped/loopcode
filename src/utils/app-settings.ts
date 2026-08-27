@@ -15,7 +15,7 @@ export type SettingsCategory =
   | "agents"
   | "providers"
   | "terminal"
-  | "diagnostics";
+  | "about";
 export type SendShortcut = "enter" | "modifier-enter";
 export type ColorMode = "system" | "light" | "dark";
 

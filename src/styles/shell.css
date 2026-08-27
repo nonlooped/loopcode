@@ -203,9 +203,12 @@
   opacity: 0.68;
 }
 
-.title-settings-icon {
+.title-brand-icon {
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
-  color: var(--muted);
+  filter: var(--provider-filter);
+  opacity: 0.68;
 }
 
 .title-copy strong {

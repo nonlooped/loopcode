@@ -1,7 +1,8 @@
 <script lang="ts">
   import { fade } from 'svelte/transition';
-  import { IconLayoutSidebar, IconPlus, IconSettings, IconTerminal2 } from '@tabler/icons-svelte';
+  import { IconLayoutSidebar, IconPlus, IconTerminal2 } from '@tabler/icons-svelte';
 
+  import appIcon from '../../assets/loopcode-mark.png';
   import ContextMenu from './ContextMenu.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
   import type { HarnessProfile, ThreadState } from '../types';
@@ -94,7 +95,7 @@
         {#key settingsOpen ? 'settings' : `${selectedThread?.id ?? 'empty'}:${selectedThread?.title ?? ''}:${selectedThread?.profileId ?? ''}`}
           <span class="title-context-motion" transition:fade={{ duration: reducedMotion ? 0 : 130 }}>
             {#if settingsOpen}
-              <IconSettings class="title-settings-icon" size={14} stroke={1.55} />
+              <img class="title-brand-icon" src={appIcon} alt="" aria-hidden="true" />
               <span class="title-copy" data-tauri-drag-region><strong>Settings</strong></span>
             {:else if selectedThread}
               {@const selectedProfile = profileById(selectedThread.profileId)}
