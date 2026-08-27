@@ -117,12 +117,92 @@
 .compact-transcript .message.from-user {
   margin-top: 8px;
   margin-bottom: 16px;
+  padding: 8px 12px;
 }
 
 .message.from-user {
   margin: 18px 0 26px;
-  padding-left: 13px;
-  border-left: 2px solid var(--line-strong);
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.message.from-user.editable:not(.editing):hover {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+}
+
+.message.from-user.editing {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+}
+
+.prompt-edit-trigger {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prompt-edit-input {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  resize: none;
+  white-space: pre-wrap;
+}
+
+.prompt-edit-input:focus-visible {
+  outline: 0;
+}
+
+.prompt-edit-actions {
+  display: flex;
+  margin-top: 10px;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.prompt-edit-actions button {
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.prompt-edit-actions button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--panel-hover);
+  color: var(--text);
+}
+
+.prompt-edit-actions button.primary {
+  border-color: var(--line-strong);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.prompt-edit-actions button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.prompt-edit-actions button:disabled {
+  opacity: 0.5;
 }
 
 .message-body {
