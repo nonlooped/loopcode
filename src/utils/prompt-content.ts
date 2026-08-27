@@ -41,17 +41,18 @@ export function promptPartsFromText(
     .map((reference) => ({ reference, token: referenceToken(reference) }))
     .sort((left, right) => right.token.length - left.token.length);
 
-  // Characters that can extend a reference token (file path segments, skill names) so a
-  // token boundary isn't just "starts with" — `@src/foo.ts` must not match `@src/foo.tsx`.
-  const isTokenChar = (character: string | undefined) =>
-    character !== undefined && /[\w./-]/.test(character);
+  // Almost any character can appear in a file path or skill name, so a token boundary is
+  // whitespace/punctuation that plausibly ends a token, not a fixed set of "path" characters
+  // — `@src/foo.ts` must not match `@src/foo.tsx` or `@src/foo.ts` followed by an emoji, etc.
+  const isBoundary = (character: string | undefined) =>
+    character === undefined || /[\s,;:!?"'()[\]{}<>]/.test(character);
 
   const parts: PromptPart[] = [];
   let plain = "";
   let index = 0;
   while (index < text.length) {
     const match = tokens.find(
-      ({ token }) => text.startsWith(token, index) && !isTokenChar(text[index + token.length]),
+      ({ token }) => text.startsWith(token, index) && isBoundary(text[index + token.length]),
     );
     if (!match) {
       plain += text[index];

@@ -71,6 +71,11 @@ void test("editing a reference token to extend it is treated as plain text, not 
   assert.deepEqual(parts, [{ type: "text", text: "Read @src/Composer.svelte.bak first" }]);
 });
 
+void test("editing a reference token with a non-word continuation character is still treated as plain text", () => {
+  const parts = promptPartsFromText("Read @src/Composer.svelte+backup first", [reference]);
+  assert.deepEqual(parts, [{ type: "text", text: "Read @src/Composer.svelte+backup first" }]);
+});
+
 void test("composer send shortcuts preserve a newline path", () => {
   const key = { key: "Enter", shiftKey: false, ctrlKey: false, metaKey: false };
   assert.equal(composerEnterAction("enter", key), "send");

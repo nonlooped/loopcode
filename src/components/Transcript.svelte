@@ -161,12 +161,13 @@
 
   // Rendered prompts may contain their own links, so activation ignores clicks and Enter
   // presses that belong to a nested control.
-  function isNestedControl(target: EventTarget | null) {
+  function isNestedControl(event: Event) {
+    const target = event.composedPath?.().find((node) => node instanceof Element) ?? event.target;
     return target instanceof Element && target.closest('a, button') !== null;
   }
 
   function startEditingPrompt(message: TimelineMessage, event: Event) {
-    if (isNestedControl(event.target)) return;
+    if (isNestedControl(event)) return;
     if (window.getSelection()?.isCollapsed === false) return;
     editingMessageId = message.id;
     editDraft = message.text;
@@ -440,7 +441,7 @@
                     onclick={(event) => startEditingPrompt(message, event)}
                     onkeydown={(event) => {
                       if (event.key !== 'Enter' && event.key !== ' ') return;
-                      if (isNestedControl(event.target)) return;
+                      if (isNestedControl(event)) return;
                       event.preventDefault();
                       startEditingPrompt(message, event);
                     }}
