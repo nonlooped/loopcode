@@ -107,36 +107,35 @@
         aria-selected={!entry.isDirectory && activeFilePath === entry.path}
         data-path={entry.path}
         tabindex={focusedPath === entry.path ? 0 : -1}
-        class:folder={entry.isDirectory}
         class:active={!entry.isDirectory && activeFilePath === entry.path}
-        class="project-file-row"
-        style={`--file-depth: ${depth}`}
+        class="project-file-row flex h-[25px] w-full min-w-0 items-center gap-1 overflow-hidden rounded-[5px] border-0 bg-transparent px-[7px] text-left text-muted hover:bg-panel-hover hover:text-text-soft [&.active]:bg-panel-active [&.active]:text-text"
+        style={`--file-depth: ${depth}; padding-left: calc(5px + var(--file-depth) * 14px)`}
         title={entry.path}
         onclick={activate}
         onfocus={() => setFocusedPath(entry.path)}
       >
-        <span class="project-file-chevron" aria-hidden="true">
+        <span class="grid size-[13px] h-4 shrink-0 place-items-center text-faint" aria-hidden="true">
           {#if entry.isDirectory}
             {#if expanded}<IconChevronDown size={13} stroke={1.55} />{:else}<IconChevronRight size={13} stroke={1.55} />{/if}
           {/if}
         </span>
-        {#if icon}<img class="project-file-icon" src={icon} alt="" />{/if}
-        <span class="project-file-name">{entry.name}</span>
-        {#if entry.isSymlink}<IconLink class="project-file-link" size={11} stroke={1.55} />{/if}
+        {#if icon}<img class="size-4 shrink-0 opacity-[0.64] [filter:var(--provider-filter)]" src={icon} alt="" />{/if}
+        <span class="min-w-0 overflow-hidden text-xs leading-[25px] text-ellipsis whitespace-nowrap">{entry.name}</span>
+        {#if entry.isSymlink}<IconLink class="shrink-0 text-faint" size={11} stroke={1.55} />{/if}
       </button>
     {/snippet}
   </ContextMenu>
 
   {#if entry.isDirectory && expanded}
-    <ul class="project-file-group" role="group">
+    <ul class="m-0 list-none p-0" role="group">
       {#if loading && !loaded}
-        <li class="project-file-state" style={`--file-depth: ${depth + 1}`}>Loading…</li>
+        <li class="h-6 text-[11px] leading-6 text-faint" style={`--file-depth: ${depth + 1}; padding-left: calc(38px + var(--file-depth) * 14px)`}>Loading…</li>
       {:else if loadError}
-        <li class="project-file-state error" style={`--file-depth: ${depth + 1}`} title={loadError}>
+        <li class="h-6 text-[11px] leading-6 text-danger" style={`--file-depth: ${depth + 1}; padding-left: calc(38px + var(--file-depth) * 14px)`} title={loadError}>
           Folder unavailable
         </li>
       {:else if children.length === 0}
-        <li class="project-file-state" style={`--file-depth: ${depth + 1}`}>Empty</li>
+        <li class="h-6 text-[11px] leading-6 text-faint" style={`--file-depth: ${depth + 1}; padding-left: calc(38px + var(--file-depth) * 14px)`}>Empty</li>
       {:else}
         {#each children as child (child.path)}
           <ProjectFileNode
@@ -155,4 +154,3 @@
     </ul>
   {/if}
 </li>
-

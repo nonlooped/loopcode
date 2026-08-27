@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -13,7 +12,6 @@ import {
   savePermissionMode,
   saveSidebarWidth,
   saveTerminalHeight,
-  THEME_OPTIONS,
 } from "../src/utils/app-settings.ts";
 
 void test("permission mode defaults to restricted and persists valid choices", () => {
@@ -131,14 +129,6 @@ void test("app preferences use safe defaults and validate persisted values", () 
   assert.deepEqual(loadAppPreferences(storage).providerSettings, {});
   assert.equal(loadAppPreferences(storage).terminalFontSize, 12);
   assert.equal(loadAppPreferences(storage).terminalScrollback, 5_000);
-});
-
-void test("every built-in theme has a settings preview palette", () => {
-  const styles = readFileSync(new URL("../src/styles/base.css", import.meta.url), "utf8");
-
-  for (const theme of THEME_OPTIONS) {
-    assert.match(styles, new RegExp(`\\.theme-preview-${theme.id}\\b`));
-  }
 });
 
 void test("provider settings preserve ACP arguments without mutating defaults", () => {

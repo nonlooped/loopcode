@@ -1,6 +1,11 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import { Tween } from 'svelte/motion';
+  import { cubicOut } from 'svelte/easing';
+
   import TerminalPane from './TerminalPane.svelte';
   import type { ThreadState } from '../types';
+  import { shellLayoutDuration } from '../utils/shell-layout-motion';
 
   interface Props {
     threads: ThreadState[];
@@ -29,38 +34,55 @@
     startResize,
     resizeBy,
   }: Props = $props();
+
   let layoutSettled = $state(false);
+  // Tracks the closing animation only. Panes stay mounted either way: unmounting
+  // a TerminalPane stops its shell, so the drawer must not own terminal lifetime.
+  let visible = $state(untrack(() => open));
+
+  const drawerHeight = new Tween(0, { duration: 0, easing: cubicOut });
+  const drawerOpacity = new Tween(0, { duration: 0, easing: cubicOut });
+
+  const expandedHeight = $derived(
+    `clamp(140px, ${height}px, calc(100dvh - var(--titlebar-height) - 120px))`,
+  );
 
   $effect(() => {
-    layoutSettled = open && reducedMotion;
+    const duration = shellLayoutDuration(reducedMotion);
+    if (open) {
+      visible = true;
+      void drawerOpacity.set(1, { duration });
+      void drawerHeight.set(height, { duration }).then(() => {
+        if (open) layoutSettled = true;
+      });
+      return;
+    }
+    layoutSettled = reducedMotion;
+    void drawerOpacity.set(0, { duration });
+    void drawerHeight.set(0, { duration }).then(() => {
+      if (!open) visible = false;
+    });
   });
 
-  function handleTransitionEnd(event: TransitionEvent) {
-    if (open && event.target === event.currentTarget && event.propertyName === 'height') {
-      layoutSettled = true;
+  $effect(() => {
+    if (open && drawerHeight.current > 0) {
+      void drawerHeight.set(height, { duration: 0 });
     }
-  }
-
-  function handleResizeKeydown(event: KeyboardEvent) {
-    const delta = event.key === 'ArrowUp' ? 10 : event.key === 'ArrowDown' ? -10 : 0;
-    if (!delta) return;
-    event.preventDefault();
-    resizeBy(delta);
-  }
+  });
 </script>
 
 <section
-  class:open
-  class="terminal-drawer"
+  class="relative min-h-0 min-w-0 overflow-hidden border-t bg-transparent {open ? 'pointer-events-auto border-line' : 'pointer-events-none border-transparent'} {visible ? 'visible' : 'invisible'}"
+  style:height="{drawerHeight.current}px"
+  style:opacity={drawerOpacity.current}
+  style:max-height={expandedHeight}
   aria-label="Terminal drawer"
   aria-hidden={!open}
-  ontransitionend={handleTransitionEnd}
 >
-  <!-- The ARIA separator is keyboard-resizable, though Svelte treats it as non-interactive. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    class="terminal-resize-handle"
+    class="absolute top-[-4px] right-0 left-0 z-[4] h-[9px] cursor-ns-resize touch-none after:absolute after:top-1 after:right-0 after:left-0 after:h-px after:bg-transparent after:content-[''] hover:after:bg-line-strong focus-visible:after:bg-line-strong [body.resizing-terminal_&]:after:bg-line-strong"
     role="separator"
     aria-label="Resize terminal drawer"
     aria-orientation="horizontal"
@@ -69,7 +91,12 @@
     aria-valuenow={height}
     tabindex={open ? 0 : -1}
     onpointerdown={startResize}
-    onkeydown={handleResizeKeydown}
+    onkeydown={(event) => {
+      const delta = event.key === 'ArrowUp' ? 10 : event.key === 'ArrowDown' ? -10 : 0;
+      if (!delta) return;
+      event.preventDefault();
+      resizeBy(delta);
+    }}
   ></div>
   {#each threads as thread (thread.id)}
     <TerminalPane

@@ -18,13 +18,25 @@
 
 <Dialog.Root open onOpenChange={(open) => { if (!open) close(); }}>
   <Dialog.Portal>
-    <Dialog.Overlay class="modal-overlay image-preview-overlay" />
-    <Dialog.Content class="image-preview">
-      <Dialog.Title class="visually-hidden-title">{name}</Dialog.Title>
-      <button class="chrome-button image-preview-close" type="button" aria-label="Close image preview" title="Close" onclick={close}>
+    <Dialog.Overlay class="fixed inset-0 z-[90] bg-overlay-strong backdrop-blur-scrim-strong" />
+    <Dialog.Content
+      class="fixed top-1/2 left-1/2 z-[91] grid -translate-x-1/2 -translate-y-1/2 place-items-center border-0 bg-transparent p-11 outline-0"
+    >
+      <Dialog.Title class="absolute h-px w-px overflow-hidden [clip-path:inset(50%)] whitespace-nowrap">{name}</Dialog.Title>
+      <button
+        class="absolute top-2 right-2 grid size-[25px] place-items-center rounded-md border border-line bg-floating text-muted shadow-overlay hover:border-line-strong"
+        type="button"
+        aria-label="Close image preview"
+        title="Close"
+        onclick={close}
+      >
         <IconX size={16} stroke={1.55} />
       </button>
-      <img {src} alt={name} />
+      <img
+        class="block max-h-[calc(100vh-88px)] max-w-[calc(100vw-88px)] rounded-[9px] object-contain"
+        {src}
+        alt={name}
+      />
     </Dialog.Content>
   </Dialog.Portal>
 </Dialog.Root>

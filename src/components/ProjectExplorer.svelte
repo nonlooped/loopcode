@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { Tween } from 'svelte/motion';
   import { Tabs } from 'bits-ui';
   import { IconAlertCircle, IconLayoutSidebarRight, IconRefresh } from '@tabler/icons-svelte';
 
@@ -11,9 +12,15 @@
     stopProjectFileWatcher,
     type ProjectFileEntry,
   } from '../services/native';
+  import { shellLayoutDuration } from '../utils/shell-layout-motion';
+
+  const macOS = ['darwin', 'macos'].includes(document.documentElement.dataset.platform ?? '');
+
   interface Props {
     open: boolean;
     visible: boolean;
+    compactLayout: boolean;
+    reducedMotion: boolean;
     projectRoot: string;
     projectName: string;
     activeFilePath: string | null;
@@ -26,9 +33,39 @@
   }
 
   const {
-    open, visible, projectRoot, projectName, activeFilePath, currentBranch, branches,
+    open, visible, compactLayout, reducedMotion, projectRoot, projectName, activeFilePath, currentBranch, branches,
     toggle, openFile, filesChanged, startResize,
   }: Props = $props();
+
+  const chromeButton =
+    'grid size-[25px] shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-muted hover:bg-panel-hover hover:text-text-soft';
+
+  const drawerRightOffset = new Tween(0, { duration: 0 });
+  const actionsRight = $derived(
+    compactLayout && !open
+      ? 'auto'
+      : macOS ? '12px' : 'calc(var(--window-controls-width) + 12px)',
+  );
+  const actionsLeft = $derived(visible ? '6px' : compactLayout ? '3px' : 'auto');
+  const actionsWidth = $derived(visible ? 'auto' : '25px');
+
+  function compactClosedRight() {
+    const expanded = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--project-explorer-expanded-width'),
+    ) || 280;
+    const controls = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--window-controls-width'),
+    ) || 104;
+    return (macOS ? 37 : 37 + controls) - expanded;
+  }
+
+  $effect(() => {
+    if (!compactLayout) return;
+    void drawerRightOffset.set(open ? 0 : compactClosedRight(), {
+      duration: shellLayoutDuration(reducedMotion),
+    });
+  });
+
   let entries = $state<ProjectFileEntry[]>([]);
   let loading = $state(true);
   let loadError = $state('');
@@ -150,19 +187,30 @@
   }
 </script>
 
-<aside class:open class="project-explorer" aria-label="Project explorer">
+<aside
+  class:open
+  class="project-explorer absolute top-0 right-0 bottom-0 z-[11] flex min-h-0 w-explorer min-w-0 flex-col overflow-visible border-l border-line bg-sidebar pt-titlebar opacity-100 compact:fixed compact:top-0 compact:bottom-0 compact:w-[var(--project-explorer-expanded-width)] compact:pt-titlebar compact:[&:not(.open)]:pointer-events-none compact:[&:not(.open)]:border-transparent compact:[&:not(.open)]:bg-transparent compact:[&:not(.open)]:shadow-none compact:[&.open]:bg-raised compact:[&.open]:shadow-[-22px_0_60px_rgba(0,0,0,0.4)] non-macos:shell-explorer-open:pt-[calc(var(--titlebar-height)+32px)]"
+  style:right={compactLayout ? `${drawerRightOffset.current}px` : undefined}
+  aria-label="Project explorer"
+>
   <div
-    class="sidebar-resize-handle right-sidebar-resize-handle"
+    class="sidebar-resize-handle right-sidebar-resize-handle absolute top-0 bottom-0 -left-1 z-[4] w-[7px] cursor-ew-resize touch-none after:absolute after:inset-y-0 after:left-[3px] after:w-px after:bg-transparent after:content-[''] hover:after:bg-line-strong shell-explorer-collapsed:hidden compact:hidden"
     role="separator"
     aria-label="Resize right sidebar"
     aria-orientation="vertical"
     onpointerdown={startResize}
   ></div>
 
-  <div class="project-explorer-actions" data-tauri-drag-region>
+  <div
+    class="project-explorer-actions pointer-events-auto absolute top-1.5 z-[3] flex items-center justify-between"
+    style:right={actionsRight}
+    style:left={actionsLeft}
+    style:width={actionsWidth}
+    data-tauri-drag-region
+  >
     <button
       type="button"
-      class="chrome-button project-explorer-refresh"
+      class="{chromeButton} project-explorer-refresh {visible ? '' : 'hidden'}"
       aria-label={view === 'files' ? 'Refresh project files' : 'Refresh Git changes'}
       title={view === 'files' ? 'Refresh project files' : 'Refresh Git changes'}
       onclick={() => { revision += 1; }}
@@ -171,7 +219,7 @@
     </button>
     <button
       type="button"
-      class="chrome-button project-explorer-toggle"
+      class="{chromeButton} project-explorer-toggle [&.active]:bg-panel-hover [&.active]:text-text-soft"
       class:active={visible}
       aria-label={visible ? 'Collapse right sidebar' : 'Expand right sidebar'}
       aria-pressed={visible}
@@ -182,22 +230,28 @@
     </button>
   </div>
 
-  <Tabs.Root class="project-explorer-tabs" value={view} onValueChange={setView}>
-    <Tabs.List class="project-explorer-tab-list" aria-label="Right sidebar views">
+  <Tabs.Root class="flex min-h-0 w-full flex-1 flex-col" value={view} onValueChange={setView}>
+    <Tabs.List
+      class="project-explorer-tab-list absolute top-[7px] right-[38px] left-[38px] z-[4] flex h-[23px] items-center justify-center gap-0.5 shell-explorer-collapsed:invisible shell-explorer-collapsed:pointer-events-none shell-explorer-collapsed:opacity-0 non-macos:shell-explorer-open:top-[calc(var(--titlebar-height)+7px)] compact:[[class~='project-explorer']:not(.open)_&]:invisible compact:[[class~='project-explorer']:not(.open)_&]:pointer-events-none compact:[[class~='project-explorer']:not(.open)_&]:opacity-0 [&_button]:h-[23px] [&_button]:rounded-[5px] [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-[7px] [&_button]:text-[11px] [&_button]:font-medium [&_button]:text-faint hover:[&_button]:bg-panel-hover hover:[&_button]:text-text-soft [&_button[data-state=active]]:bg-panel-active [&_button[data-state=active]]:text-text"
+      aria-label="Right sidebar views"
+    >
       <Tabs.Trigger value="files">Files</Tabs.Trigger>
       {#if currentBranch !== null}<Tabs.Trigger value="changes">Changes</Tabs.Trigger>{/if}
     </Tabs.List>
-    <Tabs.Content class="project-explorer-scroll" value="files">
+    <Tabs.Content
+      class="project-explorer-scroll min-h-0 w-full flex-1 overflow-auto p-[5px_5px_10px] shell-explorer-collapsed:invisible shell-explorer-collapsed:pointer-events-none shell-explorer-collapsed:opacity-0 compact:[[class~='project-explorer']:not(.open)_&]:invisible compact:[[class~='project-explorer']:not(.open)_&]:pointer-events-none compact:[[class~='project-explorer']:not(.open)_&]:opacity-0"
+      value="files"
+    >
       {#if loading && entries.length === 0}
-        <p class="project-explorer-empty">Loading project…</p>
+        <p class="m-0 p-2.5 text-[11px] leading-[1.45] text-faint">Loading project…</p>
       {:else if loadError}
-        <p class="project-explorer-empty error" title={loadError}>Could not read this project.</p>
+        <p class="m-0 p-2.5 text-[11px] leading-[1.45] text-danger" title={loadError}>Could not read this project.</p>
       {:else if entries.length === 0}
-        <p class="project-explorer-empty">This project is empty.</p>
+        <p class="m-0 p-2.5 text-[11px] leading-[1.45] text-faint">This project is empty.</p>
       {:else}
         <ul
           bind:this={tree}
-          class="project-file-tree"
+          class="project-file-tree m-0 list-none p-0"
           role="tree"
           aria-label={`${projectName} files`}
           onkeydown={handleTreeKeydown}
@@ -219,7 +273,10 @@
       {/if}
     </Tabs.Content>
     {#if currentBranch !== null}
-      <Tabs.Content class="project-explorer-scroll project-changes-scroll" value="changes">
+      <Tabs.Content
+        class="project-explorer-scroll project-changes-scroll min-h-0 w-full flex-1 overflow-auto py-[5px] pr-0 pl-0 shell-explorer-collapsed:invisible shell-explorer-collapsed:pointer-events-none shell-explorer-collapsed:opacity-0"
+        value="changes"
+      >
         {#if view === 'changes'}
           <ChangesPanel
             cwd={projectRoot}
@@ -233,9 +290,13 @@
   </Tabs.Root>
 
   {#if notice}
-    <button class="project-explorer-notice" title={notice} onclick={() => { notice = ''; }}>
+    <button
+      class="project-explorer-notice mx-1.5 mb-[7px] flex min-h-[31px] w-[calc(100%-12px)] shrink-0 items-center gap-[7px] overflow-hidden rounded-[7px] border border-[color-mix(in_srgb,var(--danger)_22%,transparent)] bg-[color-mix(in_srgb,var(--danger)_7%,transparent)] px-2 py-1.5 text-left text-[color-mix(in_srgb,var(--danger)_86%,var(--text-soft))] shell-explorer-collapsed:invisible shell-explorer-collapsed:pointer-events-none shell-explorer-collapsed:opacity-0"
+      title={notice}
+      onclick={() => { notice = ''; }}
+    >
       <IconAlertCircle size={13} stroke={1.55} />
-      <span>{notice}</span>
+      <span class="overflow-hidden text-[11px] text-ellipsis whitespace-nowrap">{notice}</span>
     </button>
   {/if}
 </aside>

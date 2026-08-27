@@ -8,7 +8,6 @@ const RIGHT_SIDEBAR_WIDTH_KEY = "loopcode.right-sidebar-width";
 const TERMINAL_HEIGHT_KEY = "loopcode.terminal-height";
 
 export type SettingsCategory =
-  | "general"
   | "appearance"
   | "conversation"
   | "composer"
