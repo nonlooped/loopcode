@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { onMount, tick, untrack } from 'svelte';
+  import { Tween } from 'svelte/motion';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -11,6 +11,7 @@
   import SettingsPage from './components/SettingsPage.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Titlebar from './components/Titlebar.svelte';
+  import MotionFade from './components/motion/MotionFade.svelte';
   import { profileById, profiles as officialProfiles } from './config/providers';
   import { preferredAllowOptionId } from './services/acp';
   import {
@@ -68,9 +69,14 @@
   import {
     initialProviderCatalog,
     previewProviderCatalog,
+    providerCanToggle,
     readyProviderId,
   } from './utils/provider-availability';
   import { activeProvider, compareSidebarThreads } from './utils/threads';
+  import { shellLayoutDuration } from './utils/shell-layout-motion';
+
+  const SIDEBAR_DEFAULT_WIDTH = 300;
+  const EXPLORER_DEFAULT_WIDTH = 280;
 
   const appWindow = getCurrentWindow();
   const appWebview = getCurrentWebview();
@@ -134,7 +140,7 @@
   let rightSidebarWidth = $state<number | null>(savedSidebarWidths.right);
   let compactLayout = $state(window.matchMedia('(max-width: 880px)').matches);
   let settingsOpen = $state(false);
-  let settingsCategory = $state<SettingsCategory>('general');
+  let settingsCategory = $state<SettingsCategory>('appearance');
   let preferences = $state<AppPreferences>(loadedPreferences);
   let systemReducedMotion = $state(motionPreference.matches);
   let systemDarkMode = $state(colorPreference.matches);
@@ -152,6 +158,7 @@
   const providerAuthGenerations = new Map<string, number>();
   let stopSidebarResize: (() => void) | undefined;
   let stopTerminalResize: (() => void) | undefined;
+  let sidebarResizing = $state(false);
 
   const reducedMotion = $derived(
     systemReducedMotion || preferences.motionMode === 'reduced',
@@ -165,7 +172,9 @@
   const enabledProfiles = $derived(
     profiles.filter((profile) => preferences.providerSettings[profile.id]?.enabled !== false),
   );
-  const selectableProfiles = $derived(enabledProfiles);
+  const selectableProfiles = $derived(
+    enabledProfiles.filter((profile) => providerCanToggle(profile.id, providerCatalogs[profile.id], providerAuthStatuses[profile.id])),
+  );
   const layoutStyle = $derived([
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
     rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
@@ -196,6 +205,36 @@
   });
 
   const selectedThread = $derived(threads.find((thread) => thread.id === selectedThreadId));
+  const projectExplorerCollapsedEffective = $derived(
+    !selectedThread?.cwd || settingsOpen || (!compactLayout && projectExplorerCollapsed),
+  );
+  const sidebarWidthTarget = $derived(
+    sidebarCollapsed ? 0 : (leftSidebarWidth ?? SIDEBAR_DEFAULT_WIDTH),
+  );
+  const explorerWidthTarget = $derived(
+    projectExplorerCollapsedEffective ? 0 : (rightSidebarWidth ?? EXPLORER_DEFAULT_WIDTH),
+  );
+  const sidebarWidth = new Tween(untrack(() => sidebarWidthTarget), { duration: 0 });
+  const explorerWidth = new Tween(untrack(() => explorerWidthTarget), { duration: 0 });
+
+  $effect(() => {
+    void sidebarWidth.set(sidebarWidthTarget, {
+      duration: shellLayoutDuration(reducedMotion, sidebarResizing),
+    });
+  });
+
+  $effect(() => {
+    void explorerWidth.set(explorerWidthTarget, {
+      duration: shellLayoutDuration(reducedMotion),
+    });
+  });
+
+  const shellStyle = $derived([
+    layoutStyle,
+    `--sidebar-width: ${sidebarWidth.current}px`,
+    `--project-explorer-width: ${explorerWidth.current}px`,
+  ].join('; '));
+
   const selectedInteraction = $derived(
     selectedThread ? interactions[interactionKey(selectedThread.id, selectedThread.profileId)] : undefined,
   );
@@ -521,6 +560,7 @@
     const startWidth = panel.getBoundingClientRect().width;
     const range = side === 'left' ? LEFT_SIDEBAR_WIDTH_RANGE : RIGHT_SIDEBAR_WIDTH_RANGE;
     document.body.classList.add('resizing-sidebar');
+    sidebarResizing = true;
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       const delta = side === 'left' ? moveEvent.clientX - startX : startX - moveEvent.clientX;
@@ -533,6 +573,7 @@
       window.removeEventListener('pointerup', finish);
       window.removeEventListener('pointercancel', finish);
       document.body.classList.remove('resizing-sidebar');
+      sidebarResizing = false;
       const width = side === 'left' ? leftSidebarWidth : rightSidebarWidth;
       if (width !== null) saveSidebarWidth(side, width);
       stopSidebarResize = undefined;
@@ -877,6 +918,7 @@
 <svelte:head><title>{settingsOpen ? 'Settings' : (selectedThread?.title ?? 'LoopCode')} | LoopCode</title></svelte:head>
 
 <div
+  class="app-shell relative isolate h-dvh w-full overflow-hidden rounded-xl bg-shell shadow-app backdrop-blur-[44px] backdrop-saturate-[118%] shell-maximized:rounded-none"
   class:maximized={windowMaximized}
   class:sidebar-collapsed={sidebarCollapsed}
   class:project-explorer-collapsed={!selectedThread?.cwd || settingsOpen || (!compactLayout && projectExplorerCollapsed)}
@@ -884,14 +926,18 @@
   class:compact-transcript={preferences.transcriptDensity === 'compact'}
   class:wrap-message-code={preferences.wrapCode}
   class:show-message-timestamps={preferences.showMessageTimestamps}
-  class="app-shell"
-  style={layoutStyle}
+  style={shellStyle}
 >
   <Titlebar
     {settingsOpen}
     {selectedThread}
     {windowMaximized}
     {reducedMotion}
+    sidebarCollapsed={sidebarCollapsed}
+    projectExplorerCollapsed={projectExplorerCollapsedEffective}
+    compactExplorerOpen={compactLayout && projectExplorerOpen}
+    {compactLayout}
+    hideChromeNewThread={!compactLayout && !sidebarCollapsed && !['darwin', 'macos'].includes(document.documentElement.dataset.platform ?? '')}
     {profiles}
     terminalOpen={terminalVisible}
     {toggleSidebar}
@@ -902,21 +948,29 @@
     toggleMaximize={() => { void appWindow.toggleMaximize(); }}
   />
   {#if zoomPercent}
-    <div class="zoom-indicator" role="status" transition:fade={{ duration: reducedMotion ? 0 : 120 }}>
-      {zoomPercent}%
-    </div>
+    <MotionFade
+      show
+      duration={reducedMotion ? 0 : 120}
+      class="pointer-events-none fixed top-[calc(var(--titlebar-height)+10px)] left-1/2 z-30 -translate-x-1/2 rounded-[7px] border border-line-strong bg-floating px-[9px] py-[5px] text-[11px] font-semibold text-text-soft"
+    >
+      <span role="status">{zoomPercent}%</span>
+    </MotionFade>
   {/if}
   {#if workspaceSaveError}
-    <div class="workspace-save-error" role="alert">
+    <div
+      class="fixed top-[calc(var(--titlebar-height)+10px)] right-3 z-30 flex max-w-[min(420px,calc(100vw-24px))] items-center gap-2.5 rounded-[7px] border border-[color-mix(in_srgb,var(--danger)_42%,var(--line-strong))] bg-floating-solid px-2.5 py-[7px] text-xs leading-snug text-text shadow-app"
+      role="alert"
+    >
       <span>{workspaceSaveError}</span>
-      <button type="button" onclick={() => { workspaceSaveError = ''; }}>Dismiss</button>
+      <button type="button" class="rounded bg-transparent px-[5px] py-[3px] text-danger hover:bg-panel-hover" onclick={() => { workspaceSaveError = ''; }}>Dismiss</button>
     </div>
   {/if}
   {#if compactLayout && sidebarOpen}
-    <button type="button" class="compact-drawer-backdrop" tabindex="-1" aria-label="Close sidebar" onclick={() => { sidebarOpen = false; }}></button>
+    <button type="button" class="fixed inset-x-0 top-titlebar bottom-0 z-[11] border-0 bg-transparent p-0" tabindex="-1" aria-label="Close sidebar" onclick={() => { sidebarOpen = false; }}></button>
   {/if}
   <Sidebar
       open={sidebarOpen}
+      collapsed={sidebarCollapsed}
       {settingsOpen}
       {settingsCategory}
       {profiles}

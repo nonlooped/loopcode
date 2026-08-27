@@ -19,6 +19,6 @@
   ]}
 >
   {#snippet children({ props })}
-    <div {...props} class="markdown-code" role="presentation"><ShikiCode {lang} {text} /></div>
+    <div {...props} class="contents" role="presentation"><ShikiCode {lang} {text} /></div>
   {/snippet}
 </ContextMenu>

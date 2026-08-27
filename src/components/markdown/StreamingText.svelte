@@ -1,4 +1,6 @@
 <script lang="ts">
+  import MotionEnter from '../motion/MotionEnter.svelte';
+
   interface Props {
     text: string;
     streamingText?: boolean;
@@ -30,4 +32,4 @@
   });
 </script>
 
-{stableText}{#if revealedText}{#key text}<span class="stream-chunk">{revealedText}</span>{/key}{/if}
+{stableText}{#if revealedText}{#key text}<MotionEnter class="inline" duration={180} y={0}>{revealedText}</MotionEnter>{/key}{/if}

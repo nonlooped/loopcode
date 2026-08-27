@@ -330,12 +330,15 @@
 </script>
 
 {#if compactLayout && projectExplorerOpen}
-  <button type="button" class="compact-drawer-backdrop" tabindex="-1" aria-label="Close project explorer" onclick={() => setProjectExplorerOpen(false)}></button>
+  <button type="button" class="fixed inset-x-0 top-titlebar bottom-0 z-[11] border-0 bg-transparent p-0" tabindex="-1" aria-label="Close project explorer" onclick={() => setProjectExplorerOpen(false)}></button>
 {/if}
 
-<div class="workspace-grid">
-  <main class="conversation">
-    <div class="conversation-primary">
+<div
+  class="workspace-grid grid min-h-0 h-[calc(100dvh-var(--titlebar-height))] compact:block resizing-sidebar:transition-none"
+  style="grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--project-explorer-width)"
+>
+  <main class="conversation relative col-start-2 grid min-h-0 min-w-0 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] bg-transparent shell-collapsed:bg-transparent compact:h-full">
+    <div class="conversation-primary relative flex min-h-0 min-w-0 flex-col bg-transparent">
       {#if settingsOpen}
         {@render settings()}
       {:else if selectedThread}
@@ -351,16 +354,16 @@
           />
         {:else}
           {#if fileHistory.length > 0}
-            <div class="file-viewer-resume">
-              <button type="button" class="settings-action" onclick={() => { fileHistoryIndex += 1; }}>
+            <div class="flex min-h-[39px] items-center justify-end border-b border-line px-3 py-1">
+              <button type="button" class="inline-flex h-[30px] items-center justify-center rounded-[7px] border border-line bg-panel px-[11px] text-[11px] font-medium text-text-soft hover:border-line-strong hover:bg-panel-hover hover:text-text" onclick={() => { fileHistoryIndex += 1; }}>
                 Return to file
               </button>
             </div>
           {/if}
-          <div bind:this={threadViewElement} class:empty={selectedThreadEmpty} class="thread-view">
+          <div bind:this={threadViewElement} class:empty={selectedThreadEmpty} class="thread-view flex min-h-0 min-w-0 flex-1 flex-col [&.empty]:justify-center [&.empty]:pt-6 [&.empty]:pb-[12vh]">
             {#if selectedThreadEmpty}
-              <img class="empty-thread-logo" src={appIcon} alt="" aria-hidden="true" />
-              <h1 class="empty-thread-heading">
+              <img class="mx-auto mb-3.5 size-24 shrink-0 object-contain [filter:var(--provider-filter)]" src={appIcon} alt="" aria-hidden="true" />
+              <h1 class="mx-auto mb-5 w-[min(var(--content-width,720px),calc(100%-56px))] px-3.5 text-center text-2xl leading-tight font-[550] tracking-tight wrap-anywhere text-text max-[680px]:mb-3.5 max-[680px]:w-[calc(100%-30px)] max-[680px]:px-[9px] max-[680px]:text-[19px]">
                 What should we build in {workspace.projectNameForThread(selectedThread)}?
               </h1>
             {:else}
@@ -451,6 +454,8 @@
       <ProjectExplorer
         open={projectExplorerOpen && !settingsOpen}
         visible={projectExplorerVisible}
+        {compactLayout}
+        {reducedMotion}
         projectRoot={explorerRoot}
         projectName={explorerProjectName}
         {activeFilePath}
