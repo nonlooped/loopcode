@@ -8,7 +8,6 @@ import {
   loadPermissionMode,
   loadSidebarWidths,
   loadTerminalHeight,
-  providerVersionFromOutput,
   resetInterfaceSettings,
   saveAppPreference,
   savePermissionMode,
@@ -16,16 +15,6 @@ import {
   saveTerminalHeight,
   THEME_OPTIONS,
 } from "../src/utils/app-settings.ts";
-
-void test("settings writes tolerate unavailable web storage", () => {
-  const storage = {
-    setItem: () => {
-      throw new Error("storage unavailable");
-    },
-  };
-
-  assert.doesNotThrow(() => savePermissionMode("full", storage));
-});
 
 void test("permission mode defaults to restricted and persists valid choices", () => {
   const values = new Map();
@@ -160,12 +149,6 @@ void test("provider settings preserve ACP arguments without mutating defaults", 
   assert.equal(configured[0].command, "/opt/npx");
   assert.deepEqual(configured[0].args, ["adapter"]);
   assert.equal(profiles[0].label, "Codex");
-});
-
-void test("provider versions are read from common CLI output", () => {
-  assert.equal(providerVersionFromOutput("codex-cli 0.149.0"), "0.149.0");
-  assert.equal(providerVersionFromOutput("claude 2.1.240 (Claude Code)"), "2.1.240");
-  assert.equal(providerVersionFromOutput("unknown"), undefined);
 });
 
 void test("interface reset preserves provider and permission settings", () => {

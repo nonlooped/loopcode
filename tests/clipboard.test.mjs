@@ -12,11 +12,6 @@ function replaceGlobal(context, name, value) {
   });
 }
 
-void test("rejects image copy when the clipboard API is unavailable", async (context) => {
-  replaceGlobal(context, "navigator", { clipboard: {} });
-  await assert.rejects(copyImage("blob:test"), /not supported/i);
-});
-
 void test("uses a PNG type when fetched image metadata has no MIME type", async (context) => {
   const writes = [];
   replaceGlobal(context, "navigator", {

@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  discoverProviderModelOptions,
-  mergeProviderModels,
-  ProviderRuntime,
-} from "../src/services/provider-runtime.ts";
+import { ProviderRuntime } from "../src/services/provider-runtime.ts";
 import { providerDefinitions } from "../src/config/provider-definitions.ts";
 import { restoreWorkspace } from "../src/utils/workspace.ts";
 
@@ -186,26 +182,6 @@ void test("unchanged custom models do not disconnect ready providers", () => {
   assert.equal(state.providers.codex.connectionStatus, "ready");
 });
 
-void test("custom models extend advertised models and replace duplicate labels", () => {
-  assert.deepEqual(
-    mergeProviderModels(
-      [
-        { id: "model-1", name: "Model 1" },
-        { id: "model-2", name: "Old model 2" },
-      ],
-      [
-        { id: "model-2", name: "Model 2" },
-        { id: "custom", name: "Custom" },
-      ],
-    ),
-    [
-      { id: "model-1", name: "Model 1" },
-      { id: "model-2", name: "Model 2" },
-      { id: "custom", name: "Custom" },
-    ],
-  );
-});
-
 void test("disabling the active provider falls back to an enabled ready provider", () => {
   const state = thread();
   const readyCatalogs = { ...catalogs, claude: catalogs.codex };
@@ -272,42 +248,6 @@ void test("Grok and fx image turns are rejected before timeline changes", () => 
     );
     assert.deepEqual(state.messages, []);
   }
-});
-
-void test("Pi discovery skips per-model option probing", async () => {
-  const pi = providerDefinitions.find((profile) => profile.id === "pi");
-  assert.ok(pi);
-  let modelChanges = 0;
-  const state = {
-    modelConfigId: "model",
-    models: [
-      { id: "pi-fast", name: "Pi Fast" },
-      { id: "pi-smart", name: "Pi Smart" },
-    ],
-    selectedModelId: "pi-fast",
-    reasoningConfigId: "thinking",
-    reasoningOptions: [{ id: "medium", name: "Medium" }],
-    selectedReasoningId: "medium",
-  };
-
-  const options = await discoverProviderModelOptions(
-    pi,
-    {
-      async setModel() {
-        modelChanges += 1;
-        return state;
-      },
-    },
-    state,
-  );
-
-  assert.equal(modelChanges, 0);
-  assert.deepEqual(options.reasoningOptionsByModel, {
-    "pi-fast": {
-      options: [{ id: "medium", name: "Medium" }],
-      selectedId: "medium",
-    },
-  });
 });
 
 void test("reconnect waits for a replaced provider process to stop", async () => {

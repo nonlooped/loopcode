@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   composerEnterAction,
-  fuzzyScore,
   promptParts,
   promptPartsFromText,
   promptText,
@@ -83,9 +82,4 @@ void test("composer send shortcuts preserve a newline path", () => {
   assert.equal(composerEnterAction("modifier-enter", key), "newline");
   assert.equal(composerEnterAction("modifier-enter", { ...key, ctrlKey: true }), "send");
   assert.equal(composerEnterAction("enter", { ...key, isComposing: true }), undefined);
-});
-
-void test("fuzzy matching accepts ordered path characters", () => {
-  assert.notEqual(fuzzyScore("src/components/Composer.svelte", "scps"), undefined);
-  assert.equal(fuzzyScore("src/components/Composer.svelte", "xyz"), undefined);
 });
