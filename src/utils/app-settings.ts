@@ -67,7 +67,7 @@ export interface AppPreferences {
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   colorMode: "system",
-  theme: "graphite",
+  theme: "indigo",
   compactSessionRows: false,
   startupBehavior: "last-thread",
   newThreadProject: "selected",
