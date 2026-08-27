@@ -66,6 +66,11 @@ void test("overlapping reference tokens resolve to the longest match", () => {
   assert.deepEqual(parts, [{ type: "reference", reference: nested }]);
 });
 
+void test("editing a reference token to extend it is treated as plain text, not the original reference", () => {
+  const parts = promptPartsFromText("Read @src/Composer.svelte.bak first", [reference]);
+  assert.deepEqual(parts, [{ type: "text", text: "Read @src/Composer.svelte.bak first" }]);
+});
+
 void test("composer send shortcuts preserve a newline path", () => {
   const key = { key: "Enter", shiftKey: false, ctrlKey: false, metaKey: false };
   assert.equal(composerEnterAction("enter", key), "send");
