@@ -51,8 +51,7 @@ export function promptPartsFromText(
   let index = 0;
   while (index < text.length) {
     const match = tokens.find(
-      ({ token }) =>
-        text.startsWith(token, index) && !isTokenChar(text[index + token.length]),
+      ({ token }) => text.startsWith(token, index) && !isTokenChar(text[index + token.length]),
     );
     if (!match) {
       plain += text[index];
