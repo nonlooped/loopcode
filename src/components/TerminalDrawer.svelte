@@ -36,7 +36,9 @@
   }: Props = $props();
 
   let layoutSettled = $state(false);
-  let mounted = $state(untrack(() => open));
+  // Tracks the closing animation only. Panes stay mounted either way: unmounting
+  // a TerminalPane stops its shell, so the drawer must not own terminal lifetime.
+  let visible = $state(untrack(() => open));
 
   const drawerHeight = new Tween(0, { duration: 0, easing: cubicOut });
   const drawerOpacity = new Tween(0, { duration: 0, easing: cubicOut });
@@ -48,7 +50,7 @@
   $effect(() => {
     const duration = shellLayoutDuration(reducedMotion);
     if (open) {
-      mounted = true;
+      visible = true;
       void drawerOpacity.set(1, { duration });
       void drawerHeight.set(height, { duration }).then(() => {
         if (open) layoutSettled = true;
@@ -58,7 +60,7 @@
     layoutSettled = reducedMotion;
     void drawerOpacity.set(0, { duration });
     void drawerHeight.set(0, { duration }).then(() => {
-      if (!open) mounted = false;
+      if (!open) visible = false;
     });
   });
 
@@ -70,7 +72,7 @@
 </script>
 
 <section
-  class="relative min-h-0 min-w-0 overflow-hidden border-t bg-transparent {open ? 'pointer-events-auto visible border-line' : 'pointer-events-none invisible border-transparent'}"
+  class="relative min-h-0 min-w-0 overflow-hidden border-t bg-transparent {open ? 'pointer-events-auto border-line' : 'pointer-events-none border-transparent'} {visible ? 'visible' : 'invisible'}"
   style:height="{drawerHeight.current}px"
   style:opacity={drawerOpacity.current}
   style:max-height={expandedHeight}
@@ -96,18 +98,16 @@
       resizeBy(delta);
     }}
   ></div>
-  {#if mounted}
-    {#each threads as thread (thread.id)}
-      <TerminalPane
-        {thread}
-        active={open && thread.id === selectedThreadId}
-        ready={layoutSettled && open && thread.id === selectedThreadId}
-        {fontSize}
-        {scrollback}
-        {reducedMotion}
-        {close}
-        exited={() => terminalExited(thread.id)}
-      />
-    {/each}
-  {/if}
+  {#each threads as thread (thread.id)}
+    <TerminalPane
+      {thread}
+      active={open && thread.id === selectedThreadId}
+      ready={layoutSettled && open && thread.id === selectedThreadId}
+      {fontSize}
+      {scrollback}
+      {reducedMotion}
+      {close}
+      exited={() => terminalExited(thread.id)}
+    />
+  {/each}
 </section>
