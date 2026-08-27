@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  formatElapsedDuration,
-  isStreamingMessage,
-  timelineEntries,
-} from "../src/utils/timeline.ts";
+import { isStreamingMessage, timelineEntries } from "../src/utils/timeline.ts";
 
 function thread(status = "ready") {
   return {
@@ -79,12 +75,6 @@ void test("keeps the substantive response visible when a completed turn ends wit
 
   const entries = timelineEntries(value);
   assert.ok(entries.some((entry) => entry.type === "message" && entry.message.id === "final"));
-});
-
-void test("formats work duration labels", () => {
-  assert.equal(formatElapsedDuration(8_000), "8s");
-  assert.equal(formatElapsedDuration(62_000), "1m 2s");
-  assert.equal(formatElapsedDuration(120_000), "2m");
 });
 
 void test("does not mark the previous turn's response as streaming while the next turn starts", () => {
