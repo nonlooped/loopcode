@@ -313,50 +313,36 @@
             {/each}
           </RadioGroup.Root>
         </div>
-        <div class="settings-visual-section settings-row-separated">
+        <div class="settings-row settings-row-separated">
           <span class="settings-row-copy">
             <strong>Sidebar thread spacing</strong>
-            <small>Preview how much detail each thread shows in the sidebar.</small>
+            <small>How much detail each thread shows in the sidebar.</small>
           </span>
           <RadioGroup.Root
-            class="settings-density-grid"
+            class="settings-segmented-control"
             aria-label="Sidebar thread spacing"
             orientation="horizontal"
             value={preferences.compactSessionRows ? 'compact' : 'comfortable'}
             onValueChange={(value) => setPreference('compactSessionRows', value === 'compact')}
           >
-            {#each ['comfortable', 'compact'] as density (density)}
-              <RadioGroup.Item class="settings-choice-card settings-density-choice" value={density}>
-                <span class:compact={density === 'compact'} class="settings-density-preview settings-sidebar-density-preview" aria-hidden="true">
-                  <i></i><i></i><i></i><i></i>
-                </span>
-                <span class="settings-choice-label">{density === 'compact' ? 'Compact' : 'Comfortable'}</span>
-                <span class="settings-choice-check" aria-hidden="true"><IconCheck size={11} stroke={2} /></span>
-              </RadioGroup.Item>
-            {/each}
+            <RadioGroup.Item class="settings-segmented-option" value="comfortable">Comfortable</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="compact">Compact</RadioGroup.Item>
           </RadioGroup.Root>
         </div>
-        <div class="settings-visual-section settings-row-separated">
+        <div class="settings-row settings-row-separated">
           <span class="settings-row-copy">
             <strong>Transcript spacing</strong>
-            <small>Preview the space between transcript entries.</small>
+            <small>The space between transcript entries.</small>
           </span>
           <RadioGroup.Root
-            class="settings-density-grid"
+            class="settings-segmented-control"
             aria-label="Transcript spacing"
             orientation="horizontal"
             value={preferences.transcriptDensity}
             onValueChange={(value) => setPreference('transcriptDensity', value === 'compact' ? 'compact' : 'comfortable')}
           >
-            {#each ['comfortable', 'compact'] as density (density)}
-              <RadioGroup.Item class="settings-choice-card settings-density-choice" value={density}>
-                <span class:compact={density === 'compact'} class="settings-density-preview settings-transcript-density-preview" aria-hidden="true">
-                  <i></i><i></i><i></i>
-                </span>
-                <span class="settings-choice-label">{density === 'compact' ? 'Compact' : 'Comfortable'}</span>
-                <span class="settings-choice-check" aria-hidden="true"><IconCheck size={11} stroke={2} /></span>
-              </RadioGroup.Item>
-            {/each}
+            <RadioGroup.Item class="settings-segmented-option" value="comfortable">Comfortable</RadioGroup.Item>
+            <RadioGroup.Item class="settings-segmented-option" value="compact">Compact</RadioGroup.Item>
           </RadioGroup.Root>
         </div>
         <div class="settings-row settings-row-separated">

@@ -175,7 +175,7 @@
   }
 </script>
 
-{#if !loading && !loadError}
+{#if changes.length > 0}
   <div
     class="git-change-summary"
     aria-label={`${changes.length} changed ${changes.length === 1 ? 'file' : 'files'}, ${summary.additions} additions, ${summary.deletions} deletions`}
@@ -211,19 +211,18 @@
       </select>
     </label>
   {/if}
+  {#if loading}
+    <span class="git-changes-note">Loading…</span>
+  {:else if loadError}
+    <span class="git-changes-note error" title={loadError}>Could not read changes</span>
+  {:else if mode === 'branch' && comparisonBranches.length === 0}
+    <span class="git-changes-note">No branch to compare</span>
+  {:else if changes.length === 0}
+    <span class="git-changes-note">No changes</span>
+  {/if}
 </div>
 
-{#if loading}
-  <p class="project-explorer-empty">Loading changes…</p>
-{:else if loadError}
-  <p class="project-explorer-empty error" title={loadError}>Could not read Git changes.</p>
-{:else if mode === 'branch' && comparisonBranches.length === 0}
-  <p class="project-explorer-empty">No other local branch is available for comparison.</p>
-{:else if changes.length === 0}
-  <p class="project-explorer-empty">
-    {mode === 'working' ? 'No working-tree changes.' : `No changes since ${baseBranch}.`}
-  </p>
-{:else}
+{#if changes.length > 0}
   <div class="git-change-list">
     {#each changes as change, index (changeKey(change))}
       {@const key = changeKey(change)}
