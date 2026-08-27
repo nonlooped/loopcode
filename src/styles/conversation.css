@@ -152,8 +152,7 @@
 }
 
 .settings-mode-grid,
-.settings-theme-grid,
-.settings-density-grid {
+.settings-theme-grid {
   display: grid;
   gap: 8px;
 }
@@ -164,10 +163,6 @@
 
 .settings-theme-grid {
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-}
-
-.settings-density-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .settings-choice-card {
@@ -371,66 +366,6 @@
 
 .settings-theme-preview-dark::after {
   background: rgb(var(--theme-dark-accent-rgb));
-}
-
-.settings-density-choice {
-  padding: 8px;
-}
-
-.settings-density-preview {
-  display: grid;
-  height: 58px;
-  padding: 9px 10px;
-  align-content: center;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--recessed-surface);
-}
-
-.settings-density-preview i {
-  display: block;
-  border-radius: 4px;
-  background: var(--panel-active);
-}
-
-.settings-sidebar-density-preview {
-  gap: 5px;
-}
-
-.settings-sidebar-density-preview.compact {
-  gap: 2px;
-}
-
-.settings-sidebar-density-preview i {
-  height: 7px;
-  border-left: 13px solid var(--line-strong);
-}
-
-.settings-sidebar-density-preview.compact i {
-  height: 5px;
-}
-
-.settings-transcript-density-preview {
-  gap: 8px;
-}
-
-.settings-transcript-density-preview.compact {
-  gap: 3px;
-}
-
-.settings-transcript-density-preview i {
-  width: 74%;
-  height: 5px;
-}
-
-.settings-transcript-density-preview i:nth-child(2) {
-  width: 88%;
-  margin-left: auto;
-}
-
-.settings-transcript-density-preview i:nth-child(3) {
-  width: 62%;
-  margin-left: 12%;
 }
 
 .settings-segmented-control {

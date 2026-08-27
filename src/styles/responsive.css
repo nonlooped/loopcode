@@ -182,10 +182,6 @@
     font-size: 19px;
   }
 
-  .message.from-user {
-    max-width: 92%;
-  }
-
   .composer-wrap {
     padding-right: 9px;
     padding-left: 9px;

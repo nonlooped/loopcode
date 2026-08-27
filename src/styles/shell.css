@@ -244,18 +244,18 @@
 }
 
 .app-shell.sidebar-collapsed .titlebar {
-  grid-template-columns: 154px minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
 }
 
 .app-shell.sidebar-collapsed .window-chrome {
   position: static;
-  width: 154px;
   height: var(--titlebar-height);
   border-right: 0;
   background: transparent;
 }
 
 .app-shell.sidebar-collapsed .title-context {
+  padding-left: 2px;
   background: transparent;
 }
 

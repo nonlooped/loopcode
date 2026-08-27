@@ -42,22 +42,25 @@
       aria-label="Reasoning and speed"
     >
       {#if props.provider.reasoningOptions.length > 0}
-        <DropdownMenu.RadioGroup value={selected?.id} onValueChange={props.select}>
-          <div class="reasoning-menu-options">
-            {#each props.provider.reasoningOptions as option (option.id)}
-              <DropdownMenu.RadioItem
-                class="reasoning-option"
-                value={option.id}
-                title={option.description ?? option.name}
-              >
-                {#snippet children({ checked })}
-                  <span>{option.name}</span>
-                  {#if checked}<IconCheck size={14} stroke={2} />{/if}
-                {/snippet}
-              </DropdownMenu.RadioItem>
-            {/each}
-          </div>
-        </DropdownMenu.RadioGroup>
+        <DropdownMenu.Group>
+          <DropdownMenu.GroupHeading class="reasoning-menu-label">Reasoning</DropdownMenu.GroupHeading>
+          <DropdownMenu.RadioGroup value={selected?.id} onValueChange={props.select}>
+            <div class="reasoning-menu-options">
+              {#each props.provider.reasoningOptions as option (option.id)}
+                <DropdownMenu.RadioItem
+                  class="reasoning-option"
+                  value={option.id}
+                  title={option.description ?? option.name}
+                >
+                  {#snippet children({ checked })}
+                    <span>{option.name}</span>
+                    {#if checked}<IconCheck size={14} stroke={2} />{/if}
+                  {/snippet}
+                </DropdownMenu.RadioItem>
+              {/each}
+            </div>
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Group>
       {/if}
       {#if fastModeAvailable(props.provider)}
         <DropdownMenu.Separator class="reasoning-menu-divider" />
