@@ -9,10 +9,10 @@
     IconChevronDown,
     IconChevronRight,
     IconContrast,
-    IconDatabase,
     IconFolder,
     IconFolderPlus,
     IconInbox,
+    IconInfoCircle,
     IconMessageCircle,
     IconPlus,
     IconPlugConnected,
@@ -23,6 +23,7 @@
     IconWriting,
   } from '@tabler/icons-svelte';
 
+  import appIcon from '../../assets/loopcode-mark.png';
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
   import type { HarnessProfile, PermissionRequest, ProjectState, ThreadState } from '../types';
@@ -74,7 +75,7 @@
     { category: 'agents', label: 'Agents and permissions', icon: IconRobot },
     { category: 'providers', label: 'Providers', icon: IconPlugConnected },
     { category: 'terminal', label: 'Terminal', icon: IconTerminal2 },
-    { category: 'diagnostics', label: 'Diagnostics', icon: IconDatabase },
+    { category: 'about', label: 'About', icon: IconInfoCircle },
   ] satisfies { category: SettingsCategory; label: string; icon: typeof IconSettings }[];
   let archiveDeletionPending = $state(false);
   const inboxGroups = $derived.by(() => {
@@ -129,7 +130,10 @@
   ></div>
   {#if props.settingsOpen}
     <div class="settings-nav">
-      <div class="settings-nav-label">Settings</div>
+      <div class="settings-nav-label">
+        <img class="settings-nav-logo" src={appIcon} alt="" aria-hidden="true" />
+        <span>Settings</span>
+      </div>
       <nav aria-label="Settings categories">
         {#each settingsCategories as { category, label, icon: Icon } (category)}
           <button

@@ -4,6 +4,8 @@
   import { IconArrowLeft, IconCheck, IconPlus, IconTrash } from '@tabler/icons-svelte';
   import { AlertDialog, RadioGroup, Slider, Switch } from 'bits-ui';
 
+  import { version as appVersion } from '../../package.json';
+  import appIcon from '../../assets/loopcode-mark.png';
   import { exportDiagnostics } from '../services/native';
   import type { HarnessProfile, PermissionMode, ProviderModelCatalog } from '../types';
   import {
@@ -80,7 +82,7 @@
     agents: ['Agents and permissions', 'Control agent access and thread title generation.'],
     providers: ['Providers', 'Manage provider availability, defaults, connections, and models.'],
     terminal: ['Terminal', 'Tune the terminal drawer and its retained output.'],
-    diagnostics: ['Diagnostics', 'Export troubleshooting data or restore interface defaults.'],
+    about: ['About', 'App details, diagnostics, and interface defaults.'],
   } satisfies Record<SettingsCategory, [string, string]>;
   const pageCopy = $derived(
     category === 'providers' && selectedProvider
@@ -727,7 +729,16 @@
           </RadioGroup.Root>
         </div>
       </div>
-    {:else}
+    {:else if category === 'about'}
+      <div class="settings-card">
+        <div class="settings-about-row">
+          <img class="settings-about-logo" src={appIcon} alt="" aria-hidden="true" />
+          <span class="settings-row-copy">
+            <strong>LoopCode</strong>
+            <small>Version {appVersion}</small>
+          </span>
+        </div>
+      </div>
       <div class="settings-card">
         <div class="settings-row">
           <span class="settings-row-copy">

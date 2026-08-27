@@ -153,6 +153,7 @@
 }
 
 .title-context {
+  position: relative;
   min-width: 0;
   overflow: hidden;
   padding: 0 46px 0 14px;
@@ -160,6 +161,10 @@
 }
 
 .title-context-motion {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: inherit;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -203,9 +208,12 @@
   opacity: 0.68;
 }
 
-.title-settings-icon {
+.title-brand-icon {
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
-  color: var(--muted);
+  filter: var(--provider-filter);
+  opacity: 0.68;
 }
 
 .title-copy strong {
