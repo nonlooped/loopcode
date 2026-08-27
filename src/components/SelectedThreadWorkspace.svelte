@@ -281,6 +281,12 @@
     await turn;
   }
 
+  function resendPrompt(text: string) {
+    const thread = selectedThread;
+    if (!thread || gitOperationThreadId) return;
+    void providers.runTurn(thread, text);
+  }
+
   function animateComposerToTranscript(previousTop: number) {
     void tick().then(() => {
       const composer = threadViewElement?.querySelector<HTMLElement>('.composer-wrap');
@@ -352,7 +358,9 @@
                   entries={selectedTimelineEntries}
                   {profiles}
                   {reducedMotion}
+                  sendShortcut={preferences.sendShortcut}
                   {openFile}
+                  {resendPrompt}
                 />
               {/key}
             {/if}

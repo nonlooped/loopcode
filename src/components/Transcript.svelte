@@ -9,8 +9,10 @@
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
   import type { HarnessProfile, MessageImage, ThreadState, TimelineMessage, ToolActivity } from '../types';
   import type { TimelineDisplayEntry } from '../types/timeline';
+  import type { SendShortcut } from '../utils/app-settings';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
+  import { composerEnterAction } from '../utils/prompt-content';
   import { formatElapsedDuration, isStreamingMessage } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
@@ -19,10 +21,13 @@
     entries: TimelineDisplayEntry[];
     profiles: HarnessProfile[];
     reducedMotion: boolean;
+    sendShortcut: SendShortcut;
     openFile: (path: string) => void;
+    resendPrompt: (text: string) => void;
   }
 
-  const { thread, entries, profiles, reducedMotion, openFile }: Props = $props();
+  const { thread, entries, profiles, reducedMotion, sendShortcut, openFile, resendPrompt }: Props =
+    $props();
   let transcriptElement = $state<HTMLElement>();
   let canScrollUp = $state(false);
   let canScrollDown = $state(false);
@@ -31,6 +36,9 @@
   let renderedUserMessageId: string | undefined;
   let animateEntries = $state(false);
   let imagePreview = $state<{ src: string; name: string }>();
+  let editingMessageId = $state<string>();
+  let editDraft = $state('');
+  let editEditor = $state<HTMLTextAreaElement>();
   let workDurationNow = $state(Date.now());
   let workGroupOpen = $state<Record<string, boolean>>({});
   let toolOpen = $state<Record<string, boolean>>({});
@@ -43,6 +51,13 @@
   const transcriptStatus = $derived(threadStatus(thread));
   const awaitingAnswer = $derived(
     transcriptStatus === 'connecting' || transcriptStatus === 'running',
+  );
+  // Only the newest prompt is editable: turns are append-only, so an edit resends rather
+  // than rewinds, and appending only reads correctly at the end of the thread.
+  const editablePromptId = $derived(
+    latestUserMessage && !awaitingAnswer && !(latestUserMessage.images?.length)
+      ? latestUserMessage.id
+      : undefined,
   );
   const activeWorkStartedAt = $derived.by(() => {
     for (const entry of entries) {
@@ -128,6 +143,47 @@
     pinnedToBottom = false;
   }
 
+  // Drop out of editing whenever the prompt stops being the editable one: thread switch,
+  // a new turn starting, or the agent replying.
+  $effect(() => {
+    if (editingMessageId && editingMessageId !== editablePromptId) editingMessageId = undefined;
+  });
+
+  function startEditingPrompt(message: TimelineMessage) {
+    if (window.getSelection()?.isCollapsed === false) return;
+    editingMessageId = message.id;
+    editDraft = message.text;
+    void tick().then(() => {
+      if (!editEditor) return;
+      growEditor(editEditor);
+      editEditor.focus();
+      editEditor.setSelectionRange(editDraft.length, editDraft.length);
+    });
+  }
+
+  function growEditor(editor: HTMLTextAreaElement) {
+    editor.style.height = 'auto';
+    editor.style.height = `${editor.scrollHeight}px`;
+  }
+
+  function submitEditedPrompt() {
+    const text = editDraft.trim();
+    editingMessageId = undefined;
+    if (text) resendPrompt(text);
+  }
+
+  function handleEditKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      editingMessageId = undefined;
+      return;
+    }
+    if (composerEnterAction(sendShortcut, event) === 'send') {
+      event.preventDefault();
+      submitEditedPrompt();
+    }
+  }
+
   function imageUrl(image: { mimeType: string; data: string }) {
     return `data:${image.mimeType};base64,${image.data}`;
   }
@@ -167,6 +223,31 @@
     ];
   }
 </script>
+
+{#snippet promptContent(message: TimelineMessage, streaming: boolean)}
+  {#if message.content}
+    <div class="message-prompt-content">
+      {#each message.content as part}
+        {#if part.type === 'text'}
+          <span>{part.text}</span>
+        {:else}
+          {@const reference = part.reference}
+          <span class:skill={reference.kind === 'skill'} class="message-reference" title={reference.relativePath}>
+            {#if reference.kind === 'skill'}
+              <span class="composer-reference-mark">$</span>
+            {:else}
+              {@const icon = reference.kind === 'folder' ? materialFolderIcon(reference.name, false) : materialFileIcon(reference.name)}
+              {#if icon}<img src={icon} alt="" />{/if}
+            {/if}
+            <span>{reference.name}</span>
+          </span>
+        {/if}
+      {/each}
+    </div>
+  {:else}
+    <MarkdownMessage id={message.id} source={message.text} {streaming} />
+  {/if}
+{/snippet}
 
 <div class="transcript-shell" in:fade|global={{ duration: reducedMotion ? 0 : 150 }}>
   <section
@@ -295,6 +376,8 @@
                 {...props}
                 bind:this={messageBodies[message.id]}
                 class:from-user={message.role === 'user'}
+                class:editable={editablePromptId === message.id}
+                class:editing={editingMessageId === message.id}
                 class:streaming={streaming}
                 class="message"
                 in:fly={{ y: entryMotion ? (message.role === 'user' ? 10 : 4) : 0, duration: entryMotion ? 180 : 0 }}
@@ -306,25 +389,38 @@
               </time>
             </header>
             <div class="message-body">
-              {#if message.role === 'user' && message.content}
-                <div class="message-prompt-content">
-                  {#each message.content as part}
-                    {#if part.type === 'text'}
-                      <span>{part.text}</span>
-                    {:else}
-                      {@const reference = part.reference}
-                      <span class:skill={reference.kind === 'skill'} class="message-reference" title={reference.relativePath}>
-                        {#if reference.kind === 'skill'}
-                          <span class="composer-reference-mark">$</span>
-                        {:else}
-                          {@const icon = reference.kind === 'folder' ? materialFolderIcon(reference.name, false) : materialFileIcon(reference.name)}
-                          {#if icon}<img src={icon} alt="" />{/if}
-                        {/if}
-                        <span>{reference.name}</span>
-                      </span>
-                    {/if}
-                  {/each}
-                </div>
+              {#if message.role === 'user'}
+                {#if editingMessageId === message.id}
+                  <div class="prompt-edit">
+                    <textarea
+                      bind:this={editEditor}
+                      bind:value={editDraft}
+                      class="prompt-edit-input"
+                      aria-label="Edit prompt"
+                      rows="1"
+                      oninput={(event) => growEditor(event.currentTarget)}
+                      onkeydown={handleEditKeydown}
+                    ></textarea>
+                    <div class="prompt-edit-actions">
+                      <button type="button" onclick={() => { editingMessageId = undefined; }}>Cancel</button>
+                      <button
+                        type="button"
+                        class="primary"
+                        disabled={editDraft.trim().length === 0}
+                        onclick={submitEditedPrompt}
+                      >Send</button>
+                    </div>
+                  </div>
+                {:else if editablePromptId === message.id}
+                  <button
+                    type="button"
+                    class="prompt-edit-trigger"
+                    aria-label="Edit prompt"
+                    onclick={() => startEditingPrompt(message)}
+                  >{@render promptContent(message, streaming)}</button>
+                {:else}
+                  {@render promptContent(message, streaming)}
+                {/if}
               {:else}
                 <MarkdownMessage
                   id={message.id}
