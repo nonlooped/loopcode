@@ -14,32 +14,20 @@ void test("non-macOS window controls match their keyboard order", () => {
     new URL("../src/components/Titlebar.svelte", import.meta.url),
     "utf8",
   );
-  const controls = readFileSync(
-    new URL("../src/styles/window-controls.css", import.meta.url),
-    "utf8",
-  );
 
   assert.match(
     titlebar,
     /{:else}\s*{@render minimizeControl\(\)}\s*{@render maximizeControl\(\)}\s*{@render closeControl\(\)}/,
   );
-  assert.doesNotMatch(controls, /^\s*order:/m);
+  assert.doesNotMatch(titlebar, /\border:/);
 });
 
-void test("non-macOS panels leave titlebar controls usable", () => {
-  const controls = readFileSync(
-    new URL("../src/styles/window-controls.css", import.meta.url),
+void test("titlebar is utility-styled without a platform stylesheet", () => {
+  const titlebar = readFileSync(
+    new URL("../src/components/Titlebar.svelte", import.meta.url),
     "utf8",
   );
 
-  assert.doesNotMatch(controls, /\.thread-sidebar \{\s*top: 0;/);
-  assert.match(controls, /\.app-shell:not\(\.sidebar-collapsed\):has\(\.sidebar-heading\)/);
-  assert.match(
-    controls,
-    /\.project-explorer-actions \{\s*right: calc\(var\(--window-controls-width\) \+ 6px\);/,
-  );
-  assert.match(
-    controls,
-    /\.project-explorer-tab-list \{\s*top: calc\(var\(--titlebar-height\) \+ 7px\);/,
-  );
+  assert.match(titlebar, /grid-cols-\[var\(--sidebar-width\)_minmax\(0,1fr\)\]/);
+  assert.match(titlebar, /bg-\[rgba\(255,95,87,\.92\)\]/);
 });

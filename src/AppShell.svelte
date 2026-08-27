@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { Tween } from 'svelte/motion';
+  import { cubicOut } from 'svelte/easing';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { getCurrentWindow } from '@tauri-apps/api/window';
 
@@ -132,6 +134,8 @@
   const savedSidebarWidths = loadSidebarWidths();
   let leftSidebarWidth = $state<number | null>(savedSidebarWidths.left);
   let rightSidebarWidth = $state<number | null>(savedSidebarWidths.right);
+  const leftPanelWidth = new Tween(savedSidebarWidths.left ?? 300);
+  const rightPanelWidth = new Tween(savedSidebarWidths.right ?? 280);
   let compactLayout = $state(window.matchMedia('(max-width: 880px)').matches);
   let settingsOpen = $state(false);
   let settingsCategory = $state<SettingsCategory>('general');
@@ -167,8 +171,8 @@
   );
   const selectableProfiles = $derived(enabledProfiles);
   const layoutStyle = $derived([
-    leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
-    rightSidebarWidth === null ? '' : `--project-explorer-expanded-width: ${rightSidebarWidth}px`,
+    `--sidebar-width: ${leftPanelWidth.current}px`,
+    `--project-explorer-width: ${rightPanelWidth.current}px`,
     `--terminal-height: ${terminalHeight}px`,
     `--content-width: ${preferences.contentWidth}px`,
   ].filter(Boolean).join('; '));
@@ -196,6 +200,9 @@
   });
 
   const selectedThread = $derived(threads.find((thread) => thread.id === selectedThreadId));
+  const projectExplorerHidden = $derived(
+    !selectedThread?.cwd || settingsOpen || (!compactLayout && projectExplorerCollapsed),
+  );
   const selectedInteraction = $derived(
     selectedThread ? interactions[interactionKey(selectedThread.id, selectedThread.profileId)] : undefined,
   );
@@ -227,6 +234,20 @@
       return thread ? [thread] : [];
     }),
   );
+
+  $effect(() => {
+    void leftPanelWidth.set(sidebarCollapsed ? 0 : leftSidebarWidth ?? 300, {
+      duration: reducedMotion ? 0 : 220,
+      easing: cubicOut,
+    });
+  });
+
+  $effect(() => {
+    void rightPanelWidth.set(projectExplorerHidden ? 0 : rightSidebarWidth ?? 280, {
+      duration: reducedMotion ? 0 : 220,
+      easing: cubicOut,
+    });
+  });
 
   $effect(() => {
     void appWebview.setZoom(preferences.interfaceZoom / 100);
@@ -879,12 +900,12 @@
 <div
   class:maximized={windowMaximized}
   class:sidebar-collapsed={sidebarCollapsed}
-  class:project-explorer-collapsed={!selectedThread?.cwd || settingsOpen || (!compactLayout && projectExplorerCollapsed)}
+  class:project-explorer-collapsed={projectExplorerHidden}
   class:compact-session-rows={preferences.compactSessionRows}
   class:compact-transcript={preferences.transcriptDensity === 'compact'}
   class:wrap-message-code={preferences.wrapCode}
   class:show-message-timestamps={preferences.showMessageTimestamps}
-  class="app-shell"
+  class={`app-shell relative isolate h-dvh w-full overflow-hidden rounded-xl bg-[var(--shell-tint)] shadow-app backdrop-blur-[44px] backdrop-saturate-[118%] ${windowMaximized ? 'rounded-none' : ''}`}
   style={layoutStyle}
 >
   <Titlebar
@@ -902,18 +923,18 @@
     toggleMaximize={() => { void appWindow.toggleMaximize(); }}
   />
   {#if zoomPercent}
-    <div class="zoom-indicator" role="status" transition:fade={{ duration: reducedMotion ? 0 : 120 }}>
+    <div class="fixed top-[calc(var(--titlebar-height)+10px)] left-1/2 z-30 -translate-x-1/2 rounded-md border border-line-strong bg-floating px-2 py-1 text-[11px] font-semibold text-ink-soft" role="status" transition:fade={{ duration: reducedMotion ? 0 : 120 }}>
       {zoomPercent}%
     </div>
   {/if}
   {#if workspaceSaveError}
-    <div class="workspace-save-error" role="alert">
+    <div class="fixed top-[calc(var(--titlebar-height)+10px)] right-3 z-30 flex max-w-[min(420px,calc(100vw-24px))] items-center gap-2.5 rounded-md border border-[color-mix(in_srgb,var(--danger)_42%,var(--line-strong))] bg-floating px-2 py-1.5 text-xs leading-[1.35] shadow-app" role="alert">
       <span>{workspaceSaveError}</span>
-      <button type="button" onclick={() => { workspaceSaveError = ''; }}>Dismiss</button>
+      <button class="rounded px-1.5 py-0.5 text-danger hover:bg-panel-hover" type="button" onclick={() => { workspaceSaveError = ''; }}>Dismiss</button>
     </div>
   {/if}
   {#if compactLayout && sidebarOpen}
-    <button type="button" class="compact-drawer-backdrop" tabindex="-1" aria-label="Close sidebar" onclick={() => { sidebarOpen = false; }}></button>
+    <button type="button" class="fixed inset-0 z-[8] bg-overlay" tabindex="-1" aria-label="Close sidebar" onclick={() => { sidebarOpen = false; }}></button>
   {/if}
   <Sidebar
       open={sidebarOpen}

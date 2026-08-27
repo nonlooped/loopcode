@@ -247,18 +247,18 @@
 
 {#snippet promptContent(message: TimelineMessage, streaming: boolean)}
   {#if message.content}
-    <div class="message-prompt-content">
+    <div class="contents">
       {#each message.content as part}
         {#if part.type === 'text'}
           <span>{part.text}</span>
         {:else}
           {@const reference = part.reference}
-          <span class:skill={reference.kind === 'skill'} class="message-reference" title={reference.relativePath}>
+          <span class="inline-flex h-[1.45em] max-w-[180px] mx-px items-center gap-1 rounded bg-panel-active px-1.5 align-[-.18em] text-[13px] leading-none whitespace-nowrap text-ink-soft [&>img]:size-3 [&>img]:shrink-0 [&>img]:opacity-65 [&>img]:[filter:var(--provider-filter)] [&>span:last-child]:min-w-0 [&>span:last-child]:truncate" title={reference.relativePath}>
             {#if reference.kind === 'skill'}
-              <span class="composer-reference-mark">$</span>
+              <span class="font-semibold text-muted">$</span>
             {:else}
               {@const icon = reference.kind === 'folder' ? materialFolderIcon(reference.name, false) : materialFileIcon(reference.name)}
-              {#if icon}<img src={icon} alt="" />{/if}
+              {#if icon}<img class="size-3 shrink-0 opacity-65 [filter:var(--provider-filter)]" src={icon} alt="" />{/if}
             {/if}
             <span>{reference.name}</span>
           </span>
@@ -270,42 +270,37 @@
   {/if}
 {/snippet}
 
-<div class="transcript-shell" in:fade|global={{ duration: reducedMotion ? 0 : 150 }}>
+<div class="relative flex min-h-0 min-w-0 flex-1 flex-col" in:fade|global={{ duration: reducedMotion ? 0 : 150 }}>
   <section
-    class:can-scroll-up={canScrollUp}
-    class:can-scroll-down={canScrollDown}
-    class="transcript"
+    class="min-h-0 min-w-0 flex-1 overflow-y-auto scroll-smooth"
     bind:this={transcriptElement}
     aria-live="polite"
     onscroll={updateScrollState}
   >
     <div
-      class="message-stack"
-      class:empty={thread.messages.length === 0 && thread.tools.length === 0}
-      class:awaiting-answer={awaitingAnswer}
+      class="mx-auto flex w-[min(var(--content-width,720px),100%)] flex-col gap-4 px-4 py-6"
     >
     {#each entries as entry (entry.type === 'message' ? `message-${entry.message.id}` : entry.id)}
       {#if entry.type === 'work'}
         {@const workGroupExpanded = entry.active || workGroupOpen[entry.id] === true}
         <div
-          class:active={entry.active}
-          class="work-group"
+          class="rounded-lg border border-line bg-panel p-2"
           in:fly={{ y: entryMotion ? 4 : 0, duration: entryMotion ? 180 : 0 }}
         >
-          <div class="work-group-header">
+          <div class="flex min-h-6 items-center">
             {#if entry.active}
-              <div class="work-group-status">
+              <div class="text-xs text-muted">
                 Working for {formatElapsedDuration(workDurationNow - entry.startedAt)}
               </div>
             {:else}
               <button
                 type="button"
-                class="work-group-trigger"
+                class="flex w-full items-center justify-between text-left text-xs text-muted hover:text-ink-soft"
                 aria-expanded={workGroupExpanded}
                 onclick={() => { workGroupOpen[entry.id] = !workGroupExpanded; }}
               >
                 <span>Worked for {formatElapsedDuration(entry.durationMs ?? 0)}</span>
-                <span class="work-chevron">
+                <span class="shrink-0">
                   {#if workGroupExpanded}
                     <IconChevronDown size={14} stroke={1.55} />
                   {:else}
@@ -316,7 +311,7 @@
             {/if}
           </div>
           {#if workGroupExpanded}
-            <div class="work-group-content">
+            <div class="mt-2 space-y-2">
             {#each entry.entries as workEntry (workEntry.type === 'tool' ? `tool-${workEntry.tool.id}` : `message-${workEntry.message.id}`)}
               {#if workEntry.type === 'tool'}
                 {@const tool = workEntry.tool}
@@ -324,25 +319,25 @@
                   {#snippet children({ props })}
                     <Collapsible.Root
                       {...props}
-                      class="tool-item"
+                      class="rounded-md border border-line bg-recessed"
                       bind:open={
                         () => toolOpen[tool.id] ?? tool.status === 'in_progress',
                         (value) => { toolOpen[tool.id] = value; }
                       }
                     >
                       <div in:fly={{ y: entryMotion ? 3 : 0, duration: entryMotion ? 160 : 0 }}>
-                        <Collapsible.Trigger class="tool-item-trigger">
-                          <span class="tool-icon"><IconTool size={16} stroke={1.55} /></span>
-                          <span class="tool-title"><strong>{tool.title}</strong><small>{toolStatus(tool.status)}</small></span>
+                        <Collapsible.Trigger class="flex w-full items-center gap-2 p-2 text-left">
+                          <span class="grid size-6 shrink-0 place-items-center rounded bg-panel text-muted"><IconTool size={16} stroke={1.55} /></span>
+                          <span class="grid min-w-0 gap-0.5"><strong class="truncate text-xs font-semibold text-ink-soft">{tool.title}</strong><small class="text-[11px] text-muted">{toolStatus(tool.status)}</small></span>
                         </Collapsible.Trigger>
                         <Collapsible.Content>
-                          {#if tool.detail}<pre>{tool.detail}</pre>{/if}
+                          {#if tool.detail}<pre class="m-2 overflow-auto rounded bg-shell p-2 text-[11px] leading-5 whitespace-pre-wrap text-ink-soft">{tool.detail}</pre>{/if}
                           {#if tool.locations.length > 0}
-                            <div class="tool-locations">
+                            <div class="flex flex-wrap gap-1 p-2 pt-0">
                               {#each tool.locations as location (location)}
                                 <ContextMenu items={[{ label: 'Copy path', action: () => copyText(location) }]}>
                                   {#snippet children({ props: locationProps })}
-                                    <span role="presentation" {...locationProps}>{location}</span>
+                                    <span class="rounded bg-panel px-1.5 py-0.5 font-mono text-[10px] text-muted" role="presentation" {...locationProps}>{location}</span>
                                   {/snippet}
                                 </ContextMenu>
                               {/each}
@@ -360,8 +355,7 @@
                       {...props}
                       bind:this={messageBodies[workEntry.message.id]}
                       role="presentation"
-                      class:thought={workEntry.message.role === 'thought'}
-                      class="work-message"
+                      class="rounded px-2 text-sm leading-6 text-ink-soft [&_p]:my-2 [&_pre]:overflow-auto"
                       in:fly={{ y: entryMotion ? 3 : 0, duration: entryMotion ? 160 : 0 }}
                     >
                       <MarkdownMessage
@@ -382,8 +376,7 @@
         {@const message = entry.message}
         {#if message.role === 'notice' || message.role === 'error'}
           <div
-            class:error={message.role === 'error'}
-            class="notice-message"
+            class={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs ${message.role === 'error' ? 'border-danger/30 bg-danger/10 text-danger' : 'border-line bg-panel text-muted'}`}
             in:fly={{ y: entryMotion ? 4 : 0, duration: entryMotion ? 170 : 0 }}
           >
             {#if message.role === 'error'}<IconAlertTriangle size={15} stroke={1.55} />{/if}
@@ -396,37 +389,33 @@
               <article
                 {...props}
                 bind:this={messageBodies[message.id]}
-                class:from-user={message.role === 'user'}
-                class:editable={editablePromptId === message.id}
-                class:editing={editingMessageId === message.id}
-                class:streaming={streaming}
-                class="message"
+                class={`rounded-lg px-3 py-2.5 text-sm leading-6 ${message.role === 'user' ? 'ml-auto w-fit max-w-[85%] bg-panel' : 'text-ink'}`}
                 in:fly={{ y: entryMotion ? (message.role === 'user' ? 10 : 4) : 0, duration: entryMotion ? 180 : 0 }}
               >
-            <header>
+            <header class="mb-1 hidden items-center justify-between text-[11px] text-faint">
               <span>{message.role === 'user' ? 'You' : threadHarness(thread, profiles)}</span>
               <time datetime={new Date(message.createdAt).toISOString()} title={new Date(message.createdAt).toLocaleString()}>
                 {timeFormatter.format(message.createdAt)}
               </time>
             </header>
-            <div class="message-body">
+            <div class="message-body [&_a]:text-accent [&_a]:underline [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-3 [&_code]:font-mono [&_h1]:my-4 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:my-3 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:my-3 [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-3 [&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-recessed [&_pre]:p-3 [&_table]:my-3 [&_table]:w-full [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6">
               {#if message.role === 'user'}
                 {#if editingMessageId === message.id}
                   <div class="prompt-edit">
                     <textarea
                       bind:this={editEditor}
                       bind:value={editDraft}
-                      class="prompt-edit-input"
+                    class="block w-full resize-none rounded-md border border-line bg-recessed p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
                       aria-label="Edit prompt"
                       rows="1"
                       oninput={(event) => growEditor(event.currentTarget)}
                       onkeydown={handleEditKeydown}
                     ></textarea>
-                    <div class="prompt-edit-actions">
+                    <div class="mt-2 flex justify-end gap-1.5 [&_button]:rounded-md [&_button]:border [&_button]:border-line [&_button]:px-2 [&_button]:py-1 [&_button]:text-xs [&_button]:text-muted [&_button:hover]:bg-panel-hover">
                       <button type="button" onclick={() => { editingMessageId = undefined; }}>Cancel</button>
                       <button
                         type="button"
-                        class="primary"
+                        class="!border-line-strong !bg-accent !text-accent-contrast disabled:opacity-40"
                         disabled={editDraft.trim().length === 0}
                         onclick={submitEditedPrompt}
                       >Send</button>
@@ -436,7 +425,7 @@
                   <div
                     role="button"
                     tabindex="0"
-                    class="prompt-edit-trigger"
+                    class="cursor-text"
                     aria-label="Edit prompt"
                     onclick={(event) => startEditingPrompt(message, event)}
                     onkeydown={(event) => {
@@ -460,7 +449,7 @@
                 />
               {/if}
               {#if message.images && message.images.length > 0}
-                <div class="message-images" aria-label="Attached images">
+                <div class="mt-2 flex flex-wrap gap-2" aria-label="Attached images">
                   {#each message.images as image, index (`${message.id}-image-${index}`)}
                     {@const src = imageUrl(image)}
                     <ContextMenu items={imageMenuItems(image, src)}>
@@ -468,11 +457,11 @@
                         <button
                           {...imageProps}
                           type="button"
-                          class="message-image-button"
+                          class="size-20 overflow-hidden rounded-md border border-line"
                           aria-label={`Preview ${image.name}`}
                           title={image.name}
                           onclick={() => { imagePreview = { src, name: image.name }; }}
-                        ><img {src} alt="" /></button>
+                        ><img class="size-full object-cover" {src} alt="" /></button>
                       {/snippet}
                     </ContextMenu>
                   {/each}
@@ -486,14 +475,14 @@
       {/if}
     {/each}
     {#if threadStatus(thread) === 'running' && !entries.some((entry) => entry.type === 'work' && entry.active)}
-      <div class="running-indicator" in:fade={{ duration: entryMotion ? 140 : 0 }}><span class="activity-spark"></span><span>Working…</span></div>
+      <div class="flex items-center gap-2 text-xs text-muted" in:fade={{ duration: entryMotion ? 140 : 0 }}><span class="size-1.5 rounded-full bg-success"></span><span>Working…</span></div>
     {/if}
     </div>
   </section>
 
   {#if canScrollDown}
     <button
-      class="scroll-to-bottom"
+      class="absolute right-4 bottom-4 flex items-center gap-1 rounded-full border border-line-strong bg-floating px-2.5 py-1.5 text-[11px] text-ink-soft shadow-overlay hover:bg-panel-hover"
       type="button"
       aria-label="Scroll to latest message"
       onclick={() => scrollToBottom()}

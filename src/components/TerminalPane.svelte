@@ -201,27 +201,26 @@
   }
 </script>
 
-<section class:active class="terminal-pane" aria-label={`Terminal for ${thread.title}`}>
-  <header class="terminal-header">
+<section class:grid={active} class="hidden h-full min-h-0 w-full grid-rows-[33px_minmax(0,1fr)]" aria-label={`Terminal for ${thread.title}`}>
+  <header class="flex min-w-0 items-center gap-2 px-2 py-1 text-muted">
     <IconTerminal2 size={14} stroke={1.55} />
-    <strong>Terminal</strong>
-    <small title={thread.cwd}>{folderName(thread.cwd)}</small>
+    <strong class="shrink-0 text-xs font-semibold text-ink-soft">Terminal</strong>
+    <small class="max-w-[42%] min-w-0 truncate text-[11px] text-faint" title={thread.cwd}>{folderName(thread.cwd)}</small>
     <span
-      class:error={status.kind === 'error'}
-      class="terminal-status"
+      class={`ml-auto min-w-0 truncate text-[11px] text-faint ${status.kind === 'error' ? 'text-danger' : ''}`}
       aria-live="polite"
       title={status.kind === 'error' ? status.message : undefined}
     >
       {#if status.kind === 'starting'}Starting…{:else if status.kind === 'error'}{status.message}{/if}
     </span>
     {#if status.kind === 'error'}
-      <button class="chrome-button" aria-label="Restart terminal" title="Restart terminal" onclick={() => { void restart(); }}>
+      <button class="grid size-[25px] shrink-0 place-items-center rounded-md text-muted hover:bg-panel-hover hover:text-ink-soft" aria-label="Restart terminal" title="Restart terminal" onclick={() => { void restart(); }}>
         <IconRefresh size={14} stroke={1.55} />
       </button>
     {/if}
-    <button class="chrome-button" aria-label="Close terminal drawer" title="Close terminal drawer" onclick={close}>
+    <button class="grid size-[25px] shrink-0 place-items-center rounded-md text-muted hover:bg-panel-hover hover:text-ink-soft" aria-label="Close terminal drawer" title="Close terminal drawer" onclick={close}>
       <IconX size={15} stroke={1.55} />
     </button>
   </header>
-  <div bind:this={host} class="terminal-host" aria-label="Terminal input and output"></div>
+  <div bind:this={host} class="min-h-0 min-w-0 overflow-hidden px-2 py-1.5 font-mono [&_.xterm-viewport]:bg-transparent! [&_.xterm]:h-full" aria-label="Terminal input and output"></div>
 </section>

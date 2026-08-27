@@ -150,19 +150,19 @@
   }
 </script>
 
-<aside class:open class="project-explorer" aria-label="Project explorer">
+<aside class={`relative col-start-3 flex min-h-0 min-w-0 flex-col border-l border-line bg-[var(--sidebar-tint)] ${visible ? '' : 'pointer-events-none opacity-0'}`} aria-label="Project explorer">
   <div
-    class="sidebar-resize-handle right-sidebar-resize-handle"
+    class="absolute top-0 bottom-0 left-[-4px] z-4 w-2 touch-none cursor-ew-resize before:absolute before:top-0 before:bottom-0 before:left-1 before:w-px before:bg-transparent hover:before:bg-line-strong"
     role="separator"
     aria-label="Resize right sidebar"
     aria-orientation="vertical"
     onpointerdown={startResize}
   ></div>
 
-  <div class="project-explorer-actions" data-tauri-drag-region>
+  <div class="flex h-[41px] shrink-0 items-center justify-end gap-1 px-2 pt-2 pb-1" data-tauri-drag-region>
     <button
       type="button"
-      class="chrome-button project-explorer-refresh"
+      class="grid size-[25px] place-items-center rounded-md text-muted hover:bg-panel-hover hover:text-ink-soft"
       aria-label={view === 'files' ? 'Refresh project files' : 'Refresh Git changes'}
       title={view === 'files' ? 'Refresh project files' : 'Refresh Git changes'}
       onclick={() => { revision += 1; }}
@@ -171,8 +171,7 @@
     </button>
     <button
       type="button"
-      class="chrome-button project-explorer-toggle"
-      class:active={visible}
+      class={`grid size-[25px] place-items-center rounded-md text-muted hover:bg-panel-hover hover:text-ink-soft ${visible ? 'bg-panel-hover text-ink-soft' : ''}`}
       aria-label={visible ? 'Collapse right sidebar' : 'Expand right sidebar'}
       aria-pressed={visible}
       title={visible ? 'Collapse right sidebar' : 'Expand right sidebar'}
@@ -182,22 +181,22 @@
     </button>
   </div>
 
-  <Tabs.Root class="project-explorer-tabs" value={view} onValueChange={setView}>
-    <Tabs.List class="project-explorer-tab-list" aria-label="Right sidebar views">
-      <Tabs.Trigger value="files">Files</Tabs.Trigger>
-      {#if currentBranch !== null}<Tabs.Trigger value="changes">Changes</Tabs.Trigger>{/if}
+  <Tabs.Root class="flex min-h-0 flex-1 flex-col" value={view} onValueChange={setView}>
+    <Tabs.List class="flex shrink-0 gap-1 border-b border-line px-2 py-1" aria-label="Right sidebar views">
+      <Tabs.Trigger class="rounded px-2 py-1 text-[11px] text-muted hover:bg-panel-hover data-[state=active]:bg-panel-active data-[state=active]:text-ink-soft" value="files">Files</Tabs.Trigger>
+      {#if currentBranch !== null}<Tabs.Trigger class="rounded px-2 py-1 text-[11px] text-muted hover:bg-panel-hover data-[state=active]:bg-panel-active data-[state=active]:text-ink-soft" value="changes">Changes</Tabs.Trigger>{/if}
     </Tabs.List>
-    <Tabs.Content class="project-explorer-scroll" value="files">
+    <Tabs.Content class="min-h-0 flex-1 overflow-auto p-2" value="files">
       {#if loading && entries.length === 0}
-        <p class="project-explorer-empty">Loading project…</p>
+        <p class="p-2 text-xs text-faint">Loading project…</p>
       {:else if loadError}
-        <p class="project-explorer-empty error" title={loadError}>Could not read this project.</p>
+        <p class="p-2 text-xs text-danger" title={loadError}>Could not read this project.</p>
       {:else if entries.length === 0}
-        <p class="project-explorer-empty">This project is empty.</p>
+        <p class="p-2 text-xs text-faint">This project is empty.</p>
       {:else}
         <ul
           bind:this={tree}
-          class="project-file-tree"
+          class="m-0 list-none p-0"
           role="tree"
           aria-label={`${projectName} files`}
           onkeydown={handleTreeKeydown}
@@ -219,7 +218,7 @@
       {/if}
     </Tabs.Content>
     {#if currentBranch !== null}
-      <Tabs.Content class="project-explorer-scroll project-changes-scroll" value="changes">
+      <Tabs.Content class="min-h-0 flex-1 overflow-auto p-2" value="changes">
         {#if view === 'changes'}
           <ChangesPanel
             cwd={projectRoot}
@@ -233,9 +232,9 @@
   </Tabs.Root>
 
   {#if notice}
-    <button class="project-explorer-notice" title={notice} onclick={() => { notice = ''; }}>
+    <button class="m-2 flex min-w-0 items-center gap-1.5 rounded-md border border-warning/30 bg-panel px-2 py-1.5 text-left text-[11px] text-warning" title={notice} onclick={() => { notice = ''; }}>
       <IconAlertCircle size={13} stroke={1.55} />
-      <span>{notice}</span>
+      <span class="truncate">{notice}</span>
     </button>
   {/if}
 </aside>

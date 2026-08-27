@@ -310,7 +310,7 @@
 
   function createReferenceElement(reference: ComposerReference) {
     const pill = document.createElement('span');
-    pill.className = `composer-reference ${reference.kind === 'skill' ? 'skill' : ''}`;
+    pill.className = 'inline-flex max-w-[180px] h-[1.45em] mx-px items-center gap-1 rounded bg-panel-active px-1.5 align-[-.18em] text-[13px] leading-none whitespace-nowrap text-ink-soft [&>img]:size-3 [&>img]:shrink-0 [&>img]:opacity-65 [&>img]:[filter:var(--provider-filter)] [&>span:last-child]:min-w-0 [&>span:last-child]:truncate';
     pill.contentEditable = 'false';
     pill.dataset.referenceId = reference.id;
     pill.title = reference.relativePath;
@@ -318,7 +318,7 @@
 
     if (reference.kind === 'skill') {
       const mark = document.createElement('span');
-      mark.className = 'composer-reference-mark';
+      mark.className = 'font-semibold text-muted';
       mark.textContent = '$';
       pill.append(mark);
     } else {
@@ -532,38 +532,37 @@
 </script>
 
 <section
-  class:picker-open={modelPickerOpen || reasoningPickerOpen}
-  class="composer-wrap"
+  class={`relative z-3 shrink-0 px-4 pt-[22px] pb-3 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[22px] before:bg-linear-to-b before:from-transparent before:to-[var(--shell-tint)] ${modelPickerOpen || reasoningPickerOpen ? 'z-[15]' : ''}`}
   in:fly|global={{ y: props.reducedMotion ? 0 : 4, duration: props.reducedMotion ? 0 : 180 }}
 >
-  <div bind:this={composerElement} class="composer" class:expanded={expanded} class:working={status === 'running'}>
+  <div bind:this={composerElement} class={`relative mx-auto grid min-h-[49px] w-[min(var(--content-width,720px),100%)] grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2 rounded-[18px] border border-line-strong bg-raised p-2 shadow-overlay backdrop-blur-xl backdrop-saturate-[115%] focus-within:border-[var(--focus-ring)] ${expanded ? '[&_.prompt-editor]:order-1 [&_.prompt-editor]:col-span-full [&_.attach-button]:order-2 [&_.attach-button]:col-start-1 [&_.composer-footer]:order-3 [&_.composer-footer]:col-span-2 [&_.composer-footer]:w-max [&_.composer-footer]:justify-self-end' : ''}`}>
     {#if props.images.length > 0 || props.attachmentError || imageSupportError}
-      <div class="attachment-strip" aria-label="Attached images">
+      <div class="col-span-full flex min-w-0 items-center gap-2 overflow-x-auto px-px pt-px pb-1" aria-label="Attached images">
         {#each props.images as image (image.id)}
           <ContextMenu items={imageMenuItems(image)}>
             {#snippet children({ props: imageProps })}
-              <div {...imageProps} class="image-attachment" role="group" title={image.name}>
+              <div {...imageProps} class="relative size-11 shrink-0 rounded-lg border border-line-strong bg-panel-hover" role="group" title={image.name}>
                 <button
                   type="button"
-                  class="image-attachment-preview"
+                  class="block size-full overflow-hidden rounded-lg"
                   aria-label={`Preview ${image.name}`}
                   onclick={() => { imagePreview = { src: image.previewUrl, name: image.name }; }}
-                ><img src={image.previewUrl} alt="" /></button>
-                <button class="image-attachment-remove" type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
+                ><img class="size-full object-cover" src={image.previewUrl} alt="" /></button>
+                <button class="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full border border-line-strong bg-floating text-ink-soft hover:bg-raised hover:text-ink" type="button" aria-label={`Remove ${image.name}`} title={`Remove ${image.name}`} onclick={() => props.removeImage(image.id)}>
                   <IconX size={10} stroke={1.55} />
                 </button>
               </div>
             {/snippet}
           </ContextMenu>
         {/each}
-        {#if imageSupportError}<span class="attachment-error">{imageSupportError}</span>{/if}
-        {#if props.attachmentError}<span class="attachment-error">{props.attachmentError}</span>{/if}
+        {#if imageSupportError}<span class="text-[11px] text-danger">{imageSupportError}</span>{/if}
+        {#if props.attachmentError}<span class="text-[11px] text-danger">{props.attachmentError}</span>{/if}
       </div>
     {/if}
-    <input bind:this={imageInput} class="image-input" type="file" accept="image/*" multiple disabled={!canEdit() || !profile.supportsImages} onchange={handleImageSelection} />
+    <input bind:this={imageInput} class="hidden" type="file" accept="image/*" multiple disabled={!canEdit() || !profile.supportsImages} onchange={handleImageSelection} />
     <button
       bind:this={attachButton}
-      class="attach-button"
+      class="attach-button grid size-[30px] place-items-center rounded-full text-muted hover:bg-panel-hover hover:text-ink-soft disabled:opacity-40"
       type="button"
       aria-label={profile.supportsImages ? 'Attach images' : `${profile.label} does not support images`}
       title={profile.supportsImages ? 'Attach images (you can also paste them)' : `${profile.label} does not support image prompts`}
@@ -574,7 +573,7 @@
     </button>
     <div
       bind:this={promptEditor}
-      class="prompt-editor"
+      class="prompt-editor min-h-8 max-h-[161px] w-full resize-none overflow-y-hidden bg-transparent py-1.5 pr-1.5 pl-0 text-sm leading-6 text-ink outline-none whitespace-pre-wrap wrap-anywhere empty:before:pointer-events-none empty:before:text-muted empty:before:content-[attr(data-placeholder)] aria-disabled:cursor-default aria-disabled:opacity-60"
       role="textbox"
       aria-label="Prompt"
       aria-autocomplete="list"
@@ -603,13 +602,13 @@
       onblur={() => { window.setTimeout(closeCompletion, 100); }}
     ></div>
     {#if completionPrefix}
-      <div id="composer-autocomplete" class="composer-autocomplete" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : 'Workspace files'}>
+      <div id="composer-autocomplete" class="absolute bottom-[calc(100%+6px)] left-[38px] z-20 max-h-[min(280px,42vh)] w-[min(380px,calc(100%_-_52px))] overflow-y-auto rounded-xl border border-line-strong bg-floating p-1 shadow-overlay backdrop-blur-xl" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : 'Workspace files'}>
         {#if completionStatus === 'loading'}
-          <p>Loading…</p>
+          <p class="p-2 text-[11px] text-muted">Loading…</p>
         {:else if completionStatus === 'error'}
-          <p>Autocomplete unavailable.</p>
+          <p class="p-2 text-[11px] text-muted">Autocomplete unavailable.</p>
         {:else if completionResults.length === 0}
-          <p>No matches.</p>
+          <p class="p-2 text-[11px] text-muted">No matches.</p>
         {:else}
           {#each completionResults as entry, index (`${entry.kind}-${entry.path}`)}
             <button
@@ -617,7 +616,7 @@
               type="button"
               role="option"
               aria-selected={index === completionIndex}
-              class:active={index === completionIndex}
+              class={`flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-ink-soft hover:bg-panel-active ${index === completionIndex ? 'bg-panel-active' : ''}`}
               onpointerenter={() => { completionIndex = index; }}
               onpointerdown={(event) => {
                 event.preventDefault();
@@ -625,22 +624,22 @@
               }}
             >
               {#if entry.kind === 'skill'}
-                <span class="composer-completion-skill"><IconSparkles size={14} stroke={1.55} /></span>
+                <span class="grid size-4 shrink-0 place-items-center text-muted"><IconSparkles size={14} stroke={1.55} /></span>
               {:else}
                 {@const icon = entry.kind === 'folder' ? materialFolderIcon(entry.name, false) : materialFileIcon(entry.name)}
-                {#if icon}<img src={icon} alt="" />{/if}
+                {#if icon}<img class="size-4 shrink-0 opacity-65 [filter:var(--provider-filter)]" src={icon} alt="" />{/if}
               {/if}
-              <span class="composer-completion-copy">
-                <strong>{entry.name}</strong>
-                <small>{entry.description ?? entry.relativePath}</small>
+              <span class="flex min-w-0 items-baseline gap-2">
+                <strong class="max-w-[55%] min-w-0 flex-[0_1_auto] truncate text-xs font-semibold">{entry.name}</strong>
+                <small class="min-w-0 flex-1 truncate text-[11px] leading-[1.3] text-muted">{entry.description ?? entry.relativePath}</small>
               </span>
             </button>
           {/each}
         {/if}
       </div>
     {/if}
-    <div bind:this={composerFooter} class="composer-footer">
-      <div class="composer-context">
+    <div bind:this={composerFooter} class="composer-footer flex items-center justify-end gap-2">
+      <div class="flex max-w-[390px] items-center gap-1 overflow-visible text-[11px] whitespace-nowrap text-muted">
           <div class="model-picker-wrap">
             {#if props.selectableProfiles.length > 0}
               <ModelPicker
@@ -671,18 +670,18 @@
         {/if}
       </div>
       {#if status === 'running'}
-        <button class="cancel-button" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.55} /></button>
+        <button class="grid size-[30px] shrink-0 place-items-center rounded-full bg-accent text-accent-contrast hover:bg-accent-hover active:translate-y-px" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.55} /></button>
       {:else if status === 'error' || status === 'stopped'}
-        <button class="reconnect-button" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.55} /></button>
+        <button class="grid size-[30px] shrink-0 place-items-center rounded-full border border-line-strong bg-panel-hover text-ink-soft hover:bg-panel-active hover:text-ink active:translate-y-px" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.55} /></button>
       {:else}
-        <button class="send-button" aria-label="Send prompt" title={hasMissingReferences() ? 'Remove missing references before sending' : props.gitBusy ? 'Wait for the Git operation to finish' : 'Send prompt'} disabled={props.gitBusy || (!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
+        <button class="grid size-[30px] shrink-0 place-items-center rounded-full bg-accent text-accent-contrast hover:bg-accent-hover disabled:bg-panel-active disabled:text-faint active:translate-y-px" aria-label="Send prompt" title={hasMissingReferences() ? 'Remove missing references before sending' : props.gitBusy ? 'Wait for the Git operation to finish' : 'Send prompt'} disabled={props.gitBusy || (!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
           <IconArrowUp size={17} stroke={1.55} />
         </button>
       {/if}
     </div>
   </div>
-  <div class="composer-meta">
-    <div class="composer-meta-actions">
+  <div class="mx-auto mt-1.5 flex w-[min(var(--content-width,720px),100%)] items-center justify-end gap-1 px-2 text-[11px] text-faint">
+    <div class="flex items-center gap-1">
       {#if props.currentBranch !== null}
         <GitControls
           cwd={props.thread.cwd}

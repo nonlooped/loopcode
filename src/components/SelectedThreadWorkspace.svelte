@@ -330,12 +330,12 @@
 </script>
 
 {#if compactLayout && projectExplorerOpen}
-  <button type="button" class="compact-drawer-backdrop" tabindex="-1" aria-label="Close project explorer" onclick={() => setProjectExplorerOpen(false)}></button>
+  <button type="button" class="fixed inset-0 z-[8] bg-overlay" tabindex="-1" aria-label="Close project explorer" onclick={() => setProjectExplorerOpen(false)}></button>
 {/if}
 
-<div class="workspace-grid">
-  <main class="conversation">
-    <div class="conversation-primary">
+<div class="grid h-[calc(100dvh-var(--titlebar-height))] min-h-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--project-explorer-width)]">
+  <main class="relative col-start-2 grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto]">
+    <div class="relative flex min-h-0 min-w-0 flex-col">
       {#if settingsOpen}
         {@render settings()}
       {:else if selectedThread}
@@ -351,16 +351,16 @@
           />
         {:else}
           {#if fileHistory.length > 0}
-            <div class="file-viewer-resume">
-              <button type="button" class="settings-action" onclick={() => { fileHistoryIndex += 1; }}>
+            <div class="px-3 pt-3">
+              <button type="button" class="rounded-md border border-line bg-panel px-2.5 py-1.5 text-xs text-ink-soft hover:bg-panel-hover disabled:opacity-50" onclick={() => { fileHistoryIndex += 1; }}>
                 Return to file
               </button>
             </div>
           {/if}
-          <div bind:this={threadViewElement} class:empty={selectedThreadEmpty} class="thread-view">
+          <div bind:this={threadViewElement} class={`flex min-h-0 min-w-0 flex-1 flex-col ${selectedThreadEmpty ? 'justify-center py-6' : ''}`}>
             {#if selectedThreadEmpty}
-              <img class="empty-thread-logo" src={appIcon} alt="" aria-hidden="true" />
-              <h1 class="empty-thread-heading">
+              <img class="mx-auto mb-3.5 size-24 shrink-0 object-contain [filter:var(--provider-filter)]" src={appIcon} alt="" aria-hidden="true" />
+              <h1 class="mx-auto mb-5 w-[min(var(--content-width,720px),calc(100%_-_56px))] px-3.5 text-center text-2xl/relaxed font-[550] tracking-[-.03em] wrap-anywhere text-ink">
                 What should we build in {workspace.projectNameForThread(selectedThread)}?
               </h1>
             {:else}

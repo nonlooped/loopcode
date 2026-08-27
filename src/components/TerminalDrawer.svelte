@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { prefersReducedMotion, Tween } from 'svelte/motion';
+  import { cubicOut } from 'svelte/easing';
   import TerminalPane from './TerminalPane.svelte';
   import type { ThreadState } from '../types';
 
@@ -29,17 +31,16 @@
     startResize,
     resizeBy,
   }: Props = $props();
+  const drawerHeight = new Tween(0);
   let layoutSettled = $state(false);
 
   $effect(() => {
-    layoutSettled = open && reducedMotion;
+    layoutSettled = false;
+    void drawerHeight.set(open ? height : 0, {
+      duration: reducedMotion || prefersReducedMotion.current ? 0 : 220,
+      easing: cubicOut,
+    }).then(() => { layoutSettled = open; });
   });
-
-  function handleTransitionEnd(event: TransitionEvent) {
-    if (open && event.target === event.currentTarget && event.propertyName === 'height') {
-      layoutSettled = true;
-    }
-  }
 
   function handleResizeKeydown(event: KeyboardEvent) {
     const delta = event.key === 'ArrowUp' ? 10 : event.key === 'ArrowDown' ? -10 : 0;
@@ -50,17 +51,18 @@
 </script>
 
 <section
-  class:open
-  class="terminal-drawer"
+  class="relative min-w-0 overflow-hidden border-t border-line bg-transparent"
+  style:height={`${drawerHeight.current}px`}
+  class:pointer-events-none={!open}
+  class:opacity-0={!open}
   aria-label="Terminal drawer"
   aria-hidden={!open}
-  ontransitionend={handleTransitionEnd}
 >
   <!-- The ARIA separator is keyboard-resizable, though Svelte treats it as non-interactive. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    class="terminal-resize-handle"
+    class="absolute -top-1 right-0 left-0 z-4 h-2 touch-none cursor-ns-resize before:absolute before:top-1 before:right-0 before:left-0 before:h-px before:bg-transparent hover:before:bg-line-strong focus-visible:before:bg-line-strong"
     role="separator"
     aria-label="Resize terminal drawer"
     aria-orientation="horizontal"

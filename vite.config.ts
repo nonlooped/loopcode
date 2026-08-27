@@ -1,4 +1,5 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite-plus";
 
 import { materialIconMapsFromManifest } from "./src/utils/material-icon-lookup.ts";
@@ -37,7 +38,7 @@ function materialIconManifest() {
 
 export default defineConfig({
   // SAFETY: vite-plus currently bundles a different Vite plugin type version than Svelte.
-  plugins: [svelte() as never, materialIconManifest()],
+  plugins: [tailwindcss() as never, svelte() as never, materialIconManifest()],
   clearScreen: false,
   server: {
     port: 1420,

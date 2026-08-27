@@ -24,7 +24,7 @@
 
 <DropdownMenu.Root open={props.open} onOpenChange={props.setOpen}>
   <DropdownMenu.Trigger
-    class="reasoning-picker-trigger"
+    class="flex h-7 max-w-[210px] items-center gap-1.5 rounded-md border border-transparent px-2 text-[11px] font-medium text-muted hover:border-line hover:bg-panel hover:text-ink-soft aria-expanded:border-line aria-expanded:bg-panel aria-expanded:text-ink-soft disabled:cursor-default disabled:opacity-45 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:text-muted"
     disabled={props.provider.turnStatus !== 'idle' || props.provider.connectionStatus === 'connecting'}
     aria-label={`Reasoning: ${selectedName}${fastModeEnabled ? ', Fast mode' : ''}`}
     title={`Reasoning: ${selectedName}${fastModeEnabled ? ' · Fast mode' : ''}`}
@@ -34,7 +34,7 @@
   </DropdownMenu.Trigger>
   <DropdownMenu.Portal>
     <DropdownMenu.Content
-      class="reasoning-menu"
+      class="w-60 max-w-[calc(100vw_-_42px)] overflow-hidden rounded-xl border border-line bg-floating p-1 shadow-overlay text-left text-ink whitespace-normal backdrop-blur-xl"
       side="top"
       align="end"
       sideOffset={10}
@@ -43,12 +43,12 @@
     >
       {#if props.provider.reasoningOptions.length > 0}
         <DropdownMenu.Group>
-          <DropdownMenu.GroupHeading class="reasoning-menu-label">Reasoning</DropdownMenu.GroupHeading>
+          <DropdownMenu.GroupHeading class="px-2 py-1 text-[11px] font-semibold tracking-[.04em] text-muted uppercase">Reasoning</DropdownMenu.GroupHeading>
           <DropdownMenu.RadioGroup value={selected?.id} onValueChange={props.select}>
-            <div class="reasoning-menu-options">
+            <div class="flex flex-col gap-0.5 py-0.5">
               {#each props.provider.reasoningOptions as option (option.id)}
                 <DropdownMenu.RadioItem
-                  class="reasoning-option"
+                  class="flex min-h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] text-[color-mix(in_srgb,var(--text)_90%,transparent)] outline-none hover:bg-panel-active hover:text-ink data-[highlighted]:bg-panel-active data-[highlighted]:text-ink [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:text-ink-soft"
                   value={option.id}
                   title={option.description ?? option.name}
                 >
@@ -63,22 +63,22 @@
         </DropdownMenu.Group>
       {/if}
       {#if fastModeAvailable(props.provider)}
-        <DropdownMenu.Separator class="reasoning-menu-divider" />
+        <DropdownMenu.Separator class="mx-1 my-1 h-px bg-line" />
         <DropdownMenu.Group>
-          <DropdownMenu.GroupHeading class="reasoning-menu-label">Speed</DropdownMenu.GroupHeading>
-          <div class="reasoning-menu-options">
+          <DropdownMenu.GroupHeading class="px-2 py-1 text-[11px] font-semibold tracking-[.04em] text-muted uppercase">Speed</DropdownMenu.GroupHeading>
+          <div class="flex flex-col gap-0.5 py-0.5">
             <DropdownMenu.RadioGroup
               value={fastModeEnabled ? 'fast' : 'standard'}
               onValueChange={(value) => props.selectFastMode(value === 'fast')}
             >
-              <DropdownMenu.RadioItem class="reasoning-option" value="standard" title="Standard speed">
+              <DropdownMenu.RadioItem class="flex min-h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] text-[color-mix(in_srgb,var(--text)_90%,transparent)] outline-none hover:bg-panel-active hover:text-ink data-[highlighted]:bg-panel-active data-[highlighted]:text-ink [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:text-ink-soft" value="standard" title="Standard speed">
                 {#snippet children({ checked })}
                   <span>Standard</span>
                   {#if checked}<IconCheck size={14} stroke={2} />{/if}
                 {/snippet}
               </DropdownMenu.RadioItem>
               <DropdownMenu.RadioItem
-                class="reasoning-option"
+                class="flex min-h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-[13px] text-[color-mix(in_srgb,var(--text)_90%,transparent)] outline-none hover:bg-panel-active hover:text-ink data-[highlighted]:bg-panel-active data-[highlighted]:text-ink [&>span]:min-w-0 [&>span]:flex-1 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:text-ink-soft"
                 value="fast"
                 title={props.provider.fastModeDescription ?? 'Faster responses at a higher cost.'}
               >

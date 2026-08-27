@@ -120,25 +120,24 @@
   }
 </script>
 
-<aside class:open={props.open} class="thread-sidebar">
+<aside class="absolute top-0 bottom-0 left-0 z-9 flex w-[var(--sidebar-width)] min-h-0 flex-col overflow-visible border-r border-line bg-[var(--sidebar-tint)] pt-[var(--titlebar-height)]">
   <div
-    class="sidebar-resize-handle left-sidebar-resize-handle"
+    class="absolute top-0 right-[-4px] bottom-0 z-4 w-2 touch-none cursor-ew-resize before:absolute before:top-0 before:bottom-0 before:left-1 before:w-px before:bg-transparent hover:before:bg-line-strong"
     role="separator"
     aria-label="Resize left sidebar"
     aria-orientation="vertical"
     onpointerdown={props.startResize}
   ></div>
   {#if props.settingsOpen}
-    <div class="settings-nav">
-      <div class="settings-nav-label">
-        <img class="settings-nav-logo" src={appIcon} alt="" aria-hidden="true" />
+    <div class="px-2 pt-3">
+      <div class="flex items-center gap-1.5 px-2 pb-1 text-[11px] font-medium text-faint">
+        <img class="size-3 shrink-0 opacity-70 [filter:var(--provider-filter)]" src={appIcon} alt="" aria-hidden="true" />
         <span>Settings</span>
       </div>
-      <nav aria-label="Settings categories">
+      <nav class="grid gap-0.5" aria-label="Settings categories">
         {#each settingsCategories as { category, label, icon: Icon } (category)}
           <button
-            class:active={props.settingsCategory === category}
-            class="settings-nav-item"
+            class={`flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-muted hover:bg-panel-hover hover:text-ink-soft [&>svg]:shrink-0 ${props.settingsCategory === category ? 'bg-panel-active font-medium text-ink' : ''}`}
             aria-current={props.settingsCategory === category ? 'page' : undefined}
             onclick={() => props.setSettingsCategory(category)}
           >
@@ -148,24 +147,24 @@
         {/each}
       </nav>
     </div>
-    <div class="settings-nav-spacer"></div>
-    <div class="settings-nav-footer">
-      <button class="settings-back" onclick={props.closeSettings}>
+    <div class="flex-1"></div>
+    <div class="px-2 pb-3">
+      <button class="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] text-muted hover:bg-panel-hover hover:text-ink" onclick={props.closeSettings}>
         <IconArrowLeft size={16} stroke={1.55} />
         <span>Back</span>
       </button>
     </div>
   {:else}
-    <div class="sidebar-heading">
+    <div class="flex h-[41px] shrink-0 items-center justify-between px-2 pt-2 pb-1 text-[11px] text-muted">
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger class="workspace-identity" title="Choose folder">
+        <DropdownMenu.Trigger class="flex h-[29px] min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-muted hover:bg-panel-hover hover:text-ink-soft" title="Choose folder">
           <IconFolder size={15} stroke={1.55} />
-          <strong>{props.activeProject ? props.activeProject.name : 'All projects'}</strong>
-          <IconChevronDown class="workspace-chevron" size={12} stroke={1.55} />
+          <strong class="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-soft">{props.activeProject ? props.activeProject.name : 'All projects'}</strong>
+          <IconChevronDown class="shrink-0 text-faint" size={12} stroke={1.55} />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            class="workspace-dropdown"
+            class="grid max-h-80 w-[min(320px,calc(100vw_-_16px))] gap-0.5 overflow-auto rounded-xl border border-line bg-floating p-1.5 shadow-overlay backdrop-blur-xl"
             side="bottom"
             align="start"
             sideOffset={4}
@@ -176,12 +175,12 @@
               value={props.selectedProjectId ?? '__all-projects__'}
               onValueChange={(value) => props.selectProject(value === '__all-projects__' ? null : value)}
             >
-              <DropdownMenu.RadioItem class="workspace-option" value="__all-projects__">
+              <DropdownMenu.RadioItem class="flex min-h-[38px] w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-muted hover:bg-panel-hover hover:text-ink-soft data-[state=checked]:border-line data-[state=checked]:bg-panel-active" value="__all-projects__">
                 {#snippet children({ checked })}
                   <IconFolder size={13} stroke={1.55} />
-                  <span class="workspace-option-main">
-                    <strong>All projects</strong>
-                    <small title={props.defaultWorkingFolder}>{props.defaultWorkingFolder || 'local'} · default</small>
+                  <span class="grid min-w-0 flex-1 gap-px">
+                    <strong class="truncate text-xs font-semibold text-ink-soft">All projects</strong>
+                    <small class="truncate text-[11px] text-faint" title={props.defaultWorkingFolder}>{props.defaultWorkingFolder || 'local'} · default</small>
                   </span>
                   {#if checked}<IconCheck size={13} stroke={2} />{/if}
                 {/snippet}
@@ -189,12 +188,12 @@
               {#each props.projects as project (project.id)}
                 <ContextMenu items={projectMenuItems(project)}>
                   {#snippet children({ props: triggerProps })}
-                    <DropdownMenu.RadioItem {...triggerProps} class="workspace-option" value={project.id}>
+                    <DropdownMenu.RadioItem {...triggerProps} class="flex min-h-[38px] w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-muted hover:bg-panel-hover hover:text-ink-soft data-[state=checked]:border-line data-[state=checked]:bg-panel-active" value={project.id}>
                       {#snippet children({ checked })}
                         <IconFolder size={13} stroke={1.55} />
-                        <span class="workspace-option-main">
-                          <strong>{project.name}</strong>
-                          <small title={project.path}>{project.path}</small>
+                        <span class="grid min-w-0 flex-1 gap-px">
+                          <strong class="truncate text-xs font-semibold text-ink-soft">{project.name}</strong>
+                          <small class="truncate text-[11px] text-faint" title={project.path}>{project.path}</small>
                         </span>
                         {#if checked}<IconCheck size={13} stroke={2} />{/if}
                       {/snippet}
@@ -203,20 +202,20 @@
                 </ContextMenu>
               {/each}
             </DropdownMenu.RadioGroup>
-            <DropdownMenu.Separator class="workspace-dropdown-separator" />
-            <DropdownMenu.Item class="workspace-add-folder" onSelect={props.addProject}>
+            <DropdownMenu.Separator class="mt-1 mb-0.5 h-px bg-line" />
+            <DropdownMenu.Item class="flex min-h-8 w-full items-center gap-1.5 rounded-md px-2 text-[11px] text-muted hover:bg-panel-hover hover:text-ink-soft" onSelect={props.addProject}>
               <IconFolderPlus size={13} stroke={1.55} /> Add folder…
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-      <div class="heading-actions">
-        <button class="icon-button" aria-label="New thread" title="New thread" onclick={props.addThread}>
+      <div class="ml-1 flex shrink-0 items-center gap-1">
+        <button class="grid size-6 place-items-center rounded-md text-muted hover:bg-panel-hover hover:text-ink-soft" aria-label="New thread" title="New thread" onclick={props.addThread}>
           <IconPlus size={14} stroke={1.55} />
         </button>
       </div>
     </div>
-    <div class="sidebar-scroll">
+    <div class="min-h-0 flex-1 overflow-auto px-2 pt-1 pb-2">
       <section class="sidebar-section inbox-section">
         {#if props.inboxThreads.length === 0}
           <div class="empty-hint">No threads yet</div>
