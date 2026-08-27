@@ -29,14 +29,7 @@ type ConfigState = Pick<
 
 export function readModelState(value: ConfigState): AcpModelState {
   const configOptions = value.configOptions ?? [];
-  const modelConfigs = configOptions.filter(
-    (option) => option.type === "select" && option.category === "model",
-  );
-  const modelConfig =
-    modelConfigs.find((option) => option.id.toLowerCase() === "model") ??
-    modelConfigs.find((option) => option.name.toLowerCase() === "model") ??
-    modelConfigs.find((option) => !/provider/.test(`${option.id} ${option.name}`.toLowerCase())) ??
-    modelConfigs[0];
+  const modelConfig = findModelConfig(configOptions);
   const legacyModelState = readLegacyModelState(value);
   const models = configChoices(modelConfig);
   const reasoningConfig =
@@ -46,22 +39,36 @@ export function readModelState(value: ConfigState): AcpModelState {
   return {
     modelConfigId: modelConfig?.id ?? legacyModelState?.modelConfigId,
     models: models.length > 0 ? models : (legacyModelState?.models ?? []),
-    selectedModelId:
-      modelConfig?.type === "select" ? modelConfig.currentValue : legacyModelState?.selectedModelId,
+    selectedModelId: selectedConfigValue(modelConfig) ?? legacyModelState?.selectedModelId,
     reasoningConfigId: reasoningConfig?.id,
     reasoningOptions: configChoices(reasoningConfig),
-    selectedReasoningId:
-      reasoningConfig?.type === "select" ? reasoningConfig.currentValue : undefined,
+    selectedReasoningId: selectedConfigValue(reasoningConfig),
     fastModeConfigId: fastModeConfig?.id,
     fastModeEnabled: configBooleanValue(fastModeConfig),
-    fastModeValueType:
-      fastModeConfig?.type === "boolean"
-        ? "boolean"
-        : fastModeConfig?.type === "select"
-          ? "string"
-          : undefined,
+    fastModeValueType: configValueType(fastModeConfig),
     fastModeDescription: fastModeConfig?.description ?? undefined,
   };
+}
+
+function findModelConfig(configOptions: SessionConfigOption[]) {
+  const modelConfigs = configOptions.filter(
+    (option) => option.type === "select" && option.category === "model",
+  );
+  return (
+    modelConfigs.find((option) => option.id.toLowerCase() === "model") ??
+    modelConfigs.find((option) => option.name.toLowerCase() === "model") ??
+    modelConfigs.find((option) => !/provider/.test(`${option.id} ${option.name}`.toLowerCase())) ??
+    modelConfigs[0]
+  );
+}
+
+function selectedConfigValue(config: SessionConfigOption | undefined) {
+  return config?.type === "select" ? config.currentValue : undefined;
+}
+
+function configValueType(config: SessionConfigOption | undefined): FastModeValueType | undefined {
+  if (config?.type === "boolean") return "boolean";
+  if (config?.type === "select") return "string";
 }
 
 const legacyModelStateSchema = z.object({

@@ -126,6 +126,10 @@ export interface SidebarWidths {
   right: number | null;
 }
 
+type BooleanPreferenceKey = {
+  [K in keyof AppPreferences]: AppPreferences[K] extends boolean ? K : never;
+}[keyof AppPreferences];
+
 export function loadAppPreferences(
   storage: Pick<Storage, "getItem"> = localStorage,
 ): AppPreferences {
@@ -133,9 +137,7 @@ export function loadAppPreferences(
     return {
       colorMode: storedColorMode(storage.getItem(PREFERENCE_KEYS.colorMode)),
       theme: storedTheme(storage.getItem(PREFERENCE_KEYS.theme)),
-      compactSessionRows:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.compactSessionRows)) ??
-        DEFAULT_APP_PREFERENCES.compactSessionRows,
+      compactSessionRows: storedBooleanPreference(storage, "compactSessionRows"),
       startupBehavior:
         storage.getItem(PREFERENCE_KEYS.startupBehavior) === "new-thread"
           ? "new-thread"
@@ -156,21 +158,13 @@ export function loadAppPreferences(
       contentWidth:
         storedNumber(storage.getItem(PREFERENCE_KEYS.contentWidth), CONTENT_WIDTH_RANGE) ??
         DEFAULT_APP_PREFERENCES.contentWidth,
-      wrapCode:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.wrapCode)) ??
-        DEFAULT_APP_PREFERENCES.wrapCode,
-      showMessageTimestamps:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.showMessageTimestamps)) ??
-        DEFAULT_APP_PREFERENCES.showMessageTimestamps,
-      composerSpellcheck:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.composerSpellcheck)) ??
-        DEFAULT_APP_PREFERENCES.composerSpellcheck,
+      wrapCode: storedBooleanPreference(storage, "wrapCode"),
+      showMessageTimestamps: storedBooleanPreference(storage, "showMessageTimestamps"),
+      composerSpellcheck: storedBooleanPreference(storage, "composerSpellcheck"),
       defaultProviderId:
         storage.getItem(PREFERENCE_KEYS.defaultProviderId)?.trim() ||
         DEFAULT_APP_PREFERENCES.defaultProviderId,
-      automaticTitleGeneration:
-        storedBoolean(storage.getItem(PREFERENCE_KEYS.automaticTitleGeneration)) ??
-        DEFAULT_APP_PREFERENCES.automaticTitleGeneration,
+      automaticTitleGeneration: storedBooleanPreference(storage, "automaticTitleGeneration"),
       providerModelDefaults: storedStringRecord(
         storage.getItem(PREFERENCE_KEYS.providerModelDefaults),
       ),
@@ -191,6 +185,10 @@ export function loadAppPreferences(
   } catch {
     return { ...DEFAULT_APP_PREFERENCES, providerModelDefaults: {}, providerSettings: {} };
   }
+}
+
+function storedBooleanPreference(storage: Pick<Storage, "getItem">, key: BooleanPreferenceKey) {
+  return storedBoolean(storage.getItem(PREFERENCE_KEYS[key])) ?? DEFAULT_APP_PREFERENCES[key];
 }
 
 export function saveAppPreference<K extends keyof AppPreferences>(

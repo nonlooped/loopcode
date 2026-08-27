@@ -327,17 +327,7 @@ export class ProviderRuntime {
     provider.errorDetails = undefined;
     this.#setConnectionStatus(thread, profile.id, "connecting");
 
-    const previousConnection = this.#connections.get(key);
-    try {
-      await previousConnection?.stop();
-    } catch (error) {
-      if (this.#tokens.get(key) !== token) return;
-      this.#reportError(thread, profile.id, error);
-      return;
-    } finally {
-      if (this.#connections.get(key) === previousConnection) this.#connections.delete(key);
-    }
-    if (this.#tokens.get(key) !== token) return;
+    if (!(await this.#stopPreviousConnection(key, token, thread, profile.id))) return;
 
     const isCurrent = () => this.#tokens.get(key) === token;
     let startupComplete = false;
@@ -440,38 +430,14 @@ export class ProviderRuntime {
       }
       applyProviderConfigState(provider, updated);
       provider.selectedModelId = selectedModelId;
-      const reasoningId =
-        requestedReasoningId &&
-        provider.reasoningOptions.some((option) => option.id === requestedReasoningId)
-          ? requestedReasoningId
-          : provider.selectedReasoningId;
-      if (
-        reasoningId &&
-        provider.reasoningConfigId &&
-        updated.selectedReasoningId !== reasoningId
-      ) {
-        const reasoningState = await connection.setConfigOption(
-          provider.reasoningConfigId,
-          reasoningId,
-        );
-        if (reasoningState.selectedReasoningId !== reasoningId) {
-          throw new Error(`${profile.label} did not apply reasoning variant ${reasoningId}.`);
-        }
-        applyProviderConfigState(provider, reasoningState);
-      }
-      const fastModeEnabled = requestedFastModeEnabled ?? provider.fastModeEnabled;
-      if (
-        fastModeEnabled !== undefined &&
-        provider.fastModeConfigId &&
-        provider.fastModeEnabled !== fastModeEnabled
-      ) {
-        const fastModeState = await connection.setFastModeConfigOption(
-          provider.fastModeConfigId,
-          fastModeEnabled,
-          provider.fastModeValueType,
-        );
-        applyProviderConfigState(provider, fastModeState);
-      }
+      await this.#restoreReasoning(
+        connection,
+        provider,
+        profile.label,
+        requestedReasoningId,
+        updated.selectedReasoningId,
+      );
+      await this.#restoreFastMode(connection, provider, requestedFastModeEnabled);
       startupComplete = true;
       provider.error = undefined;
       provider.errorDetails = undefined;
@@ -487,6 +453,63 @@ export class ProviderRuntime {
         // Preserve the startup error; process cleanup is best-effort here.
       }
     }
+  }
+
+  async #stopPreviousConnection(
+    key: string,
+    token: string,
+    thread: ThreadState,
+    profileId: string,
+  ) {
+    const previousConnection = this.#connections.get(key);
+    try {
+      await previousConnection?.stop();
+    } catch (error) {
+      if (this.#tokens.get(key) === token) this.#reportError(thread, profileId, error);
+      return false;
+    } finally {
+      if (this.#connections.get(key) === previousConnection) this.#connections.delete(key);
+    }
+    return this.#tokens.get(key) === token;
+  }
+
+  async #restoreReasoning(
+    connection: AcpConnection,
+    provider: ProviderSessionState,
+    profileLabel: string,
+    requestedReasoningId: string | undefined,
+    appliedReasoningId: string | undefined,
+  ) {
+    const reasoningId =
+      requestedReasoningId &&
+      provider.reasoningOptions.some((option) => option.id === requestedReasoningId)
+        ? requestedReasoningId
+        : provider.selectedReasoningId;
+    if (!reasoningId || !provider.reasoningConfigId || appliedReasoningId === reasoningId) return;
+    const reasoningState = await connection.setConfigOption(
+      provider.reasoningConfigId,
+      reasoningId,
+    );
+    if (reasoningState.selectedReasoningId !== reasoningId) {
+      throw new Error(`${profileLabel} did not apply reasoning variant ${reasoningId}.`);
+    }
+    applyProviderConfigState(provider, reasoningState);
+  }
+
+  async #restoreFastMode(
+    connection: AcpConnection,
+    provider: ProviderSessionState,
+    requestedFastModeEnabled: boolean | undefined,
+  ) {
+    const enabled = requestedFastModeEnabled ?? provider.fastModeEnabled;
+    if (enabled === undefined || !provider.fastModeConfigId || provider.fastModeEnabled === enabled)
+      return;
+    const fastModeState = await connection.setFastModeConfigOption(
+      provider.fastModeConfigId,
+      enabled,
+      provider.fastModeValueType,
+    );
+    applyProviderConfigState(provider, fastModeState);
   }
 
   async #completeTurn(
