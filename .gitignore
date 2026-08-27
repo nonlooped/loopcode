@@ -19,8 +19,10 @@
 /.cursor/
 /.opencode/
 /.pi/
-/AGENTS.md
-/opencode.json
+/.claude/
+AGENTS.md
+CLAUDE.md
+opencode.json
 skills-lock.json
 
 # Generated reports and logs
