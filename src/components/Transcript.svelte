@@ -7,7 +7,14 @@
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import ImagePreview from './ImagePreview.svelte';
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
-  import type { HarnessProfile, MessageImage, ThreadState, TimelineMessage, ToolActivity } from '../types';
+  import type {
+    ComposerReference,
+    HarnessProfile,
+    MessageImage,
+    ThreadState,
+    TimelineMessage,
+    ToolActivity,
+  } from '../types';
   import type { TimelineDisplayEntry } from '../types/timeline';
   import type { SendShortcut } from '../utils/app-settings';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
@@ -23,7 +30,7 @@
     reducedMotion: boolean;
     sendShortcut: SendShortcut;
     openFile: (path: string) => void;
-    resendPrompt: (text: string) => void;
+    resendPrompt: (text: string, references: ComposerReference[]) => boolean;
   }
 
   const { thread, entries, profiles, reducedMotion, sendShortcut, openFile, resendPrompt }: Props =
@@ -38,6 +45,7 @@
   let imagePreview = $state<{ src: string; name: string }>();
   let editingMessageId = $state<string>();
   let editDraft = $state('');
+  let editReferences = $state.raw<ComposerReference[]>([]);
   let editEditor = $state<HTMLTextAreaElement>();
   let workDurationNow = $state(Date.now());
   let workGroupOpen = $state<Record<string, boolean>>({});
@@ -55,7 +63,9 @@
   // Only the newest prompt is editable: turns are append-only, so an edit resends rather
   // than rewinds, and appending only reads correctly at the end of the thread.
   const editablePromptId = $derived(
-    latestUserMessage && !awaitingAnswer && !(latestUserMessage.images?.length)
+    latestUserMessage
+      && (transcriptStatus === 'disconnected' || transcriptStatus === 'ready')
+      && !(latestUserMessage.images?.length)
       ? latestUserMessage.id
       : undefined,
   );
@@ -149,10 +159,20 @@
     if (editingMessageId && editingMessageId !== editablePromptId) editingMessageId = undefined;
   });
 
-  function startEditingPrompt(message: TimelineMessage) {
+  // Rendered prompts may contain their own links, so activation ignores clicks and Enter
+  // presses that belong to a nested control.
+  function isNestedControl(target: EventTarget | null) {
+    return target instanceof Element && target.closest('a, button') !== null;
+  }
+
+  function startEditingPrompt(message: TimelineMessage, event: Event) {
+    if (isNestedControl(event.target)) return;
     if (window.getSelection()?.isCollapsed === false) return;
     editingMessageId = message.id;
     editDraft = message.text;
+    editReferences = (message.content ?? []).flatMap((part) =>
+      part.type === 'reference' ? [part.reference] : [],
+    );
     void tick().then(() => {
       if (!editEditor) return;
       growEditor(editEditor);
@@ -168,8 +188,8 @@
 
   function submitEditedPrompt() {
     const text = editDraft.trim();
-    editingMessageId = undefined;
-    if (text) resendPrompt(text);
+    if (!text) return;
+    if (resendPrompt(text, editReferences)) editingMessageId = undefined;
   }
 
   function handleEditKeydown(event: KeyboardEvent) {
@@ -412,12 +432,19 @@
                     </div>
                   </div>
                 {:else if editablePromptId === message.id}
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabindex="0"
                     class="prompt-edit-trigger"
                     aria-label="Edit prompt"
-                    onclick={() => startEditingPrompt(message)}
-                  >{@render promptContent(message, streaming)}</button>
+                    onclick={(event) => startEditingPrompt(message, event)}
+                    onkeydown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      if (isNestedControl(event.target)) return;
+                      event.preventDefault();
+                      startEditingPrompt(message, event);
+                    }}
+                  >{@render promptContent(message, streaming)}</div>
                 {:else}
                   {@render promptContent(message, streaming)}
                 {/if}

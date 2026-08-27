@@ -14,6 +14,7 @@
   import type { Workspace } from '../services/workspace';
   import type {
     ComposerImage,
+    ComposerReference,
     HarnessProfile,
     MessageImage,
     ModelOption,
@@ -23,7 +24,7 @@
     ThreadState,
   } from '../types';
   import type { AppPreferences } from '../utils/app-settings';
-  import { promptParts, promptText } from '../utils/prompt-content';
+  import { promptParts, promptPartsFromText, promptText } from '../utils/prompt-content';
   import { timelineEntries } from '../utils/timeline';
   import { threadReservesCheckout, threadStatus } from '../utils/threads';
 
@@ -281,10 +282,21 @@
     await turn;
   }
 
-  function resendPrompt(text: string) {
+  // Returns whether a turn actually started, so the transcript can keep the editor (and the
+  // user's draft) open when the provider is not in a state that accepts a prompt.
+  function resendPrompt(text: string, references: ComposerReference[]) {
     const thread = selectedThread;
-    if (!thread || gitOperationThreadId) return;
-    void providers.runTurn(thread, text);
+    if (!thread || gitOperationThreadId) return false;
+    const content = promptPartsFromText(text, references);
+    const turn = providers.runTurn(
+      thread,
+      text,
+      [],
+      content.some((part) => part.type === 'reference') ? content : undefined,
+    );
+    if (!turn) return false;
+    void turn;
+    return true;
   }
 
   function animateComposerToTranscript(previousTop: number) {
