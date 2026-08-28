@@ -9,6 +9,7 @@ import { z } from "zod";
 import type {
   PlanEntry,
   ProviderSessionState,
+  SessionFailure,
   SlashCommand,
   ThreadState,
   ToolActivity,
@@ -34,6 +35,98 @@ const diffMetaSchema = z.object({ kind: z.enum(["add", "update", "delete"]).opti
 const commandOutputSchema = z.object({
   formatted_output: z.string().min(1).optional(),
   exit_code: z.number().nullable().optional(),
+});
+const toolMetaSchema = z.object({
+  contextCompaction: z
+    .object({ version: z.literal(1) })
+    .passthrough()
+    .optional(),
+  codex: z
+    .object({
+      subagent: z
+        .object({ threadId: z.string(), path: z.string(), activity: z.string() })
+        .optional(),
+      collaboration: z
+        .object({
+          tool: z.string(),
+          senderThreadId: z.string(),
+          receiverThreadIds: z.array(z.string()),
+        })
+        .optional(),
+    })
+    .optional(),
+  claudeCode: z
+    .object({
+      parentToolUseId: z.string().optional(),
+      subagent: z.literal(true).optional(),
+      toolName: z.string().optional(),
+    })
+    .optional(),
+});
+const backgroundInputSchema = z.object({ run_in_background: z.literal(true) });
+const failureSchema = z.object({
+  id: z.string().min(1),
+  revision: z.number().int().positive(),
+  category: z.enum(["connection", "access", "limit", "request", "service", "unknown"]),
+  severity: z.enum(["warning", "error"]),
+  title: z.string(),
+  details: z.string().optional(),
+  actions: z.array(z.enum(["retry", "login", "new_session"])),
+});
+const goalSchema = z.object({
+  objective: z.string(),
+  status: z.enum(["active", "paused", "blocked", "limited", "complete"]),
+  iterations: z.number().int().nonnegative().optional(),
+  lastReason: z.string().nullable().optional(),
+  createdAt: z.number().optional(),
+  updatedAt: z.number().optional(),
+  tokenBudget: z.number().nullable().optional(),
+  tokensUsed: z.number().optional(),
+  timeBudgetSeconds: z.number().nullable().optional(),
+  timeUsedSeconds: z.number().optional(),
+  controlMethod: z.string(),
+});
+const metadataSchema = z.object({
+  goal: z.union([goalSchema, z.null()]).optional(),
+  quota: z
+    .object({
+      token_count: z
+        .object({
+          totalTokens: z.number().optional(),
+          inputTokens: z.number().optional(),
+          cachedInputTokens: z.number().optional(),
+          outputTokens: z.number().optional(),
+          reasoningOutputTokens: z.number().optional(),
+        })
+        .nullable()
+        .optional(),
+    })
+    .optional(),
+  jetbrains: z.object({ air: z.object({ sessionFailure: failureSchema.optional() }) }).optional(),
+  "_codex/rateLimits": z
+    .array(
+      z.object({
+        limitId: z.string().nullable().optional(),
+        limitName: z.string().nullable().optional(),
+        primary: z
+          .object({
+            usedPercent: z.number(),
+            resetsAt: z.number().nullable().optional(),
+            windowDurationMins: z.number().nullable().optional(),
+          })
+          .nullable()
+          .optional(),
+        secondary: z
+          .object({
+            usedPercent: z.number(),
+            resetsAt: z.number().nullable().optional(),
+            windowDurationMins: z.number().nullable().optional(),
+          })
+          .nullable()
+          .optional(),
+      }),
+    )
+    .optional(),
 });
 
 type TerminalMeta = z.infer<typeof terminalMetaSchema> | undefined;
@@ -63,25 +156,45 @@ export class SessionUpdateHandler {
     update: SessionUpdate,
     modelState?: AcpModelState,
   ) {
-    if (update.sessionUpdate === "config_option_update") {
-      if (modelState) this.#applyConfig(thread.providers[profileId], modelState);
-      return;
-    }
+    this.handleMetadata(thread, profileId, update._meta);
+    if (this.#handleTranscriptUpdate(thread, profileId, update)) return;
+    this.#handleStateUpdate(thread, profileId, update, modelState);
+  }
+
+  #handleTranscriptUpdate(thread: ThreadState, profileId: string, update: SessionUpdate) {
     if (
-      update.sessionUpdate === "agent_message_chunk" ||
-      update.sessionUpdate === "agent_thought_chunk"
-    ) {
-      const role = update.sessionUpdate === "agent_message_chunk" ? "agent" : "thought";
-      const streams =
-        this.#streamIds.get(connectionKey(thread.id, profileId)) ??
-        this.#resetStreams(thread.id, profileId);
-      const messageId = update.messageId ?? streams[role];
-      const text = contentText(update.content);
-      if (text) appendMessage(thread, messageId, role, text);
-      return;
-    }
+      update.sessionUpdate !== "agent_message_chunk" &&
+      update.sessionUpdate !== "agent_thought_chunk" &&
+      update.sessionUpdate !== "tool_call" &&
+      update.sessionUpdate !== "tool_call_update"
+    )
+      return false;
     if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") {
       this.#upsertTool(thread, profileId, update);
+      return true;
+    }
+    const role = update.sessionUpdate === "agent_message_chunk" ? "agent" : "thought";
+    const streams =
+      this.#streamIds.get(connectionKey(thread.id, profileId)) ??
+      this.#resetStreams(thread.id, profileId);
+    const messageId = update.messageId ?? streams[role];
+    const text = contentText(update.content);
+    if (!text) return true;
+    const parentId = toolMetaSchema.safeParse(update._meta).data?.claudeCode?.parentToolUseId;
+    const parent = parentId ? thread.tools.find((tool) => tool.id === parentId) : undefined;
+    if (parent) appendChildMessage(parent, messageId, role, text, () => nextTimestamp(thread));
+    else appendMessage(thread, messageId, role, text);
+    return true;
+  }
+
+  #handleStateUpdate(
+    thread: ThreadState,
+    profileId: string,
+    update: SessionUpdate,
+    modelState?: AcpModelState,
+  ) {
+    if (update.sessionUpdate === "config_option_update") {
+      if (modelState) this.#applyConfig(thread.providers[profileId], modelState);
       return;
     }
     if (update.sessionUpdate === "available_commands_update") {
@@ -99,16 +212,88 @@ export class SessionUpdateHandler {
     }
     if (update.sessionUpdate === "plan") {
       this.#upsertPlan(thread, profileId, planEntries(update.entries));
+      return;
     }
+    if (update.sessionUpdate === "plan_update") {
+      this.#handlePlanUpdate(thread, profileId, update);
+      return;
+    }
+    if (update.sessionUpdate === "plan_removed") {
+      thread.tools = thread.tools.filter((tool) => tool.id !== `plan-${update.planId}`);
+      return;
+    }
+    if (update.sessionUpdate === "compaction_update") {
+      this.#upsertCompaction(thread, update);
+      return;
+    }
+    if (update.sessionUpdate === "compaction_summary_chunk") {
+      this.#appendCompactionSummary(thread, update.compactionId, contentText(update.content));
+    }
+  }
+
+  #handlePlanUpdate(
+    thread: ThreadState,
+    profileId: string,
+    update: Extract<SessionUpdate, { sessionUpdate: "plan_update" }>,
+  ) {
+    if (update.plan.type === "items") {
+      this.#upsertPlan(thread, profileId, planEntries(update.plan.entries), update.plan.planId);
+      return;
+    }
+    this.#upsertPlanDetail(
+      thread,
+      update.plan.planId,
+      update.plan.type === "markdown" ? update.plan.content : update.plan.uri,
+    );
+  }
+
+  handleMetadata(thread: ThreadState, profileId: string, metadata: unknown) {
+    const parsed = metadataSchema.safeParse(metadata);
+    if (!parsed.success) return;
+    const provider = thread.providers[profileId];
+    if (!provider) return;
+    if (parsed.data.goal !== undefined) provider.goal = parsed.data.goal;
+    const tokenCount = parsed.data.quota?.token_count;
+    if (tokenCount) provider.quota = tokenCount;
+    const rateLimits = parsed.data["_codex/rateLimits"];
+    if (rateLimits)
+      provider.rateLimits = rateLimits.map((limit, index) => ({
+        id: limit.limitId ?? limit.limitName ?? String(index),
+        name: limit.limitName ?? limit.limitId ?? "Limit",
+        primary: limit.primary,
+        secondary: limit.secondary,
+      }));
+    const failure = parsed.data.jetbrains?.air.sessionFailure;
+    if (failure) this.#upsertFailure(thread, failure);
+  }
+
+  #upsertFailure(thread: ThreadState, failure: SessionFailure) {
+    const id = `failure-${failure.id}`;
+    const existing = thread.messages.find((message) => message.id === id);
+    if (existing?.failure && existing.failure.revision >= failure.revision) return;
+    if (existing) {
+      existing.role = failure.severity === "warning" ? "notice" : "error";
+      existing.text = failure.title;
+      existing.failure = failure;
+    } else {
+      thread.messages.push({
+        id,
+        role: failure.severity === "warning" ? "notice" : "error",
+        text: failure.title,
+        failure,
+        createdAt: nextTimestamp(thread),
+      });
+    }
+    thread.updatedAt = nextTimestamp(thread);
   }
 
   /**
    * Plans arrive as a whole list on every revision, so the timeline keeps one entry per turn
    * and replaces its steps instead of appending each successive copy.
    */
-  #upsertPlan(thread: ThreadState, profileId: string, plan: PlanEntry[]) {
+  #upsertPlan(thread: ThreadState, profileId: string, plan: PlanEntry[], planId?: string) {
     if (plan.length === 0) return;
-    const id = this.#planId(thread.id, profileId);
+    const id = planId ? `plan-${planId}` : this.#planId(thread.id, profileId);
     const status = plan.every((entry) => entry.status === "completed")
       ? "completed"
       : "in_progress";
@@ -130,6 +315,54 @@ export class SessionUpdateHandler {
     thread.updatedAt = nextTimestamp(thread);
   }
 
+  #upsertPlanDetail(thread: ThreadState, planId: string, detail: string) {
+    const id = `plan-${planId}`;
+    const existing = thread.tools.find((tool) => tool.id === id);
+    if (existing) existing.detail = detail;
+    else
+      thread.tools.push({
+        id,
+        title: "Plan",
+        kind: "think",
+        status: "in_progress",
+        detail,
+        locations: [],
+        createdAt: nextTimestamp(thread),
+      });
+    thread.updatedAt = nextTimestamp(thread);
+  }
+
+  #upsertCompaction(
+    thread: ThreadState,
+    update: Extract<SessionUpdate, { sessionUpdate: "compaction_update" }>,
+  ) {
+    const id = `compaction-${update.compactionId}`;
+    const existing = thread.tools.find((tool) => tool.id === id);
+    const summary = update.summary?.map(contentText).filter(Boolean).join("\n");
+    const detail = update.error ?? summary ?? existing?.detail;
+    if (existing) Object.assign(existing, { status: update.status, detail });
+    else
+      thread.tools.push({
+        id,
+        title: "Context compaction",
+        kind: "think",
+        status: update.status,
+        detail,
+        presentation: "compaction",
+        locations: [],
+        createdAt: nextTimestamp(thread),
+      });
+    thread.updatedAt = nextTimestamp(thread);
+  }
+
+  #appendCompactionSummary(thread: ThreadState, compactionId: string, text: string) {
+    if (!text) return;
+    const tool = thread.tools.find((entry) => entry.id === `compaction-${compactionId}`);
+    if (!tool) return;
+    tool.detail = (tool.detail ?? "") + text;
+    thread.updatedAt = nextTimestamp(thread);
+  }
+
   /** One plan entry per turn: tool calls reset the message streams, but not the plan. */
   #planId(threadId: string, profileId: string) {
     const key = connectionKey(threadId, profileId);
@@ -145,6 +378,18 @@ export class SessionUpdateHandler {
     profileId: string,
     update: (ToolCall | ToolCallUpdate) & { sessionUpdate: "tool_call" | "tool_call_update" },
   ) {
+    const parentId = toolMetaSchema.safeParse(update._meta).data?.claudeCode?.parentToolUseId;
+    const parent = parentId ? thread.tools.find((tool) => tool.id === parentId) : undefined;
+    if (parent) {
+      const existing = parent.children?.find(
+        (entry): entry is ToolActivity => "kind" in entry && entry.id === update.toolCallId,
+      );
+      const next = mergedTool(existing, update, () => nextTimestamp(thread));
+      if (existing) Object.assign(existing, next);
+      else (parent.children ??= []).push(next);
+      thread.updatedAt = nextTimestamp(thread);
+      return;
+    }
     const existing = thread.tools.find((tool) => tool.id === update.toolCallId);
     const next = mergedTool(existing, update, () => nextTimestamp(thread));
     if (existing) Object.assign(existing, next);
@@ -178,18 +423,66 @@ function mergedTool(
   const content = toolContent(update);
   const diffs = content.diffs ?? existing?.diffs;
   const terminal = mergeTerminal(existing?.terminal, content.terminal, update);
+  const meta = toolMetaSchema.safeParse(update._meta).data;
   // Structured content already says everything a raw payload dump would, and a trailing
   // update carrying the aggregate output would otherwise repeat the terminal panel as text.
-  const structured = Boolean(diffs?.length) || terminal !== undefined;
+  const structured =
+    Boolean(diffs?.length) || terminal !== undefined || Boolean(content.media?.length);
   return {
     id: update.toolCallId,
     ...toolLabels(existing, update),
     detail: structured ? undefined : (content.detail ?? existing?.detail),
     diffs,
     terminal,
+    media: content.media ?? existing?.media,
+    presentation: toolPresentation(existing, update, meta, content.media),
+    subagent: toolSubagent(existing, meta),
+    children: existing?.children,
     locations: toolLocations(existing, update),
     createdAt: existing?.createdAt ?? timestamp(),
   };
+}
+
+function toolPresentation(
+  existing: ToolActivity | undefined,
+  update: ToolCall | ToolCallUpdate,
+  meta: z.infer<typeof toolMetaSchema> | undefined,
+  media: ToolActivity["media"],
+): ToolActivity["presentation"] {
+  if (meta?.contextCompaction) return "compaction";
+  if (meta?.codex?.subagent || meta?.codex?.collaboration || meta?.claudeCode?.subagent)
+    return "subagent";
+  if (backgroundInputSchema.safeParse(update.rawInput).success) return "background";
+  if (update.toolCallId.startsWith("guardian_assessment:") || update.title === "Guardian Review")
+    return "review";
+  if (media?.length || update.title?.startsWith("View Image")) return "image";
+  return existing?.presentation;
+}
+
+function toolSubagent(
+  existing: ToolActivity | undefined,
+  meta: z.infer<typeof toolMetaSchema> | undefined,
+) {
+  const codex = meta?.codex?.subagent;
+  const collaboration = meta?.codex?.collaboration;
+  const claude = meta?.claudeCode;
+  if (codex)
+    return {
+      ...existing?.subagent,
+      threadId: codex.threadId,
+      path: codex.path,
+      activity: codex.activity,
+    };
+  if (collaboration)
+    return {
+      ...existing?.subagent,
+      activity: collaboration.tool,
+      senderThreadId: collaboration.senderThreadId,
+      receiverThreadIds: collaboration.receiverThreadIds,
+    };
+  if (claude?.subagent || claude?.parentToolUseId)
+    return { ...existing?.subagent, parentToolUseId: claude.parentToolUseId };
+  return existing?.subagent;
 }
 
 function toolLabels(existing: ToolActivity | undefined, update: ToolCall | ToolCallUpdate) {
@@ -242,6 +535,7 @@ function toolContent(update: ToolCall | ToolCallUpdate) {
   const texts: string[] = [];
   const diffs: ToolDiff[] = [];
   let terminal: ToolTerminal | undefined;
+  const media: ToolActivity["media"] = [];
 
   for (const entry of update.content ?? []) {
     if (entry.type === "diff") {
@@ -254,6 +548,14 @@ function toolContent(update: ToolCall | ToolCallUpdate) {
     } else if (entry.type === "terminal") {
       terminal = { terminalId: entry.terminalId, output: "" };
     } else if (entry.type === "content") {
+      if (entry.content.type === "image") {
+        media.push({
+          data: entry.content.data,
+          mimeType: entry.content.mimeType,
+          name: "Generated image",
+        });
+        continue;
+      }
       const text = contentText(entry.content);
       if (text) texts.push(text);
     }
@@ -262,8 +564,24 @@ function toolContent(update: ToolCall | ToolCallUpdate) {
   return {
     diffs: diffs.length > 0 ? diffs : undefined,
     terminal,
+    media: media.length > 0 ? media : undefined,
     detail: toolDetail(update, texts.join("\n")),
   };
+}
+
+function appendChildMessage(
+  parent: ToolActivity,
+  id: string,
+  role: "agent" | "thought",
+  text: string,
+  timestamp: () => number,
+) {
+  const existing = parent.children?.find(
+    (entry): entry is import("../types/index.ts").TimelineMessage =>
+      "role" in entry && entry.id === id,
+  );
+  if (existing) existing.text += text;
+  else (parent.children ??= []).push({ id, role, text, createdAt: timestamp() });
 }
 
 function toolDetail(update: ToolCall | ToolCallUpdate, text: string) {

@@ -18,6 +18,7 @@ import type {
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { jsonValueSchema } from "../utils/json.ts";
+import { loadWorkspaceMcpServers } from "../utils/mcp-servers.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
 import { discoverModelOptions, modelOptionsFromStates } from "../utils/model-options.ts";
 import {
@@ -60,6 +61,7 @@ export class ProviderRuntime {
   #permissionMode: PermissionMode = "restricted";
   #connections = new Map<string, AcpConnection>();
   #createConnection: (callbacks: AcpCallbacks) => AcpConnection;
+  #loadMcpServers: typeof loadWorkspaceMcpServers;
   #tokens = new Map<string, string>();
   #stoppingProfiles = new Map<string, Promise<void>>();
   #turnTokens = new Map<string, string>();
@@ -72,10 +74,12 @@ export class ProviderRuntime {
     catalogs: Record<string, ProviderModelCatalog>,
     hooks: RuntimeHooks,
     createConnection = (callbacks: AcpCallbacks) => new AcpConnection(callbacks),
+    loadMcpServers = loadWorkspaceMcpServers,
   ) {
     this.#catalogs = catalogs;
     this.#hooks = hooks;
     this.#createConnection = createConnection;
+    this.#loadMcpServers = loadMcpServers;
     for (const [profileId, catalog] of Object.entries(catalogs)) {
       this.#baseModels.set(profileId, catalog.models);
     }
@@ -236,11 +240,13 @@ export class ProviderRuntime {
     });
 
     try {
+      const mcpServers = await this.#loadMcpServers(cwd);
       await connection.connect({
         cwd,
         command: profile.command,
         args: profile.args,
         profileId: profile.id,
+        mcpServers,
       });
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
@@ -369,6 +375,8 @@ export class ProviderRuntime {
         if (!isCurrent()) return;
         provider.harnessId = session.harnessId;
         provider.sessionId = session.sessionId;
+        provider.goalActions = session.goalActions;
+        provider.goalControlMethod = session.goalControlMethod;
         applyProviderConfigState(provider, session);
         if (
           requestedReasoningId &&
@@ -388,6 +396,9 @@ export class ProviderRuntime {
         const modelState =
           update.sessionUpdate === "config_option_update" ? readModelState(update) : undefined;
         this.#updates.handle(thread, profile.id, update, modelState);
+      },
+      metadata: (metadata) => {
+        if (isCurrent()) this.#updates.handleMetadata(thread, profile.id, metadata);
       },
       permission: (request) => {
         if (isCurrent()) {
@@ -431,6 +442,7 @@ export class ProviderRuntime {
 
     this.#connections.set(key, connection);
     try {
+      const mcpServers = await this.#loadMcpServers(thread.cwd);
       await connection.connect({
         cwd: thread.cwd,
         command: profile.command,
@@ -438,6 +450,7 @@ export class ProviderRuntime {
         profileId: profile.id,
         threadId: thread.id,
         sessionId: existingSessionId,
+        mcpServers,
       });
       if (!isCurrent()) {
         await connection.stop();
@@ -806,6 +819,42 @@ export class ProviderRuntime {
 
   cancel(thread: ThreadState) {
     return this.connection(thread.id, thread.profileId)?.cancel();
+  }
+
+  async controlGoal(
+    thread: ThreadState,
+    action: import("../types/index.ts").GoalAction,
+    objective?: string,
+  ) {
+    const provider = thread.providers[thread.profileId];
+    if (!provider.goalActions?.includes(action)) return;
+    const connection = this.connection(thread.id, thread.profileId);
+    if (!connection) throw new Error("Connect the provider before changing its goal");
+    await connection.goal(action, objective?.trim(), provider.goalControlMethod);
+  }
+
+  async retryLastTurn(thread: ThreadState) {
+    const prompt = [...thread.messages].reverse().find((message) => message.role === "user");
+    if (!prompt) return;
+    const provider = thread.providers[thread.profileId];
+    if (provider.connectionStatus !== "ready") await this.connect(thread, thread.profileId);
+    return this.runTurn(thread, prompt.text, prompt.images, prompt.content);
+  }
+
+  async newSession(thread: ThreadState) {
+    const profileId = thread.profileId;
+    const key = connectionKey(thread.id, profileId);
+    const connection = this.#connections.get(key);
+    this.#tokens.delete(key);
+    this.#connections.delete(key);
+    await connection?.stop();
+    const provider = thread.providers[profileId];
+    provider.sessionId = undefined;
+    provider.harnessId = undefined;
+    provider.connectionStatus = "disconnected";
+    provider.turnStatus = "idle";
+    provider.goal = null;
+    return this.connect(thread, profileId);
   }
 
   answerPermission(

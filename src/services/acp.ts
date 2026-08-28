@@ -21,11 +21,13 @@ type RpcId = acp.JsonRpcId;
 type PermissionResponse = acp.RequestPermissionResponse;
 
 const clientCapabilities: acp.ClientCapabilities = {
-  session: { configOptions: { boolean: {} } },
+  plan: {},
+  session: { configOptions: { boolean: {} }, compaction: {} },
   elicitation: { form: {} },
   _meta: {
     terminal_output: true,
     "subagent-transcript": true,
+    jetbrains: { air: { version: 1, capabilities: ["sessionFailure"] } },
   },
 };
 
@@ -74,6 +76,7 @@ export interface AcpCallbacks {
   initialized?: (agentInfo?: acp.Implementation | null) => void;
   ready: (session: AcpSessionInfo) => void;
   update: (update: acp.SessionUpdate) => void;
+  metadata?: (metadata: unknown) => void;
   permission: (request: PermissionRequest) => void;
   permissionMode?: () => PermissionMode;
   stderr: (line: string) => void;
@@ -84,6 +87,8 @@ export interface AcpCallbacks {
 export interface AcpSessionInfo extends AcpModelState {
   harnessId: string;
   sessionId: string;
+  goalActions?: import("../types/index.ts").GoalAction[];
+  goalControlMethod?: string;
 }
 
 export class AcpConnection {
@@ -195,7 +200,7 @@ export class AcpConnection {
           sessionState = await this.#context.request(acp.methods.agent.session.resume, {
             sessionId,
             cwd: request.cwd,
-            mcpServers: [],
+            mcpServers: request.mcpServers ?? [],
           });
         } else if (initialized.agentCapabilities?.loadSession) {
           method = "session/load";
@@ -204,7 +209,7 @@ export class AcpConnection {
             sessionState = await this.#context.request(acp.methods.agent.session.load, {
               sessionId,
               cwd: request.cwd,
-              mcpServers: [],
+              mcpServers: request.mcpServers ?? [],
             });
           } finally {
             this.#loadingSession = false;
@@ -216,17 +221,19 @@ export class AcpConnection {
         method = "session/new";
         const session = await this.#context.request(acp.methods.agent.session.new, {
           cwd: request.cwd,
-          mcpServers: [],
+          mcpServers: request.mcpServers ?? [],
         });
         sessionId = session.sessionId;
         this.#sessionId = sessionId;
         sessionState = session;
       }
       this.#modelState = readModelState(sessionState);
+      this.#callbacks.metadata?.(sessionState._meta);
       this.#callbacks.ready({
         harnessId,
         sessionId,
         supportsFollowups: this.#supportsFollowups,
+        ...goalCapability(initialized._meta),
         ...this.#modelState,
       });
       this.#emitConnectionStatus("ready");
@@ -249,10 +256,11 @@ export class AcpConnection {
     this.#emitTurnStatus("running");
     let blockedReported = false;
     try {
-      await context.request(acp.methods.agent.session.prompt, {
+      const response = await context.request(acp.methods.agent.session.prompt, {
         sessionId,
         prompt,
       });
+      this.#callbacks.metadata?.(response._meta);
       if (this.#activeToolIds.size > 0) {
         const error = new Error(
           `ACP session/prompt completed with ${this.#activeToolIds.size} tool call(s) still active`,
@@ -330,6 +338,18 @@ export class AcpConnection {
     valueType: "boolean" | "string" = "boolean",
   ) {
     return this.setConfigOption(configId, valueType === "string" ? String(value) : value);
+  }
+
+  goal(
+    action: import("../types/index.ts").GoalAction,
+    objective?: string,
+    method = "_session/goal",
+  ) {
+    return this.#requireContext().request(method, {
+      sessionId: this.#requireSessionId(),
+      action,
+      ...(action === "set" ? { objective } : {}),
+    });
   }
 
   async generateTitle(cwd: string, prompt: string, selectedModelId: string) {
@@ -487,8 +507,9 @@ export class AcpConnection {
       }
       return;
     }
-    if (notification.sessionId === this.#sessionId && !this.#loadingSession) {
-      this.#callbacks.update(notification.update);
+    if (notification.sessionId === this.#sessionId) {
+      if (!this.#loadingSession || notification.update.sessionUpdate === "session_info_update")
+        this.#callbacks.update(notification.update);
     }
   }
 
@@ -619,6 +640,19 @@ export class AcpConnection {
 const steeringSupportSchema = z.object({
   steering: z.object({ supported: z.literal(true) }),
 });
+
+const goalCapabilitySchema = z.object({
+  goal: z.object({
+    version: z.literal(1),
+    controlMethod: z.string().min(1),
+    actions: z.array(z.enum(["set", "pause", "resume", "clear"])),
+  }),
+});
+
+function goalCapability(meta: unknown) {
+  const goal = goalCapabilitySchema.safeParse(meta).data?.goal;
+  return goal ? { goalActions: goal.actions, goalControlMethod: goal.controlMethod } : {};
+}
 
 function errorDetails(
   cause: unknown,
@@ -816,21 +850,29 @@ function multiSelectOptions(items: acp.MultiSelectItems): QuestionRequest["optio
 }
 
 function optionFromEnum(option: acp.EnumOption): QuestionRequest["options"][number] {
-  return {
+  const preview = z
+    .object({ preview: z.string() })
+    .safeParse(option._meta?.["_claude/askUserQuestionOption"]).data?.preview;
+  const result: QuestionRequest["options"][number] = {
     optionId: option.const,
     name: option.title,
     description: option.description ?? undefined,
   };
+  if (preview) result.preview = preview;
+  return result;
 }
 
 function customAnswerTarget(schema: acp.ElicitationPropertySchema) {
   const parsed = z
     .object({
+      _askUserQuestionCustomAnswer: z
+        .object({ isCustomAnswer: z.literal(true), questionId: z.string() })
+        .optional(),
       codex: z.object({ isOtherAnswer: z.literal(true), questionId: z.string() }).optional(),
     })
     .safeParse(schema._meta);
   if (!parsed.success) return;
-  return parsed.data.codex?.questionId;
+  return parsed.data._askUserQuestionCustomAnswer?.questionId ?? parsed.data.codex?.questionId;
 }
 
 function elicitationContent(questions: QuestionSpec[], answers: QuestionAnswer[]) {

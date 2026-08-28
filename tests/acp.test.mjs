@@ -8,6 +8,7 @@ function fakeTransport({
   resumeSession = false,
   promptMode = "normal",
   steering = false,
+  goal = false,
   authMethods = [],
   agentInfo,
 } = {}) {
@@ -40,7 +41,21 @@ function fakeTransport({
             loadSession,
             sessionCapabilities: resumeSession ? { resume: {} } : {},
           },
-          _meta: steering ? { steering: { supported: true } } : undefined,
+          _meta:
+            steering || goal
+              ? {
+                  ...(steering ? { steering: { supported: true } } : {}),
+                  ...(goal
+                    ? {
+                        goal: {
+                          version: 1,
+                          controlMethod: "_session/goal",
+                          actions: ["set", "clear"],
+                        },
+                      }
+                    : {}),
+                }
+              : undefined,
           authMethods,
           agentInfo,
         });
@@ -113,6 +128,8 @@ function fakeTransport({
           reply(pendingPromptId, { stopReason: "end_turn" });
           pendingPromptId = undefined;
         }
+      } else if (message.method === "_session/goal") {
+        reply(message.id, {});
       }
     },
     async stop() {},
@@ -249,6 +266,9 @@ function fakeTransport({
                         const: "Balanced",
                         title: "Balanced",
                         description: "Keep the change focused.",
+                        _meta: {
+                          "_claude/askUserQuestionOption": { preview: "One focused change." },
+                        },
                       },
                       { const: "Thorough", title: "Thorough" },
                     ],
@@ -257,7 +277,10 @@ function fakeTransport({
                     type: "string",
                     title: "Other",
                     _meta: {
-                      codex: { questionId: "question_0", isOtherAnswer: true },
+                      _askUserQuestionCustomAnswer: {
+                        questionId: "question_0",
+                        isCustomAnswer: true,
+                      },
                     },
                   },
                   question_1: {
@@ -414,22 +437,32 @@ void test("uses the official SDK to initialize, create a session, and route upda
     fake.transport,
   );
 
-  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  const mcpServers = [{ type: "http", name: "docs", url: "https://example.com/mcp", headers: [] }];
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [], mcpServers });
   await connection.setConfigOption("fast_mode", true);
   await connection.prompt([{ type: "text", text: "Hello" }]);
 
   assert.deepEqual(
     fake.sent.find((message) => message.method === "initialize")?.params.clientCapabilities,
     {
-      session: { configOptions: { boolean: {} } },
+      plan: {},
+      session: { configOptions: { boolean: {} }, compaction: {} },
       elicitation: { form: {} },
-      _meta: { terminal_output: true, "subagent-transcript": true },
+      _meta: {
+        terminal_output: true,
+        "subagent-transcript": true,
+        jetbrains: { air: { version: 1, capabilities: ["sessionFailure"] } },
+      },
     },
   );
   assert.equal(ready.harnessId, "harness-1");
   assert.equal(ready.sessionId, "session-1");
   assert.equal(ready.selectedModelId, "model-1");
   assert.equal(initialized.version, "1.2.3");
+  assert.deepEqual(fake.sent.find((message) => message.method === "session/new")?.params, {
+    cwd: "C:\\workspace",
+    mcpServers,
+  });
   assert.deepEqual(
     fake.sent.find((message) => message.method === "session/set_config_option")?.params,
     { sessionId: "session-1", configId: "fast_mode", value: true, type: "boolean" },
@@ -467,6 +500,34 @@ void test("sends follow-ups through an advertised steering method", async () => 
     sessionId: "session-1",
     prompt: [{ type: "text", text: "Also check the tests" }],
     _meta: { steering: { idleBehavior: "promptRequired" } },
+  });
+});
+
+void test("uses the advertised shared goal control method", async () => {
+  const fake = fakeTransport({ goal: true });
+  let ready;
+  const connection = new AcpConnection(
+    {
+      ready: (session) => {
+        ready = session;
+      },
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  await connection.goal("set", "Ship the change", ready.goalControlMethod);
+
+  assert.deepEqual(ready.goalActions, ["set", "clear"]);
+  assert.deepEqual(fake.sent.find((message) => message.method === "_session/goal")?.params, {
+    sessionId: "session-1",
+    action: "set",
+    objective: "Ship the change",
   });
 });
 
@@ -618,6 +679,7 @@ void test("prefers resuming an existing session without replaying history", asyn
     command: "agent",
     args: [],
     sessionId: "existing-session",
+    mcpServers: [{ name: "local", command: "server", args: [], env: [] }],
   });
 
   assert.equal(
@@ -627,7 +689,7 @@ void test("prefers resuming an existing session without replaying history", asyn
   assert.deepEqual(fake.sent.find((message) => message.method === "session/resume")?.params, {
     sessionId: "existing-session",
     cwd: "C:\\workspace",
-    mcpServers: [],
+    mcpServers: [{ name: "local", command: "server", args: [], env: [] }],
   });
   assert.equal(ready.sessionId, "existing-session");
 });
@@ -796,7 +858,12 @@ void test("supports single-select, multi-select, and custom form answers", async
         title: "Approach",
         detail: "Which approach should I take?",
         options: [
-          { optionId: "Balanced", name: "Balanced", description: "Keep the change focused." },
+          {
+            optionId: "Balanced",
+            name: "Balanced",
+            description: "Keep the change focused.",
+            preview: "One focused change.",
+          },
           { optionId: "Thorough", name: "Thorough", description: undefined },
         ],
         allowMultiple: false,

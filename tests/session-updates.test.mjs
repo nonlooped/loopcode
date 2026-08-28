@@ -207,3 +207,140 @@ void test("context usage and available commands land on the provider", () => {
     { name: "compact", description: "Summarize the conversation.", hint: undefined },
   ]);
 });
+
+void test("typed failures update by stable id and preserve recovery actions", () => {
+  const thread = newThread();
+  const updates = new SessionUpdateHandler(() => {});
+  const failure = {
+    id: "turn-1:error",
+    revision: 1,
+    category: "service",
+    severity: "warning",
+    title: "Claude is retrying after an overload.",
+    actions: [],
+  };
+
+  updates.handleMetadata(thread, "codex", {
+    jetbrains: { air: { sessionFailure: failure } },
+  });
+  updates.handleMetadata(thread, "codex", {
+    jetbrains: {
+      air: {
+        sessionFailure: {
+          ...failure,
+          revision: 2,
+          severity: "error",
+          title: "The provider is still overloaded.",
+          actions: ["retry"],
+        },
+      },
+    },
+  });
+
+  assert.equal(thread.messages.length, 1);
+  assert.equal(thread.messages[0].id, "failure-turn-1:error");
+  assert.equal(thread.messages[0].role, "error");
+  assert.equal(thread.messages[0].failure.revision, 2);
+  assert.deepEqual(thread.messages[0].failure.actions, ["retry"]);
+});
+
+void test("goal, quota, and rate-limit metadata land on shared provider state", () => {
+  const thread = newThread();
+  const updates = new SessionUpdateHandler(() => {});
+
+  updates.handle(thread, "codex", {
+    sessionUpdate: "usage_update",
+    used: 40,
+    size: 100,
+    _meta: {
+      goal: {
+        objective: "Ship it",
+        status: "active",
+        tokenBudget: 1000,
+        tokensUsed: 40,
+        timeUsedSeconds: 12,
+        controlMethod: "_session/goal",
+      },
+      quota: { token_count: { totalTokens: 40, outputTokens: 5 } },
+      "_codex/rateLimits": [
+        { limitId: "five-hour", limitName: "5h", primary: { usedPercent: 25, resetsAt: 2 } },
+      ],
+    },
+  });
+
+  assert.equal(thread.providers.codex.goal.objective, "Ship it");
+  assert.equal(thread.providers.codex.quota.totalTokens, 40);
+  assert.equal(thread.providers.codex.rateLimits[0].primary.usedPercent, 25);
+});
+
+void test("keeps Claude subagent messages and tools inside their parent", () => {
+  const thread = newThread();
+  const updates = new SessionUpdateHandler(() => {});
+
+  updates.handle(thread, "codex", {
+    sessionUpdate: "tool_call",
+    toolCallId: "agent-1",
+    title: "Explore",
+    kind: "think",
+    status: "in_progress",
+    _meta: { claudeCode: { toolName: "Agent", subagent: true } },
+  });
+  updates.handle(thread, "codex", {
+    sessionUpdate: "agent_thought_chunk",
+    messageId: "child-thought",
+    content: { type: "text", text: "Checking callers" },
+    _meta: { claudeCode: { parentToolUseId: "agent-1" } },
+  });
+  updates.handle(thread, "codex", {
+    sessionUpdate: "tool_call",
+    toolCallId: "child-read",
+    title: "Read file",
+    kind: "read",
+    status: "completed",
+    _meta: { claudeCode: { toolName: "Read", parentToolUseId: "agent-1" } },
+  });
+
+  assert.equal(thread.tools.length, 1);
+  assert.equal(thread.tools[0].presentation, "subagent");
+  assert.deepEqual(
+    thread.tools[0].children.map((entry) => entry.id),
+    ["child-thought", "child-read"],
+  );
+  assert.equal(thread.messages.length, 0);
+});
+
+void test("renders generated images and Codex subagent identity structurally", () => {
+  const thread = newThread();
+  const updates = new SessionUpdateHandler(() => {});
+
+  updates.handle(thread, "codex", {
+    sessionUpdate: "tool_call",
+    toolCallId: "image-1",
+    title: "Image generation",
+    kind: "other",
+    status: "completed",
+    content: [
+      { type: "content", content: { type: "image", data: "aW1hZ2U=", mimeType: "image/png" } },
+    ],
+  });
+  updates.handle(thread, "codex", {
+    sessionUpdate: "tool_call",
+    toolCallId: "subagent-1",
+    title: "Start subagent reviewer",
+    kind: "other",
+    status: "completed",
+    _meta: {
+      codex: {
+        subagent: { threadId: "thread-child", path: "/root/reviewer", activity: "started" },
+      },
+    },
+  });
+
+  assert.equal(thread.tools[0].presentation, "image");
+  assert.equal(thread.tools[0].media[0].mimeType, "image/png");
+  assert.deepEqual(thread.tools[1].subagent, {
+    threadId: "thread-child",
+    path: "/root/reviewer",
+    activity: "started",
+  });
+});

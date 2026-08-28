@@ -1,3 +1,5 @@
+import type { McpServer } from "@agentclientprotocol/sdk";
+
 export type ConnectionStatus = "disconnected" | "connecting" | "ready" | "stopped" | "error";
 
 export type TurnStatus = "idle" | "running" | "failed" | "blocked";
@@ -44,6 +46,58 @@ export interface TimelineMessage {
   content?: PromptPart[];
   images?: MessageImage[];
   createdAt: number;
+  failure?: SessionFailure;
+}
+
+export type SessionFailureAction = "retry" | "login" | "new_session";
+
+export interface SessionFailure {
+  id: string;
+  revision: number;
+  category: "connection" | "access" | "limit" | "request" | "service" | "unknown";
+  severity: "warning" | "error";
+  title: string;
+  details?: string;
+  actions: SessionFailureAction[];
+}
+
+export type GoalAction = "set" | "pause" | "resume" | "clear";
+
+export interface GoalState {
+  objective: string;
+  status: "active" | "paused" | "blocked" | "limited" | "complete";
+  iterations?: number;
+  lastReason?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
+  tokenBudget?: number | null;
+  tokensUsed?: number;
+  timeBudgetSeconds?: number | null;
+  timeUsedSeconds?: number;
+  controlMethod: string;
+}
+
+export interface QuotaState {
+  totalTokens?: number;
+  inputTokens?: number;
+  cachedInputTokens?: number;
+  outputTokens?: number;
+  reasoningOutputTokens?: number;
+}
+
+export interface RateLimitState {
+  id: string;
+  name: string;
+  primary?: {
+    usedPercent: number;
+    resetsAt?: number | null;
+    windowDurationMins?: number | null;
+  } | null;
+  secondary?: {
+    usedPercent: number;
+    resetsAt?: number | null;
+    windowDurationMins?: number | null;
+  } | null;
 }
 
 export type ToolDiffKind = "add" | "update" | "delete";
@@ -79,6 +133,17 @@ export interface ToolActivity {
   plan?: PlanEntry[];
   locations: string[];
   createdAt: number;
+  media?: MessageImage[];
+  presentation?: "image" | "review" | "compaction" | "subagent" | "background";
+  subagent?: {
+    threadId?: string;
+    path?: string;
+    activity?: string;
+    parentToolUseId?: string;
+    senderThreadId?: string;
+    receiverThreadIds?: string[];
+  };
+  children?: Array<TimelineMessage | ToolActivity>;
 }
 
 export interface ProjectState {
@@ -196,6 +261,11 @@ export interface ProviderSessionState {
   commands?: SlashCommand[];
   error?: string;
   errorDetails?: AcpErrorDetails;
+  goal?: GoalState | null;
+  goalActions?: GoalAction[];
+  goalControlMethod?: string;
+  quota?: QuotaState;
+  rateLimits?: RateLimitState[];
 }
 
 export type DesktopPlatform = "linux" | "macos" | "windows";
@@ -224,6 +294,7 @@ export interface ConnectRequest {
   profileId?: string;
   threadId?: string;
   sessionId?: string;
+  mcpServers?: McpServer[];
 }
 
 export interface PermissionOption {
