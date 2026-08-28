@@ -47,6 +47,6 @@
         style:width={`${remaining}%`}
       ></span>
     </span>
-    <span>{remaining}% context</span>
+    <span>{remaining}%</span>
   </span>
 {/if}
