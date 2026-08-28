@@ -13,6 +13,7 @@
   import { copyText } from '../utils/clipboard';
   import { materialFileIcon } from '../utils/material-file-icons';
   import { diffLineStats, unifiedDiffLines } from '../utils/text-diff';
+  import MarkdownMessage from './markdown/MarkdownMessage.svelte';
 
   interface Props {
     tool: ToolActivity;
@@ -91,6 +92,52 @@
       </div>
     {/each}
   </div>
+{/if}
+
+{#if tool.subagent}
+  <dl class="{indent} grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 gap-y-0.5 rounded-[5px] border border-line bg-recessed p-2 text-[11px]">
+    {#if tool.subagent.threadId}<dt class="text-faint">Thread</dt><dd class="m-0 truncate font-mono text-text-soft">{tool.subagent.threadId}</dd>{/if}
+    {#if tool.subagent.path}<dt class="text-faint">Agent</dt><dd class="m-0 truncate font-mono text-text-soft">{tool.subagent.path}</dd>{/if}
+    {#if tool.subagent.activity}<dt class="text-faint">Activity</dt><dd class="m-0 capitalize text-text-soft">{tool.subagent.activity}</dd>{/if}
+    {#if tool.subagent.senderThreadId}<dt class="text-faint">Sender</dt><dd class="m-0 truncate font-mono text-text-soft">{tool.subagent.senderThreadId}</dd>{/if}
+    {#if tool.subagent.receiverThreadIds?.length}<dt class="text-faint">Receiver</dt><dd class="m-0 truncate font-mono text-text-soft">{tool.subagent.receiverThreadIds.join(', ')}</dd>{/if}
+  </dl>
+{/if}
+
+{#if tool.presentation === 'review'}
+  <p class="{indent} rounded-[5px] border border-line bg-recessed p-2 text-[11px] font-medium text-text-soft">Security review {tool.status.replaceAll('_', ' ')}</p>
+{:else if tool.presentation === 'compaction'}
+  <p class="{indent} rounded-[5px] border border-line bg-recessed p-2 text-[11px] text-text-soft">Context compaction {tool.status.replaceAll('_', ' ')}</p>
+{:else if tool.presentation === 'background'}
+  <p class="{indent} text-[11px] text-faint">Background task</p>
+{/if}
+
+{#if tool.media?.length}
+  <div class="{indent} flex flex-wrap gap-2">
+    {#each tool.media as image, index (`${tool.id}-media-${index}`)}
+      <img class="max-h-80 max-w-full rounded-lg border border-line bg-recessed object-contain" src={`data:${image.mimeType};base64,${image.data}`} alt={image.name} />
+    {/each}
+  </div>
+{:else if tool.presentation === 'image' && tool.locations[0]}
+  <button type="button" class="{indent} rounded-md border border-line bg-recessed px-2 py-1 text-[11px] text-text-soft hover:bg-panel-hover" onclick={() => openFile(tool.locations[0])}>Open image</button>
+{/if}
+
+{#if tool.children?.length}
+  <section class="{indent} grid gap-1.5 border-l border-line-strong pl-3" aria-label="Subagent transcript">
+    {#each tool.children as child (child.id)}
+      {#if 'role' in child}
+        <article class="rounded-md bg-recessed p-2 text-[12px] leading-snug text-text-soft" class:text-muted={child.role === 'thought'}>
+          <small class="mb-1 block text-[10px] font-medium uppercase tracking-wide text-faint">{child.role === 'thought' ? 'Thinking' : 'Agent'}</small>
+          <MarkdownMessage id={child.id} source={child.text} streaming={false} />
+        </article>
+      {:else}
+        <div class="rounded-md border border-line bg-recessed p-2 text-[11px]">
+          <div class="flex items-center justify-between gap-2"><strong class="truncate font-medium text-text-soft">{child.title}</strong><small class="capitalize text-faint">{child.status.replaceAll('_', ' ')}</small></div>
+          {#if child.detail}<pre class="mt-1 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-muted">{child.detail}</pre>{/if}
+        </div>
+      {/if}
+    {/each}
+  </section>
 {/if}
 
 {#each renderedDiffs as entry (entry.diff.path)}

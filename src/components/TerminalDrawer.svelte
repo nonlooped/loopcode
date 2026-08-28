@@ -14,6 +14,7 @@
     height: number;
     fontSize: number;
     scrollback: number;
+    commands: Record<string, { id: string; text: string }>;
     reducedMotion: boolean;
     close: () => void;
     terminalExited: (threadId: string) => void;
@@ -28,6 +29,7 @@
     height,
     fontSize,
     scrollback,
+    commands,
     reducedMotion,
     close,
     terminalExited,
@@ -105,6 +107,7 @@
       ready={layoutSettled && open && thread.id === selectedThreadId}
       {fontSize}
       {scrollback}
+      command={commands[thread.id]}
       {reducedMotion}
       {close}
       exited={() => terminalExited(thread.id)}

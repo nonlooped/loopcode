@@ -132,6 +132,7 @@
   let projectExplorerOpen = $state(false);
   let terminalOpen = $state(false);
   let terminalThreadIds = $state<string[]>([]);
+  let terminalCommands = $state<Record<string, { id: string; text: string }>>({});
   let terminalHeight = $state(loadTerminalHeight());
   const savedSidebarWidths = loadSidebarWidths();
   let leftSidebarWidth = $state<number | null>(savedSidebarWidths.left);
@@ -528,6 +529,11 @@
       closeTerminal();
       return;
     }
+    terminalOpen = true;
+  }
+
+  function runTerminalCommand(thread: ThreadState, text: string) {
+    terminalCommands[thread.id] = { id: crypto.randomUUID(), text };
     terminalOpen = true;
   }
 
@@ -996,6 +1002,7 @@
     {terminalThreads}
     {terminalThreadIds}
     {terminalVisible}
+    {terminalCommands}
     {terminalHeight}
     {preferences}
     {reducedMotion}
@@ -1015,6 +1022,7 @@
     dismissQuestion={() => answerPermission()}
     {cancelPrompt}
     {closeTerminal}
+    {runTerminalCommand}
     {terminalExited}
     {startTerminalResize}
     resizeTerminalBy={resizeTerminalDrawerBy}

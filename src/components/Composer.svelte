@@ -794,7 +794,17 @@
         />
       {/if}
     </div>
-    <ContextMeter {provider} fresh={props.thread.messages.length === 0} />
+    <div class="flex items-center gap-2">
+      {#if provider.quota?.totalTokens !== undefined}
+        <span title="Tokens used by the last turn">{new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(provider.quota.totalTokens)} tokens</span>
+      {/if}
+      {#each provider.rateLimits ?? [] as limit (limit.id)}
+        {#if limit.primary}
+          <span title={limit.primary.resetsAt ? `${limit.name} resets ${new Date(limit.primary.resetsAt * 1000).toLocaleString()}` : limit.name}>{Math.max(0, Math.round(100 - limit.primary.usedPercent))}% {limit.name} left</span>
+        {/if}
+      {/each}
+      <ContextMeter {provider} fresh={props.thread.messages.length === 0} />
+    </div>
   </div>
   </section>
 </MotionFly>

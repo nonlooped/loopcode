@@ -5,6 +5,7 @@
 
   import Composer from './Composer.svelte';
   import FileViewer from './FileViewer.svelte';
+  import GoalBar from './GoalBar.svelte';
   import ProjectExplorer from './ProjectExplorer.svelte';
   import QuestionComposer from './QuestionComposer.svelte';
   import TerminalDrawer from './TerminalDrawer.svelte';
@@ -21,6 +22,7 @@
     PermissionRequest,
     ProviderModelCatalog,
     QuestionAnswer,
+    SessionFailureAction,
     ThreadState,
   } from '../types';
   import type { AppPreferences } from '../utils/app-settings';
@@ -45,6 +47,7 @@
     terminalThreads: ThreadState[];
     terminalThreadIds: string[];
     terminalVisible: boolean;
+    terminalCommands: Record<string, { id: string; text: string }>;
     terminalHeight: number;
     preferences: AppPreferences;
     reducedMotion: boolean;
@@ -60,6 +63,7 @@
     dismissQuestion: () => void;
     cancelPrompt: () => Promise<void>;
     closeTerminal: () => void;
+    runTerminalCommand: (thread: ThreadState, text: string) => void;
     terminalExited: (threadId: string) => void;
     startTerminalResize: (event: PointerEvent) => void;
     resizeTerminalBy: (delta: number) => void;
@@ -84,6 +88,7 @@
     terminalThreads,
     terminalThreadIds,
     terminalVisible,
+    terminalCommands,
     terminalHeight,
     preferences,
     reducedMotion,
@@ -99,6 +104,7 @@
     dismissQuestion,
     cancelPrompt,
     closeTerminal,
+    runTerminalCommand,
     terminalExited,
     startTerminalResize,
     resizeTerminalBy,
@@ -327,6 +333,17 @@
     else projectExplorerCollapsed = !projectExplorerCollapsed;
   }
 
+  function recoverFailure(action: SessionFailureAction) {
+    const thread = selectedThread;
+    if (!thread) return;
+    if (action === 'retry') void providers.retryLastTurn(thread);
+    else if (action === 'new_session') void providers.newSession(thread);
+    else {
+      const command = profiles.find((profile) => profile.id === thread.profileId)?.loginCommand;
+      if (command) runTerminalCommand(thread, command);
+    }
+  }
+
 </script>
 
 {#if compactLayout && projectExplorerOpen}
@@ -376,9 +393,14 @@
                   sendShortcut={preferences.sendShortcut}
                   {openFile}
                   {resendPrompt}
+                  {recoverFailure}
                 />
               {/key}
             {/if}
+            <GoalBar
+              provider={selectedThread.providers[selectedThread.profileId]}
+              control={(action, objective) => { void providers.controlGoal(selectedThread, action, objective); }}
+            />
             {#if selectedInteraction?.request.type === 'question'}
               {#key selectedInteraction.request}
                 <QuestionComposer
@@ -442,6 +464,7 @@
         height={terminalHeight}
         fontSize={preferences.terminalFontSize}
         scrollback={preferences.terminalScrollback}
+        commands={terminalCommands}
         {reducedMotion}
         close={closeTerminal}
         {terminalExited}

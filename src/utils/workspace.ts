@@ -6,6 +6,7 @@ import type {
   ProjectState,
   ProviderModelCatalog,
   ThreadState,
+  ToolActivity,
 } from "../types/index.ts";
 import type { JsonValue } from "./json.ts";
 import { copyPromptPart } from "./messages.ts";
@@ -32,6 +33,15 @@ const promptPartSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }),
   z.object({ type: z.literal("reference"), reference: referenceSchema }),
 ]);
+const failureSchema = z.object({
+  id: nonEmptyString,
+  revision: z.number().int().positive(),
+  category: z.enum(["connection", "access", "limit", "request", "service", "unknown"]),
+  severity: z.enum(["warning", "error"]),
+  title: z.string(),
+  details: z.string().optional(),
+  actions: z.array(z.enum(["retry", "login", "new_session"])),
+});
 const messageSchema = z.object({
   id: nonEmptyString,
   role: z.enum(["user", "agent", "thought", "notice", "error"]),
@@ -50,7 +60,19 @@ const messageSchema = z.object({
     )
     .optional(),
   createdAt: z.number().finite(),
+  failure: failureSchema.optional(),
 });
+const childToolSchema = z
+  .object({
+    id: nonEmptyString,
+    title: nonEmptyString,
+    kind: nonEmptyString,
+    status: nonEmptyString,
+    detail: z.string().optional(),
+    locations: z.array(z.string()),
+    createdAt: z.number().finite(),
+  })
+  .passthrough();
 const toolSchema = z.object({
   id: nonEmptyString,
   title: nonEmptyString,
@@ -85,6 +107,29 @@ const toolSchema = z.object({
     )
     .optional()
     .catch(undefined),
+  media: z
+    .array(z.object({ data: nonEmptyString, mimeType: nonEmptyString, name: nonEmptyString }))
+    .optional()
+    .catch(undefined),
+  presentation: z
+    .enum(["image", "review", "compaction", "subagent", "background"])
+    .optional()
+    .catch(undefined),
+  subagent: z
+    .object({
+      threadId: z.string().optional(),
+      path: z.string().optional(),
+      activity: z.string().optional(),
+      parentToolUseId: z.string().optional(),
+      senderThreadId: z.string().optional(),
+      receiverThreadIds: z.array(z.string()).optional(),
+    })
+    .optional()
+    .catch(undefined),
+  children: z
+    .array(z.union([messageSchema, childToolSchema]))
+    .optional()
+    .transform((children) => children as ToolActivity["children"]),
   locations: z.array(z.string()).catch([]),
   createdAt: z.number().finite(),
 });
@@ -142,6 +187,16 @@ export function workspaceSnapshot(
         diffs: tool.diffs?.map((diff) => ({ ...diff })),
         terminal: tool.terminal ? { ...tool.terminal } : undefined,
         plan: tool.plan?.map((entry) => ({ ...entry })),
+        media: tool.media?.map((image) => ({ ...image })),
+        subagent: tool.subagent
+          ? {
+              ...tool.subagent,
+              receiverThreadIds: tool.subagent.receiverThreadIds
+                ? [...tool.subagent.receiverThreadIds]
+                : undefined,
+            }
+          : undefined,
+        children: tool.children?.map((entry) => ({ ...entry })),
         locations: [...tool.locations],
       })),
       draft: thread.draft,

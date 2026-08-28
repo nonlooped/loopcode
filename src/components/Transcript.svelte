@@ -31,6 +31,7 @@
     ThreadState,
     TimelineMessage,
     ToolActivity,
+    SessionFailureAction,
   } from '../types';
   import type { TimelineDisplayEntry } from '../types/timeline';
   import type { SendShortcut } from '../utils/app-settings';
@@ -48,9 +49,10 @@
     sendShortcut: SendShortcut;
     openFile: (path: string) => void;
     resendPrompt: (text: string, references: ComposerReference[]) => boolean;
+    recoverFailure: (action: SessionFailureAction) => void;
   }
 
-  const { thread, entries, profiles, reducedMotion, sendShortcut, openFile, resendPrompt }: Props =
+  const { thread, entries, profiles, reducedMotion, sendShortcut, openFile, resendPrompt, recoverFailure }: Props =
     $props();
   let transcriptElement = $state<HTMLElement>();
   let canScrollUp = $state(false);
@@ -471,7 +473,17 @@
             class:text-danger={message.role === 'error'}
           >
             {#if message.role === 'error'}<IconAlertTriangle size={15} stroke={1.55} />{/if}
-            <span>{message.text}</span>
+            <div class="min-w-0">
+              <span>{message.text}</span>
+              {#if message.failure?.details}<p class="mt-1 mb-0 whitespace-pre-wrap text-faint">{message.failure.details}</p>{/if}
+              {#if message.failure?.actions.length}
+                <div class="mt-2 flex flex-wrap gap-1.5">
+                  {#each message.failure.actions as action (action)}
+                    <button type="button" class="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-text-soft hover:bg-panel-hover" onclick={() => recoverFailure(action)}>{action === 'new_session' ? 'New session' : action[0].toUpperCase() + action.slice(1)}</button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
           </div>
           </MotionEnter>
         {:else}
