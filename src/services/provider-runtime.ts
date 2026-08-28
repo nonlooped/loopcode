@@ -13,6 +13,7 @@ import type {
   QuestionAnswer,
   ProviderModelCatalog,
   ProviderSessionState,
+  SlashCommand,
   ThreadState,
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
@@ -35,7 +36,7 @@ import {
   type PromptContent,
 } from "./acp.ts";
 import { recordDiagnostic } from "./native.ts";
-import { SessionUpdateHandler } from "./session-updates.ts";
+import { SessionUpdateHandler, slashCommands } from "./session-updates.ts";
 
 interface RuntimeHooks {
   permission: (value: { threadId: string; profileId: string; request: PermissionRequest }) => void;
@@ -206,6 +207,7 @@ export class ProviderRuntime {
     this.#catalogs[profile.id] = { status: "loading", models: [], reasoningOptions: [] };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
     let agentVersion: string | undefined;
+    let commands: SlashCommand[] | undefined;
     const connection = new AcpConnection({
       connectionStatus: () => {},
       turnStatus: () => {},
@@ -215,7 +217,12 @@ export class ProviderRuntime {
       ready: (session) => {
         discovered = session;
       },
-      update: () => {},
+      update: (update) => {
+        // Commands are published once per session, so discovery is the earliest they exist.
+        if (update.sessionUpdate === "available_commands_update") {
+          commands = slashCommands(update.availableCommands);
+        }
+      },
       permission: () => {},
       stderr: () => {},
       error: () => {},
@@ -263,6 +270,13 @@ export class ProviderRuntime {
         fastModeEnabled: selectedFastMode?.enabled,
         fastModeValueType: selectedFastMode?.valueType,
         fastModeDescription: selectedFastMode?.description,
+        modeConfigId: discovered.modeConfigId,
+        modes: discovered.modes,
+        selectedModeId: discovered.selectedModeId,
+        collaborationConfigId: discovered.collaborationConfigId,
+        collaborationModes: discovered.collaborationModes,
+        selectedCollaborationModeId: discovered.selectedCollaborationModeId,
+        commands,
       };
     } catch (error) {
       this.#baseModels.set(profile.id, []);
@@ -794,6 +808,8 @@ export class ProviderRuntime {
         applyReasoningForSelectedModel(provider);
         provider.fastModeOptionsByModel = catalog.fastModeOptionsByModel;
         applyFastModeForSelectedModel(provider);
+        applySessionSelects(provider, catalog);
+        provider.commands ??= catalog.commands;
       } else if (catalog.status === "unavailable") {
         provider.models = [];
         provider.selectedModelId = undefined;

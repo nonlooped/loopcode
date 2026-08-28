@@ -102,6 +102,20 @@ export function collapseTurnActivity(
   return collapsed;
 }
 
+/**
+ * Only the newest message in a running work group is still streaming. Marking them all
+ * leaves a caret stranded after every finished thought.
+ */
+export function streamingMessageId(entry: Extract<TimelineDisplayEntry, { type: "work" }>) {
+  if (!entry.active) return undefined;
+  return entry.entries
+    .filter(
+      (item): item is Extract<TimelineActivityEntry, { type: "message" }> =>
+        item.type === "message",
+    )
+    .at(-1)?.message.id;
+}
+
 export function formatElapsedDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.round(durationMs / 1_000));
   if (totalSeconds < 60) return `${totalSeconds}s`;

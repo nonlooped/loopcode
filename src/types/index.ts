@@ -284,6 +284,13 @@ interface ProviderModelCatalogState {
   fastModeEnabled?: boolean;
   fastModeValueType?: FastModeValueType;
   fastModeDescription?: string;
+  modeConfigId?: string;
+  modes?: ModelOption[];
+  selectedModeId?: string;
+  collaborationConfigId?: string;
+  collaborationModes?: ModelOption[];
+  selectedCollaborationModeId?: string;
+  commands?: SlashCommand[];
 }
 
 export type ProviderModelCatalog = ProviderModelCatalogState &

@@ -37,7 +37,7 @@
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
   import { composerEnterAction } from '../utils/prompt-content';
-  import { formatElapsedDuration, isStreamingMessage } from '../utils/timeline';
+  import { formatElapsedDuration, isStreamingMessage, streamingMessageId } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -448,7 +448,7 @@
                       <MarkdownMessage
                         id={workEntry.message.id}
                         source={workEntry.message.text.trim()}
-                        streaming={entry.active}
+                        streaming={workEntry.message.id === streamingMessageId(entry)}
                         fileLinks={{ projectRoot: thread.cwd, open: openFile }}
                       />
                     </div>

@@ -24,6 +24,13 @@ export function createProviderState(
     selectedReasoningId: catalog?.selectedReasoningId,
     reasoningOptionsByModel: catalog?.reasoningOptionsByModel,
     fastModeOptionsByModel: catalog?.fastModeOptionsByModel,
+    modeConfigId: catalog?.modeConfigId,
+    modes: catalog?.modes,
+    selectedModeId: catalog?.selectedModeId,
+    collaborationConfigId: catalog?.collaborationConfigId,
+    collaborationModes: catalog?.collaborationModes,
+    selectedCollaborationModeId: catalog?.selectedCollaborationModeId,
+    commands: catalog?.commands,
   };
   applyReasoningForSelectedModel(provider);
   applyFastModeForSelectedModel(provider);

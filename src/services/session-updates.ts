@@ -205,7 +205,7 @@ function toolLocations(existing: ToolActivity | undefined, update: ToolCall | To
   return locations.length > 0 ? locations : (existing?.locations ?? []);
 }
 
-function slashCommands(
+export function slashCommands(
   commands: { name: string; description: string; input?: { hint: string } | null }[],
 ): SlashCommand[] {
   return commands

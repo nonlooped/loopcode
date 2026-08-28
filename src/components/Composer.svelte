@@ -794,7 +794,7 @@
         />
       {/if}
     </div>
-    <ContextMeter {provider} />
+    <ContextMeter {provider} fresh={props.thread.messages.length === 0} />
   </div>
   </section>
 </MotionFly>
