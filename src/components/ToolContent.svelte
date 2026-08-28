@@ -104,7 +104,11 @@
           title={entry.diff.path}
           onclick={() => openFile(entry.diff.path)}
         >
-          <img class="size-3.5 shrink-0" src={materialFileIcon(entry.diff.path)} alt="" />
+          <img
+            class="size-3.5 shrink-0 opacity-[0.64] [filter:var(--provider-filter)]"
+            src={materialFileIcon(entry.diff.path)}
+            alt=""
+          />
           <span
             class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] text-text-soft"
             >{fileName(entry.diff.path)}</span
