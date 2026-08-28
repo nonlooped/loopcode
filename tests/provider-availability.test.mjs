@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CLAUDE_ACP_VERSION,
   desktopPlatform,
   providerDefinitions,
   providerSupportsPlatform,
@@ -29,6 +30,15 @@ void test("provider availability covers platform, discovery, executable, and aut
   assert.equal(desktopPlatform("linux"), "linux");
   assert.equal(desktopPlatform(undefined), "linux");
   assert.ok(providerDefinitions.every((profile) => profile.platforms.includes("macos")));
+  assert.deepEqual(
+    providerDefinitions.map(({ id }) => id),
+    ["codex", "claude"],
+  );
+  assert.ok(
+    providerDefinitions
+      .find(({ id }) => id === "claude")
+      ?.args.includes(`@agentclientprotocol/claude-agent-acp@${CLAUDE_ACP_VERSION}`),
+  );
   assert.equal(providerSupportsPlatform({ platforms: ["linux", "macos"] }, "macos"), true);
   assert.equal(providerSupportsPlatform({ platforms: ["linux", "macos"] }, "windows"), false);
   assert.equal(unavailableReason(new Error("Authentication required")), "authentication");

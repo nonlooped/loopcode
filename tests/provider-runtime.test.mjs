@@ -114,6 +114,31 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
   assert.equal(state.title, "Implement this @src/Composer.svelte");
 });
 
+void test("a running provider can accept an advertised follow-up", async () => {
+  const calls = [];
+  const connection = {
+    async followUp(content) {
+      calls.push(content);
+    },
+  };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return connection;
+    }
+  }
+
+  const state = thread();
+  state.providers.codex.turnStatus = "running";
+  state.providers.codex.supportsFollowups = true;
+  const runtime = new Runtime(catalogs, hooks);
+
+  await runtime.runTurn(state, "Also run the tests");
+
+  assert.deepEqual(calls, [[{ type: "text", text: "Also run the tests" }]]);
+  assert.equal(state.messages.at(-1).role, "user");
+  assert.equal(state.messages.at(-1).text, "Also run the tests");
+});
+
 void test("a running turn prevents switching providers", () => {
   const state = thread();
   state.providers.codex.turnStatus = "running";
@@ -244,6 +269,67 @@ void test("model defaults apply while discovery is still loading", async () => {
 
   assert.equal(state.providers.codex.selectedModelId, "model-2");
   assert.equal(state.providers.codex.selectedReasoningId, "high");
+});
+
+void test("connection startup restores preselected session options", async () => {
+  const selections = [];
+  const modes = [
+    { id: "default", name: "Manual" },
+    { id: "plan", name: "Plan" },
+  ];
+  const agents = [
+    { id: "default", name: "Default" },
+    { id: "reviewer", name: "Reviewer" },
+  ];
+  const sessionState = (mode = "default", agent = "default") => ({
+    harnessId: "harness-1",
+    sessionId: "session-1",
+    modelConfigId: "model",
+    models: catalogs.codex.models,
+    selectedModelId: "model-1",
+    reasoningOptions: [],
+    modeConfigId: "mode",
+    modes,
+    selectedModeId: mode,
+    agentConfigId: "agent",
+    agents,
+    selectedAgentId: agent,
+  });
+  let selectedMode = "default";
+  let selectedAgent = "default";
+  const runtime = new ProviderRuntime(catalogs, hooks, (callbacks) => ({
+    async connect() {
+      callbacks.ready(sessionState());
+    },
+    async setModel() {
+      return sessionState(selectedMode, selectedAgent);
+    },
+    async setConfigOption(configId, value) {
+      selections.push([configId, value]);
+      if (configId === "mode") selectedMode = value;
+      if (configId === "agent") selectedAgent = value;
+      return sessionState(selectedMode, selectedAgent);
+    },
+    async stop() {},
+  }));
+  const state = thread("disconnected");
+  Object.assign(state.providers.codex, {
+    modeConfigId: "mode",
+    modes,
+    selectedModeId: "plan",
+    agentConfigId: "agent",
+    agents,
+    selectedAgentId: "reviewer",
+  });
+
+  await runtime.connect(state, "codex");
+
+  assert.deepEqual(selections, [
+    ["mode", "plan"],
+    ["agent", "reviewer"],
+  ]);
+  assert.equal(state.providers.codex.selectedModeId, "plan");
+  assert.equal(state.providers.codex.selectedAgentId, "reviewer");
 });
 
 void test("image turns are rejected before timeline changes when a provider lacks image support", () => {

@@ -29,8 +29,12 @@
       lines: fileChangeDiffLines(change.diff, change.kind),
     })),
   );
-  const title = $derived(detail.command ? 'Run this command?' : request.title);
-  const description = $derived(describe(detail.command, fileChanges.length, planMarkdown));
+  const title = $derived(request.title);
+  const description = $derived(
+    request.type === 'permission' && request.description
+      ? request.description
+      : describe(detail.command, fileChanges.length, planMarkdown),
+  );
 
   function describe(command: string | undefined, changeCount: number, plan: string | undefined) {
     if (command) return 'A coding agent is asking to run the command below.';

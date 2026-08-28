@@ -187,6 +187,10 @@ export interface ProviderSessionState {
   collaborationConfigId?: string;
   collaborationModes?: ModelOption[];
   selectedCollaborationModeId?: string;
+  agentConfigId?: string;
+  agents?: ModelOption[];
+  selectedAgentId?: string;
+  supportsFollowups?: boolean;
   contextUsed?: number;
   contextSize?: number;
   commands?: SlashCommand[];
@@ -245,6 +249,7 @@ export interface PermissionFileChange {
 
 export interface PermissionDecisionRequest extends InteractionRequest {
   type: "permission";
+  description?: string;
   /** Populated for edit approvals so the prompt shows the change rather than a raw payload. */
   fileChanges?: PermissionFileChange[];
   /** Populated for plan approvals, which carry the proposed plan as Markdown. */
@@ -290,6 +295,10 @@ interface ProviderModelCatalogState {
   collaborationConfigId?: string;
   collaborationModes?: ModelOption[];
   selectedCollaborationModeId?: string;
+  agentConfigId?: string;
+  agents?: ModelOption[];
+  selectedAgentId?: string;
+  supportsFollowups?: boolean;
   commands?: SlashCommand[];
 }
 

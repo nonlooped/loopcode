@@ -2,6 +2,8 @@ import type { DesktopPlatform, HarnessProfile } from "../types/index.ts";
 
 export type ProviderDefinition = Omit<HarnessProfile, "icon" | "iconMode">;
 
+export const CLAUDE_ACP_VERSION = "0.70.0";
+
 export function desktopPlatform(
   tauriPlatform = import.meta.env?.TAURI_ENV_PLATFORM,
 ): DesktopPlatform {
@@ -28,6 +30,20 @@ export const providerDefinitions: ProviderDefinition[] = [
     probeModelOptions: true,
     installCommand: "npm install --global @openai/codex",
     loginCommand: "codex login",
+  },
+  {
+    id: "claude",
+    label: "Claude",
+    command: npx,
+    args: ["--yes", `@agentclientprotocol/claude-agent-acp@${CLAUDE_ACP_VERSION}`],
+    versionCommand: isWindows ? "claude.cmd" : "claude",
+    versionArgs: ["--version"],
+    platforms: ["linux", "macos", "windows"],
+    supportsImages: true,
+    titleGeneration: true,
+    probeModelOptions: true,
+    installCommand: "npm install --global @anthropic-ai/claude-code",
+    loginCommand: "claude auth login",
   },
 ];
 

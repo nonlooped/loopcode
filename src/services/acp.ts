@@ -23,6 +23,10 @@ type PermissionResponse = acp.RequestPermissionResponse;
 const clientCapabilities: acp.ClientCapabilities = {
   session: { configOptions: { boolean: {} } },
   elicitation: { form: {} },
+  _meta: {
+    terminal_output: true,
+    "subagent-transcript": true,
+  },
 };
 
 interface PendingPermission {
@@ -97,6 +101,7 @@ export class AcpConnection {
   #permissions = new Map<RpcId, PendingPermission>();
   #questions = new Map<RpcId, PendingQuestions>();
   #activeToolIds = new Set<string>();
+  #supportsFollowups = false;
   #turnActive = false;
   #connecting = false;
   #stopping = false;
@@ -168,6 +173,7 @@ export class AcpConnection {
           version: "0.1.0",
         },
       });
+      this.#supportsFollowups = steeringSupportSchema.safeParse(initialized._meta).success;
       this.#callbacks.initialized?.(initialized.agentInfo);
 
       if (initialized.authMethods?.length) {
@@ -220,6 +226,7 @@ export class AcpConnection {
       this.#callbacks.ready({
         harnessId,
         sessionId,
+        supportsFollowups: this.#supportsFollowups,
         ...this.#modelState,
       });
       this.#emitConnectionStatus("ready");
@@ -277,6 +284,27 @@ export class AcpConnection {
     await this.#context.notify(acp.methods.agent.session.cancel, {
       sessionId: this.#sessionId,
     });
+  }
+
+  async followUp(prompt: PromptContent[]) {
+    if (!this.#supportsFollowups) throw new Error("This agent does not support in-turn follow-ups");
+    if (!this.#turnActive)
+      throw new Error("The active turn finished before the follow-up was sent");
+    const response = await this.#requireContext().request<
+      { outcome: "injected" | "promptRequired" | "startedNewTurn" },
+      {
+        sessionId: string;
+        prompt: PromptContent[];
+        _meta: { steering: { idleBehavior: "promptRequired" } };
+      }
+    >("_session/steering", {
+      sessionId: this.#requireSessionId(),
+      prompt,
+      _meta: { steering: { idleBehavior: "promptRequired" } },
+    });
+    if (response.outcome !== "injected") {
+      throw new Error("The active turn finished before the follow-up was sent");
+    }
   }
 
   setModel(configId: string, modelId: string) {
@@ -374,6 +402,7 @@ export class AcpConnection {
     this.#context = undefined;
     this.#loadingSession = false;
     this.#turnActive = false;
+    this.#supportsFollowups = false;
     this.#activeToolIds.clear();
     this.#connection?.close();
     this.#connection = undefined;
@@ -432,6 +461,7 @@ export class AcpConnection {
     this.#connection = undefined;
     this.#loadingSession = false;
     this.#turnActive = false;
+    this.#supportsFollowups = false;
     this.#activeToolIds.clear();
     this.#titleSessions.clear();
     this.#cancelInteractions();
@@ -586,6 +616,10 @@ export class AcpConnection {
   }
 }
 
+const steeringSupportSchema = z.object({
+  steering: z.object({ supported: z.literal(true) }),
+});
+
 function errorDetails(
   cause: unknown,
   scope: AcpErrorDetails["scope"],
@@ -633,16 +667,26 @@ function permissionFromAcp(
   }
   const fileChanges = fileChangesFromMeta(params._meta);
   const planMarkdown = planFromInput(rawInput);
+  const presentation = permissionPresentationSchema.safeParse(params._meta).data?.permission;
   return {
     requestId,
     type: "permission",
-    title: permissionTitle(params, fileChanges),
+    title: presentation?.title ?? permissionTitle(params, fileChanges),
+    description: presentation?.description,
     detail: planMarkdown ?? (fileChanges ? "" : detail),
     options,
     fileChanges,
     planMarkdown,
   };
 }
+
+const permissionPresentationSchema = z.object({
+  permission: z.object({
+    version: z.literal(1),
+    title: z.string().min(1),
+    description: z.string().optional(),
+  }),
+});
 
 function permissionTitle(
   params: acp.RequestPermissionRequest,

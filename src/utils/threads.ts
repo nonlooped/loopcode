@@ -30,6 +30,10 @@ export function createProviderState(
     collaborationConfigId: catalog?.collaborationConfigId,
     collaborationModes: catalog?.collaborationModes,
     selectedCollaborationModeId: catalog?.selectedCollaborationModeId,
+    agentConfigId: catalog?.agentConfigId,
+    agents: catalog?.agents,
+    selectedAgentId: catalog?.selectedAgentId,
+    supportsFollowups: catalog?.supportsFollowups,
     commands: catalog?.commands,
   };
   applyReasoningForSelectedModel(provider);

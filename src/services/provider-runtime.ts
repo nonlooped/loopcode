@@ -144,6 +144,12 @@ export class ProviderRuntime {
     if (this.#disabledProfiles.has(profileId)) return;
     if (!text && images.length === 0) return;
     if (images.length > 0 && !this.#profileById(profileId).supportsImages) return;
+    if (provider.turnStatus === "running") {
+      if (!provider.supportsFollowups || provider.connectionStatus !== "ready") return;
+      addMessage(thread, "user", text, images, content);
+      this.#updates.startTurn(thread.id, profileId);
+      return this.#completeFollowUp(thread, profileId, text, images, content);
+    }
     if (provider.turnStatus !== "idle") return;
     if (provider.connectionStatus !== "disconnected" && provider.connectionStatus !== "ready")
       return;
@@ -276,6 +282,10 @@ export class ProviderRuntime {
         collaborationConfigId: discovered.collaborationConfigId,
         collaborationModes: discovered.collaborationModes,
         selectedCollaborationModeId: discovered.selectedCollaborationModeId,
+        agentConfigId: discovered.agentConfigId,
+        agents: discovered.agents,
+        selectedAgentId: discovered.selectedAgentId,
+        supportsFollowups: discovered.supportsFollowups,
         commands,
       };
     } catch (error) {
@@ -318,6 +328,11 @@ export class ProviderRuntime {
     const selectedModelId = provider.selectedModelId;
     const requestedReasoningId = provider.selectedReasoningId;
     const requestedFastModeEnabled = provider.fastModeEnabled;
+    const requestedSessionSelections: Record<SessionSelectId, string | undefined> = {
+      mode: provider.selectedModeId,
+      collaboration: provider.selectedCollaborationModeId,
+      agent: provider.selectedAgentId,
+    };
     const existingSessionId = provider.sessionId;
     if (!selectedModelId || !provider.models.some((model) => model.id === selectedModelId)) {
       this.#setError(thread, profile.id, {
@@ -446,6 +461,7 @@ export class ProviderRuntime {
         updated.selectedReasoningId,
       );
       await this.#restoreFastMode(connection, provider, requestedFastModeEnabled);
+      await this.#restoreSessionSelections(connection, provider, requestedSessionSelections);
       startupComplete = true;
       provider.error = undefined;
       provider.errorDetails = undefined;
@@ -520,6 +536,24 @@ export class ProviderRuntime {
     applyProviderConfigState(provider, fastModeState);
   }
 
+  async #restoreSessionSelections(
+    connection: AcpConnection,
+    provider: ProviderSessionState,
+    requested: Record<SessionSelectId, string | undefined>,
+  ) {
+    for (const select of Object.keys(sessionSelects) as SessionSelectId[]) {
+      const spec = sessionSelects[select];
+      const value = requested[select];
+      const configId = spec.configId(provider);
+      if (!value || !configId || spec.selected(provider) === value) continue;
+      if (!spec.options(provider).some((option) => option.id === value)) continue;
+      applyProviderConfigState(provider, await connection.setConfigOption(configId, value));
+      if (spec.selected(provider) !== value) {
+        throw new Error(`The agent did not apply ${spec.label} ${value}.`);
+      }
+    }
+  }
+
   async #completeTurn(
     thread: ThreadState,
     profileId: string,
@@ -556,6 +590,23 @@ export class ProviderRuntime {
       if (this.#turnTokens.get(thread.id) === turnToken) this.#turnTokens.delete(thread.id);
     }
     await titleCompletion;
+  }
+
+  async #completeFollowUp(
+    thread: ThreadState,
+    profileId: string,
+    text: string,
+    images: MessageImage[],
+    content?: PromptPart[],
+  ) {
+    try {
+      const connection = this.connection(thread.id, profileId);
+      if (!connection) throw new Error(`${this.#profileById(profileId).label} is not connected`);
+      await connection.followUp(acpPrompt(content, text, images));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addMessage(thread, "error", `Could not send follow-up: ${message}`);
+    }
   }
 
   async #generateThreadTitle(thread: ThreadState, request: string) {
@@ -987,6 +1038,7 @@ function connectionKey(threadId: string, profileId: string) {
 }
 
 export function applyProviderConfigState(provider: ProviderSessionState, state: AcpModelState) {
+  if (state.supportsFollowups !== undefined) provider.supportsFollowups = state.supportsFollowups;
   if (state.modelConfigId) provider.modelConfigId = state.modelConfigId;
   if (state.models.length > 0) provider.models = state.models;
   if (state.selectedModelId) provider.selectedModelId = state.selectedModelId;
@@ -1036,12 +1088,14 @@ function applySessionSelects(provider: ProviderSessionState, state: AcpModelStat
     provider.collaborationModes = state.collaborationModes;
     provider.selectedCollaborationModeId = state.selectedCollaborationModeId;
   }
+  if (state.agentConfigId) {
+    provider.agentConfigId = state.agentConfigId;
+    provider.agents = state.agents;
+    provider.selectedAgentId = state.selectedAgentId;
+  }
 }
 
-/**
- * Codex exposes its sandbox preset and plan mode as plain select config options, so both
- * share one apply path instead of repeating the optimistic-update-and-roll-back dance.
- */
+/** Session-level select options share one optimistic update and rollback path. */
 export const sessionSelects = {
   mode: {
     label: "mode",
@@ -1059,6 +1113,15 @@ export const sessionSelects = {
     selected: (provider: ProviderSessionState) => provider.selectedCollaborationModeId,
     assign: (provider: ProviderSessionState, value: string | undefined) => {
       provider.selectedCollaborationModeId = value;
+    },
+  },
+  agent: {
+    label: "agent",
+    configId: (provider: ProviderSessionState) => provider.agentConfigId,
+    options: (provider: ProviderSessionState) => provider.agents ?? [],
+    selected: (provider: ProviderSessionState) => provider.selectedAgentId,
+    assign: (provider: ProviderSessionState, value: string | undefined) => {
+      provider.selectedAgentId = value;
     },
   },
 } as const;

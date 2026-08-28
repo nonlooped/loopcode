@@ -19,6 +19,7 @@
   const props: Props = $props();
   const modes = $derived(props.provider.modes ?? []);
   const collaborationModes = $derived(props.provider.collaborationModes ?? []);
+  const agents = $derived(props.provider.agents ?? []);
   const reasoning = $derived(
     props.provider.reasoningOptions.find((option) => option.id === props.provider.selectedReasoningId)
       ?? props.provider.reasoningOptions[0],
@@ -29,10 +30,17 @@
   const collaboration = $derived(
     collaborationModes.find((option) => option.id === props.provider.selectedCollaborationModeId),
   );
+  const agent = $derived(
+    agents.find((option) => option.id === props.provider.selectedAgentId) ?? agents[0],
+  );
   const fastModeEnabled = $derived(props.provider.fastModeEnabled === true);
   const planning = $derived(Boolean(collaboration) && collaboration?.id !== 'default');
   const label = $derived(
-    [reasoning?.name, mode?.name === 'Agent (full access)' ? 'Full access' : mode?.name]
+    [
+      reasoning?.name,
+      agent?.id === 'default' ? undefined : agent?.name,
+      mode?.name === 'Agent (full access)' ? 'Full access' : mode?.name,
+    ]
       .filter(Boolean)
       .join(' · ') || 'Session',
   );
@@ -42,6 +50,7 @@
       fastModeAvailable(props.provider) ? `Speed: ${fastModeEnabled ? 'Fast' : 'Standard'}` : '',
       mode ? `Mode: ${mode.name}` : '',
       collaboration ? `Collaboration: ${collaboration.name}` : '',
+      agent ? `Agent: ${agent.name}` : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -161,6 +170,28 @@
             <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
               <DropdownMenu.RadioGroup value={collaboration?.id} onValueChange={(value) => props.selectSessionOption('collaboration', value)}>
                 {#each collaborationModes as option (option.id)}
+                  <DropdownMenu.RadioItem class={optionClass} value={option.id} title={option.description ?? option.name}>
+                    {#snippet children({ checked })}
+                      <span>{option.name}</span>
+                      {#if checked}<IconCheck size={14} stroke={2} />{/if}
+                    {/snippet}
+                  </DropdownMenu.RadioItem>
+                {/each}
+              </DropdownMenu.RadioGroup>
+            </DropdownMenu.SubContent>
+          </DropdownMenu.Sub>
+        {/if}
+
+        {#if agents.length > 1}
+          <DropdownMenu.Sub>
+            <DropdownMenu.SubTrigger class={submenuTrigger}>
+              <span>Agent</span>
+              <small>{agent?.name}</small>
+              <IconChevronRight size={13} stroke={1.55} />
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
+              <DropdownMenu.RadioGroup value={agent?.id} onValueChange={(value) => props.selectSessionOption('agent', value)}>
+                {#each agents as option (option.id)}
                   <DropdownMenu.RadioItem class={optionClass} value={option.id} title={option.description ?? option.name}>
                     {#snippet children({ checked })}
                       <span>{option.name}</span>

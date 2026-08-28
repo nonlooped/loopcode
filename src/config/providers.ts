@@ -1,14 +1,15 @@
+import claudeIcon from "@lobehub/icons-static-svg/icons/claude-color.svg?url";
 import openAiIcon from "@lobehub/icons-static-svg/icons/openai.svg?url";
 
 import { providerDefinitions } from "./provider-definitions.ts";
 import type { HarnessProfile } from "../types/index.ts";
 
-const icons = new Map(Object.entries({ codex: openAiIcon }));
+const icons = new Map(Object.entries({ claude: claudeIcon, codex: openAiIcon }));
 
 export const profiles: HarnessProfile[] = providerDefinitions.map((profile) => {
   const icon = icons.get(profile.id);
   if (!icon) throw new Error(`Missing icon for provider ${profile.id}`);
-  return { ...profile, icon, iconMode: "theme" };
+  return { ...profile, icon, iconMode: profile.id === "claude" ? "brand" : "theme" };
 });
 
 export function profileById(profileId: string) {

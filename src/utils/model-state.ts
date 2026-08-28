@@ -20,6 +20,10 @@ export interface AcpModelState {
   collaborationConfigId?: string;
   collaborationModes?: ModelOption[];
   selectedCollaborationModeId?: string;
+  agentConfigId?: string;
+  agents?: ModelOption[];
+  selectedAgentId?: string;
+  supportsFollowups?: boolean;
   fastModeConfigId?: string;
   fastModeEnabled?: boolean;
   fastModeValueType?: FastModeValueType;
@@ -39,6 +43,7 @@ export function readModelState(value: ConfigState): AcpModelState {
   const fastModeConfig = configOptions.find(isFastModeConfig);
   const modeConfig = configOptions.find(isModeConfig);
   const collaborationConfig = configOptions.find(isCollaborationModeConfig);
+  const agentConfig = configOptions.find(isAgentConfig);
 
   return {
     modelConfigId: modelConfig?.id,
@@ -57,10 +62,13 @@ export function readModelState(value: ConfigState): AcpModelState {
     collaborationConfigId: collaborationConfig?.id,
     collaborationModes: configChoices(collaborationConfig),
     selectedCollaborationModeId: selectedConfigValue(collaborationConfig),
+    agentConfigId: agentConfig?.id,
+    agents: configChoices(agentConfig),
+    selectedAgentId: selectedConfigValue(agentConfig),
   };
 }
 
-/** Codex's approval and sandbox preset: read-only, workspace write, or full access. */
+/** Provider permission or sandbox modes advertised through the standard mode category. */
 function isModeConfig(option: SessionConfigOption) {
   if (option.type !== "select") return false;
   return option.category === "mode" || option.id.toLowerCase() === "mode";
@@ -71,6 +79,10 @@ function isCollaborationModeConfig(option: SessionConfigOption) {
   if (option.type !== "select") return false;
   const key = `${option.id} ${option.category ?? ""}`.toLowerCase().replaceAll("-", "_");
   return key.includes("collaboration_mode");
+}
+
+function isAgentConfig(option: SessionConfigOption) {
+  return option.type === "select" && option.id.toLowerCase() === "agent";
 }
 
 function findModelConfig(configOptions: SessionConfigOption[]) {

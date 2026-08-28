@@ -194,7 +194,7 @@
   }
 
   function canEdit() {
-    return status === 'disconnected' || status === 'ready';
+    return status === 'disconnected' || status === 'ready' || (status === 'running' && provider.supportsFollowups === true);
   }
 
   function canSend() {
@@ -657,7 +657,9 @@
       contenteditable={canEdit()}
       spellcheck={props.spellcheck}
       data-placeholder={status === 'running'
-        ? 'Agent is working…'
+        ? provider.supportsFollowups
+          ? 'Send a follow-up…'
+          : 'Agent is working…'
         : status === 'connecting'
           ? `Starting ${threadHarness(props.thread, props.profiles)}…`
           : status === 'error'
@@ -747,7 +749,7 @@
               </button>
             {/if}
           </div>
-        {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider) || (provider.modes?.length ?? 0) > 1 || (provider.collaborationModes?.length ?? 0) > 1}
+        {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider) || (provider.modes?.length ?? 0) > 1 || (provider.collaborationModes?.length ?? 0) > 1 || (provider.agents?.length ?? 0) > 1}
           <SessionPicker
             {provider}
             open={sessionPickerOpen}
@@ -759,7 +761,14 @@
         {/if}
       </div>
       {#if status === 'running'}
-        <button class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-accent p-0 text-accent-contrast hover:bg-accent-hover active:translate-y-px" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.55} /></button>
+        {#if provider.supportsFollowups}
+          <button class="grid size-[30px] shrink-0 place-items-center rounded-full border border-line bg-transparent p-0 text-muted hover:border-line-strong hover:bg-panel-hover hover:text-text-soft" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={12} fill="currentColor" stroke={1.55} /></button>
+          <button class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-accent p-0 text-accent-contrast hover:bg-accent-hover active:translate-y-px disabled:bg-panel-active disabled:text-faint" aria-label="Send follow-up" title="Send follow-up" disabled={props.gitBusy || (!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
+            <IconArrowUp size={17} stroke={1.55} />
+          </button>
+        {:else}
+          <button class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-accent p-0 text-accent-contrast hover:bg-accent-hover active:translate-y-px" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.55} /></button>
+        {/if}
       {:else if status === 'error' || status === 'stopped'}
         <button class="grid size-[30px] shrink-0 place-items-center rounded-full border border-line-strong bg-panel-hover p-0 text-text-soft hover:bg-panel-active hover:text-text active:translate-y-px" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.55} /></button>
       {:else}

@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-Run Codex with project-bound threads, visible tool activity, and permission controls. LoopCode is a local desktop workspace for ACP coding agents, not a CLI task orchestrator.
+Run Codex and Claude with project-bound threads, visible tool activity, and permission controls. LoopCode is a local desktop workspace for ACP coding agents, not a CLI task orchestrator.
 
 ![LoopCode workspace with an agent thread](assets/screenshot.png)
 
@@ -29,15 +29,16 @@ Agent CLIs work well for one task. They get messy when you juggle projects, prov
 
 ## Supported agents
 
-| Agent | Install                              | Login         |
-| ----- | ------------------------------------ | ------------- |
-| Codex | `npm install --global @openai/codex` | `codex login` |
+| Agent  | Install                                          | Login               |
+| ------ | ------------------------------------------------ | ------------------- |
+| Codex  | `npm install --global @openai/codex`             | `codex login`       |
+| Claude | `npm install --global @anthropic-ai/claude-code` | `claude auth login` |
 
-LoopCode downloads the pinned Codex ACP adapter on first use.
+LoopCode downloads the pinned Codex and Claude ACP adapters on first use.
 
 Models, reasoning levels, and fast modes come from the agent, so every thread gets the controls it supports.
 
-More providers are on the way. LoopCode previously shipped Claude, Cursor, OpenCode, Grok, Pi, and fx; they were removed so each one can return with full support for its features rather than a lowest-common-denominator subset.
+More providers are on the way. LoopCode previously shipped Cursor, OpenCode, Grok, Pi, and fx; they were removed so each one can return with full support for its features rather than a lowest-common-denominator subset.
 
 ## Install a release
 
@@ -88,4 +89,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks, code conventions,
 
 LoopCode is [MIT](LICENSE) licensed.
 
-It is not affiliated with OpenAI or the other agents it can run. Those names are their trademarks.
+It is not affiliated with OpenAI, Anthropic, or the other agents it can run. Those names are their trademarks.

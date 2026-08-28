@@ -112,7 +112,48 @@ void test("reads model and reasoning selectors from typed ACP config options", (
     collaborationConfigId: undefined,
     collaborationModes: [],
     selectedCollaborationModeId: undefined,
+    agentConfigId: undefined,
+    agents: [],
+    selectedAgentId: undefined,
   });
+});
+
+void test("reads Claude permission and custom agent selectors", () => {
+  const state = readModelState({
+    configOptions: [
+      {
+        id: "mode",
+        name: "Mode",
+        category: "mode",
+        type: "select",
+        currentValue: "acceptEdits",
+        options: [
+          { value: "default", name: "Manual" },
+          { value: "acceptEdits", name: "Accept edits" },
+          { value: "plan", name: "Plan" },
+        ],
+      },
+      {
+        id: "agent",
+        name: "Agent",
+        type: "select",
+        currentValue: "reviewer",
+        options: [
+          { value: "default", name: "Default" },
+          { value: "reviewer", name: "Reviewer", description: "Review-focused agent" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(state.modeConfigId, "mode");
+  assert.equal(state.selectedModeId, "acceptEdits");
+  assert.equal(state.agentConfigId, "agent");
+  assert.equal(state.selectedAgentId, "reviewer");
+  assert.deepEqual(state.agents, [
+    { id: "default", name: "Default", description: undefined },
+    { id: "reviewer", name: "Reviewer", description: "Review-focused agent" },
+  ]);
 });
 
 void test("reads Codex mode and collaboration mode selectors", () => {
