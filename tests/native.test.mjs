@@ -16,6 +16,11 @@ void test("native project data is validated once at the IPC boundary", async () 
       },
       async invoke(command, args) {
         if (command === "list_composer_completions") {
+          if (args.projectRoot !== "/workspace") {
+            return [
+              { kind: "file", name: "main.ts", path: "/valid/main.ts", relativePath: "main.ts" },
+            ];
+          }
           return [{ kind: "file", name: "bad", path: 7, relativePath: "bad" }];
         }
         if (command === "read_project_directory") {
@@ -35,6 +40,9 @@ void test("native project data is validated once at the IPC boundary", async () 
     await import("../src/services/native.ts");
 
   await assert.rejects(listComposerCompletions("/workspace"));
+  assert.deepEqual(await listComposerCompletions("/valid"), [
+    { kind: "file", name: "main.ts", path: "/valid/main.ts", relativePath: "main.ts" },
+  ]);
   await assert.rejects(readProjectDirectory("/workspace", "/workspace"));
   const changes = [];
   assert.equal(await startProjectFileWatcher("/workspace", (change) => changes.push(change)), 4);
