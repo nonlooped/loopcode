@@ -15,10 +15,9 @@
   import ImagePreview from './ImagePreview.svelte';
   import ContextMeter from './ContextMeter.svelte';
   import ModelPicker from './ModelPicker.svelte';
-  import ModePicker from './ModePicker.svelte';
   import MotionFly from './motion/MotionFly.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
-  import ReasoningPicker from './ReasoningPicker.svelte';
+  import SessionPicker from './SessionPicker.svelte';
   import {
     listComposerCompletions,
     type ComposerCompletionEntry,
@@ -85,8 +84,7 @@
 
   const props: Props = $props();
   let modelPickerOpen = $state(false);
-  let reasoningPickerOpen = $state(false);
-  let modePickerOpen = $state(false);
+  let sessionPickerOpen = $state(false);
   let expanded = $state(false);
   let composerElement = $state<HTMLElement>();
   let attachButton = $state<HTMLButtonElement>();
@@ -532,7 +530,7 @@
         return;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
-        if (event.key === 'Enter' && completionStatus === 'loading') {
+        if (event.key === 'Enter' && completionPrefix !== '/' && completionStatus === 'loading') {
           event.preventDefault();
           return;
         }
@@ -598,7 +596,7 @@
 <MotionFly y={props.reducedMotion ? 0 : 4} duration={props.reducedMotion ? 0 : 180}>
   <section
     class="composer-wrap relative z-[3] shrink-0 bg-transparent px-4 pb-3 pt-2 [.thread-view:not(.empty)_&]:pt-[22px] [.thread-view:not(.empty)_&]:before:pointer-events-none [.thread-view:not(.empty)_&]:before:absolute [.thread-view:not(.empty)_&]:before:inset-x-0 [.thread-view:not(.empty)_&]:before:top-0 [.thread-view:not(.empty)_&]:before:h-[22px] [.thread-view:not(.empty)_&]:before:bg-gradient-to-b [.thread-view:not(.empty)_&]:before:from-transparent [.thread-view:not(.empty)_&]:before:to-shell [.thread-view:not(.empty)_&]:before:content-['']"
-    class:z-[15]={modelPickerOpen || reasoningPickerOpen || modePickerOpen}
+    class:z-[15]={modelPickerOpen || sessionPickerOpen}
   >
   <div
     bind:this={composerElement}
@@ -738,7 +736,7 @@
                 profiles={props.selectableProfiles}
                 label={activeModelName()}
                 open={modelPickerOpen}
-                setOpen={(open) => { reasoningPickerOpen = false; modePickerOpen = false; modelPickerOpen = open; }}
+                setOpen={(open) => { sessionPickerOpen = false; modelPickerOpen = open; }}
                 choose={chooseModel}
                 retryDiscovery={props.retryDiscovery}
               />
@@ -749,21 +747,14 @@
               </button>
             {/if}
           </div>
-        {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider)}
-          <ReasoningPicker
+        {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider) || (provider.modes?.length ?? 0) > 1 || (provider.collaborationModes?.length ?? 0) > 1}
+          <SessionPicker
             {provider}
-            open={reasoningPickerOpen}
-            setOpen={(open) => { modelPickerOpen = false; modePickerOpen = false; reasoningPickerOpen = open; }}
-            select={props.selectReasoning}
+            open={sessionPickerOpen}
+            setOpen={(open) => { modelPickerOpen = false; sessionPickerOpen = open; }}
+            selectReasoning={props.selectReasoning}
             selectFastMode={props.selectFastMode}
-          />
-        {/if}
-        {#if (provider.modes?.length ?? 0) > 1 || (provider.collaborationModes?.length ?? 0) > 1}
-          <ModePicker
-            {provider}
-            open={modePickerOpen}
-            setOpen={(open) => { modelPickerOpen = false; reasoningPickerOpen = false; modePickerOpen = open; }}
-            select={props.selectSessionOption}
+            selectSessionOption={props.selectSessionOption}
           />
         {/if}
       </div>
