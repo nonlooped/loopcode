@@ -1,7 +1,6 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { z } from "zod";
 
-import { compatibilityFor, type AcpCompatibility } from "./acp-compatibility.ts";
 import { launchHarness, sendRpc, stopHarness, type BrokerEvent } from "./native.ts";
 import type {
   AcpErrorDetails,
@@ -19,6 +18,11 @@ import { readModelState, type AcpModelState } from "../utils/model-state.ts";
 type RpcId = acp.JsonRpcId;
 
 type PermissionResponse = acp.RequestPermissionResponse;
+
+const clientCapabilities: acp.ClientCapabilities = {
+  session: { configOptions: { boolean: {} } },
+  elicitation: { form: {} },
+};
 
 interface PendingPermission {
   resolve: (response: PermissionResponse) => void;
@@ -82,7 +86,6 @@ export class AcpConnection {
   #transport: AcpTransport;
   #harnessId?: string;
   #sessionId?: string;
-  #compatibility: AcpCompatibility = compatibilityFor(undefined);
   #modelState: AcpModelState = { models: [], reasoningOptions: [] };
   #context?: acp.ClientContext;
   #connection?: acp.ClientConnection;
@@ -112,7 +115,6 @@ export class AcpConnection {
     }
     this.#connecting = true;
     this.#emitConnectionStatus("connecting");
-    this.#compatibility = compatibilityFor(request.profileId);
     this.#modelState = { models: [], reasoningOptions: [] };
     let method = "launch";
     try {
@@ -152,16 +154,13 @@ export class AcpConnection {
         .onRequest(acp.methods.client.elicitation.create, ({ params, requestId }) =>
           this.#requestElicitation(requestId, params),
         );
-      this.#compatibility.registerClientHandlers(client, {
-        requestQuestions: (requestId, pending) => this.#requestQuestions(requestId, pending),
-      });
 
       this.#connection = client.connect({ readable, writable });
       this.#context = this.#connection.agent;
       method = "initialize";
       const initialized = await this.#context.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
-        clientCapabilities: this.#compatibility.clientCapabilities,
+        clientCapabilities,
         clientInfo: {
           name: "loopcode",
           title: "LoopCode",
@@ -170,8 +169,11 @@ export class AcpConnection {
       });
       this.#callbacks.initialized?.(initialized.agentInfo);
 
-      method = "authenticate";
-      await this.#compatibility.authenticate(this.#context, initialized, this.#callbacks.stderr);
+      if (initialized.authMethods?.length) {
+        this.#callbacks.stderr(
+          "This harness advertises an authentication flow. LoopCode expects its CLI to be signed in already.",
+        );
+      }
 
       let sessionId: string;
       let sessionState:
@@ -230,10 +232,6 @@ export class AcpConnection {
     }
   }
 
-  listProviderModels() {
-    return this.#compatibility.listModels(this.#requireContext());
-  }
-
   async prompt(prompt: PromptContent[]) {
     if (this.#turnActive) throw new Error("This ACP session already has an active turn");
     const context = this.#requireContext();
@@ -280,16 +278,8 @@ export class AcpConnection {
     });
   }
 
-  async setModel(configId: string, modelId: string) {
-    const state = await this.#compatibility.setModel(
-      this.#requireContext(),
-      this.#requireSessionId(),
-      modelId,
-      this.#modelState,
-    );
-    if (!state) return this.setConfigOption(configId, modelId);
-    this.#modelState = state;
-    return state;
+  setModel(configId: string, modelId: string) {
+    return this.setConfigOption(configId, modelId);
   }
 
   async setConfigOption(configId: string, value: string | boolean) {
@@ -379,7 +369,6 @@ export class AcpConnection {
     const harnessId = this.#harnessId;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
-    this.#compatibility = compatibilityFor(undefined);
     this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#loadingSession = false;
@@ -437,7 +426,6 @@ export class AcpConnection {
     this.#stopping = false;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
-    this.#compatibility = compatibilityFor(undefined);
     this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#connection = undefined;
@@ -729,28 +717,21 @@ function multiSelectOptions(items: acp.MultiSelectItems): QuestionRequest["optio
 }
 
 function optionFromEnum(option: acp.EnumOption): QuestionRequest["options"][number] {
-  const optionMeta = option._meta?.["_claude/askUserQuestionOption"];
-  const preview = z.object({ preview: z.string() }).safeParse(optionMeta).data?.preview;
-  const result: QuestionRequest["options"][number] = {
+  return {
     optionId: option.const,
     name: option.title,
     description: option.description ?? undefined,
   };
-  if (preview) result.preview = preview;
-  return result;
 }
 
 function customAnswerTarget(schema: acp.ElicitationPropertySchema) {
   const parsed = z
     .object({
-      _askUserQuestionCustomAnswer: z
-        .object({ isCustomAnswer: z.literal(true), questionId: z.string() })
-        .optional(),
       codex: z.object({ isOtherAnswer: z.literal(true), questionId: z.string() }).optional(),
     })
     .safeParse(schema._meta);
   if (!parsed.success) return;
-  return parsed.data._askUserQuestionCustomAnswer?.questionId ?? parsed.data.codex?.questionId;
+  return parsed.data.codex?.questionId;
 }
 
 function elicitationContent(questions: QuestionSpec[], answers: QuestionAnswer[]) {

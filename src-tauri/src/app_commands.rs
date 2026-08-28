@@ -146,27 +146,6 @@ pub(crate) async fn provider_version(
     Ok(first_version_line(&output.stdout, &output.stderr))
 }
 
-#[tauri::command]
-pub(crate) async fn provider_auth_status(
-    command: String,
-    args: Vec<String>,
-) -> Result<Option<bool>, String> {
-    validate_provider_command(&command, &args)?;
-    let mut process = native_command(command.trim());
-    process
-        .args(args)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(true);
-    Ok(
-        match tokio::time::timeout(std::time::Duration::from_secs(4), process.status()).await {
-            Ok(Ok(status)) => Some(status.success()),
-            _ => None,
-        },
-    )
-}
-
 fn validate_provider_command(command: &str, args: &[String]) -> Result<(), String> {
     if command.trim().is_empty() || command.len() > 4096 {
         return Err("Enter a valid provider executable".into());
@@ -209,8 +188,8 @@ mod tests {
 
     #[test]
     fn provider_metadata_commands_are_bounded() {
-        assert!(validate_provider_command("claude", &["auth".into(), "status".into()]).is_ok());
+        assert!(validate_provider_command("codex", &["--version".into()]).is_ok());
         assert!(validate_provider_command("", &[]).is_err());
-        assert!(validate_provider_command("claude", &vec!["x".into(); 17]).is_err());
+        assert!(validate_provider_command("codex", &vec!["x".into(); 17]).is_err());
     }
 }

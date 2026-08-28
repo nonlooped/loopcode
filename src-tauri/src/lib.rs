@@ -24,7 +24,7 @@ pub(crate) fn native_command(command: &str) -> tokio::process::Command {
 use app_commands::configure_native_window;
 use app_commands::{
     export_diagnostics, initial_working_directory, load_workspace, pick_folder,
-    provider_auth_status, provider_version, record_diagnostic, save_workspace,
+    provider_version, record_diagnostic, save_workspace,
 };
 use broker::{
     Broker, FrontendGeneration, launch_harness, register_frontend, send_rpc, stop_all_harnesses,
@@ -122,7 +122,6 @@ pub fn run() {
             switch_git_branch,
             create_git_worktree,
             provider_version,
-            provider_auth_status,
             list_composer_completions,
             read_project_directory,
             read_project_file,

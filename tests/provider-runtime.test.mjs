@@ -36,7 +36,6 @@ function thread(connectionStatus) {
     draftReferences: [],
     providers: {
       codex: provider(connectionStatus),
-      claude: provider(),
     },
     updatedAt: 1,
     settled: false,
@@ -44,6 +43,15 @@ function thread(connectionStatus) {
 }
 
 const hooks = { permission() {}, clearPermission() {} };
+
+const [codexProfile] = providerDefinitions;
+const secondaryProfile = { ...codexProfile, id: "secondary", label: "Secondary" };
+const noImageProfile = {
+  ...codexProfile,
+  id: "no-images",
+  label: "No images",
+  supportsImages: false,
+};
 
 function configuration(
   profiles = providerDefinitions,
@@ -109,9 +117,11 @@ void test("ProviderRuntime owns prompt and title lifecycle", async () => {
 void test("a running turn prevents switching providers", () => {
   const state = thread();
   state.providers.codex.turnStatus = "running";
-  const runtime = new ProviderRuntime({ ...catalogs, claude: catalogs.codex }, hooks);
+  const runtime = new ProviderRuntime({ ...catalogs, secondary: catalogs.codex }, hooks);
+  runtime.configure(configuration([codexProfile, secondaryProfile]), [state]);
+  state.providers.codex.turnStatus = "running";
 
-  runtime.activate(state, "claude", false);
+  runtime.activate(state, "secondary", false);
 
   assert.equal(state.profileId, "codex");
 });
@@ -119,7 +129,7 @@ void test("a running turn prevents switching providers", () => {
 void test("unavailable providers cannot become active and restored providers fall back", () => {
   const unavailableCatalogs = {
     ...catalogs,
-    grok: {
+    secondary: {
       status: "unavailable",
       models: [],
       reasoningOptions: [],
@@ -128,10 +138,11 @@ void test("unavailable providers cannot become active and restored providers fal
     },
   };
   const state = thread();
-  state.providers.grok = provider();
+  state.providers.secondary = provider();
   const runtime = new ProviderRuntime(unavailableCatalogs, hooks);
+  runtime.configure(configuration([codexProfile, secondaryProfile]), [state]);
 
-  runtime.activate(state, "grok", false);
+  runtime.activate(state, "secondary", false);
   assert.equal(state.profileId, "codex");
 
   const restored = restoreWorkspace(
@@ -142,8 +153,8 @@ void test("unavailable providers cannot become active and restored providers fal
       threads: [
         {
           id: "restored-thread",
-          title: "Restored Grok thread",
-          profileId: "grok",
+          title: "Restored secondary thread",
+          profileId: "secondary",
           cwd: "C:\\workspace",
           messages: [],
           tools: [],
@@ -156,9 +167,12 @@ void test("unavailable providers cannot become active and restored providers fal
     unavailableCatalogs,
   );
   assert.ok(restored);
-  runtime.applyCatalog("grok", restored.threads);
+  runtime.applyCatalog("secondary", restored.threads);
   assert.equal(restored.threads[0].profileId, "codex");
-  assert.equal(restored.threads[0].providers.grok.selectedModelId, undefined);
+  assert.equal(restored.threads[0].providers.secondary, undefined);
+  assert.deepEqual(restored.providerRepairs, [
+    { threadId: "restored-thread", persistedProfileId: "secondary", profileId: "codex" },
+  ]);
 });
 
 void test("changing provider arguments disconnects its active harness", () => {
@@ -184,22 +198,25 @@ void test("unchanged custom models do not disconnect ready providers", () => {
 
 void test("disabling the active provider falls back to an enabled ready provider", () => {
   const state = thread();
-  const readyCatalogs = { ...catalogs, claude: catalogs.codex };
+  const readyCatalogs = { ...catalogs, secondary: catalogs.codex };
   const runtime = new ProviderRuntime(readyCatalogs, hooks);
 
-  runtime.configure(configuration(providerDefinitions, { disabledProfileIds: ["codex"] }), [state]);
+  runtime.configure(
+    configuration([codexProfile, secondaryProfile], { disabledProfileIds: ["codex"] }),
+    [state],
+  );
 
-  assert.equal(state.profileId, "claude");
+  assert.equal(state.profileId, "secondary");
   assert.equal(state.providers.codex.connectionStatus, "disconnected");
 });
 
 void test("runtime configuration applies models and provider fallback atomically", () => {
   const state = thread();
-  const readyCatalogs = { ...catalogs, claude: catalogs.codex };
+  const readyCatalogs = { ...catalogs, secondary: catalogs.codex };
   const runtime = new ProviderRuntime(readyCatalogs, hooks);
 
   runtime.configure(
-    configuration(providerDefinitions, {
+    configuration([codexProfile, secondaryProfile], {
       customModels: { codex: [{ id: "custom", name: "Custom" }] },
       disabledProfileIds: ["codex"],
     }),
@@ -210,7 +227,7 @@ void test("runtime configuration applies models and provider fallback atomically
     readyCatalogs.codex.models.map(({ id }) => id),
     ["model-1", "custom"],
   );
-  assert.equal(state.profileId, "claude");
+  assert.equal(state.profileId, "secondary");
 });
 
 void test("model defaults apply while discovery is still loading", async () => {
@@ -229,25 +246,20 @@ void test("model defaults apply while discovery is still loading", async () => {
   assert.equal(state.providers.codex.selectedReasoningId, "high");
 });
 
-void test("Grok and fx image turns are rejected before timeline changes", () => {
-  for (const profileId of ["grok", "fx"]) {
-    const imageCatalogs = {
-      ...catalogs,
-      [profileId]: catalogs.codex,
-    };
-    const state = thread();
-    state.profileId = profileId;
-    state.providers[profileId] = provider();
-    const runtime = new ProviderRuntime(imageCatalogs, hooks);
+void test("image turns are rejected before timeline changes when a provider lacks image support", () => {
+  const state = thread();
+  state.profileId = noImageProfile.id;
+  state.providers[noImageProfile.id] = provider();
+  const runtime = new ProviderRuntime({ ...catalogs, [noImageProfile.id]: catalogs.codex }, hooks);
+  runtime.configure(configuration([codexProfile, noImageProfile]), [state]);
 
-    assert.equal(
-      runtime.runTurn(state, "Describe this", [
-        { data: "image-data", mimeType: "image/png", name: "reference.png" },
-      ]),
-      undefined,
-    );
-    assert.deepEqual(state.messages, []);
-  }
+  assert.equal(
+    runtime.runTurn(state, "Describe this", [
+      { data: "image-data", mimeType: "image/png", name: "reference.png" },
+    ]),
+    undefined,
+  );
+  assert.deepEqual(state.messages, []);
 });
 
 void test("reconnect waits for a replaced provider process to stop", async () => {
@@ -382,11 +394,15 @@ void test("a provider switch prevents a stale reconnect from prompting", async (
   }
 
   const state = thread("disconnected");
-  const runtime = new Runtime(catalogs, hooks);
+  state.providers.secondary = provider("disconnected");
+  const runtime = new Runtime({ ...catalogs, secondary: catalogs.codex }, hooks);
+  runtime.configure(configuration([codexProfile, secondaryProfile]), [state]);
+  state.providers.codex.connectionStatus = "disconnected";
   const completion = runtime.runTurn(state, "Do not send after switching");
-  runtime.activate(state, "claude", false);
+  runtime.activate(state, "secondary", false);
   finishConnect();
 
   await completion;
+  assert.equal(state.profileId, "secondary");
   assert.equal(prompts, 0);
 });

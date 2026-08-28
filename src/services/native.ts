@@ -248,16 +248,6 @@ export async function getProviderVersion(command: string, args: string[]): Promi
     .parse(await invoke("provider_version", { command, args }));
 }
 
-export async function getProviderAuthStatus(
-  command: string,
-  args: string[],
-): Promise<boolean | null> {
-  return z
-    .boolean()
-    .nullable()
-    .parse(await invoke("provider_auth_status", { command, args }));
-}
-
 export async function listComposerCompletions(
   projectRoot: string,
 ): Promise<ComposerCompletionEntry[]> {

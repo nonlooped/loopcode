@@ -31,7 +31,6 @@
     baseProfiles: HarnessProfile[];
     catalogs: Record<string, ProviderModelCatalog>;
     providerVersions: Record<string, string>;
-    providerAuthStatuses: Record<string, boolean>;
     permissionMode: PermissionMode;
     reducedMotion: boolean;
     setPreference: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void;
@@ -49,7 +48,6 @@
     baseProfiles,
     catalogs,
     providerVersions,
-    providerAuthStatuses,
     permissionMode,
     reducedMotion,
     setPreference,
@@ -235,12 +233,7 @@
   }
 
   function providerStatus(profileId: string) {
-    return providerDisplayStatus(
-      profileId,
-      providerPreference(profileId).enabled !== false,
-      catalogs[profileId],
-      providerAuthStatuses[profileId],
-    );
+    return providerDisplayStatus(providerPreference(profileId).enabled !== false, catalogs[profileId]);
   }
 
   function providerVersion(profileId: string) {
@@ -708,14 +701,14 @@
             {@const enabled = providerPreference(profile.id).enabled !== false}
             {@const version = providerVersion(profile.id)}
             {@const status = providerStatus(profile.id)}
-            {@const canToggle = providerCanToggle(profile.id, catalogs[profile.id], providerAuthStatuses[profile.id])}
+            {@const canToggle = providerCanToggle(catalogs[profile.id])}
             <div class="{settingsRow} {settingsRowSeparated} {providerSettingsRow}">
               <button id={`provider-setting-${profile.id}`} class={providerSettingsOpen} onclick={() => showProvider(profile.id)}>
                 <span class={providerSettingsIcon} aria-hidden="true"><img class:brand-color-icon={profile.iconMode === 'brand'} class={settingsProviderIcon} src={profile.icon} alt="" /></span>
                 <span class={settingsRowCopy}>
                   <strong class={settingsRowStrong}>{profile.label}{#if version} <span class={providerVersionClass}>{version}</span>{/if}</strong>
                   <small
-                    class="{providerAuthStatus} {status === 'Authenticated' || status === 'Connected' ? 'text-success' : status === 'Disabled' ? 'text-faint' : status === 'Not logged in' ? 'text-warning' : status === 'Not installed' ? 'text-danger' : ''}"
+                    class="{providerAuthStatus} {status === 'Authenticated' ? 'text-success' : status === 'Disabled' ? 'text-faint' : status === 'Not logged in' ? 'text-warning' : status === 'Not installed' ? 'text-danger' : ''}"
                   >
                     {status}
                   </small>

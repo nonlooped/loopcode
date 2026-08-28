@@ -165,8 +165,6 @@ export interface HarnessProfile {
   args: string[];
   versionCommand: string;
   versionArgs: string[];
-  authCommand?: string;
-  authArgs?: string[];
   platforms: DesktopPlatform[];
   supportsImages: boolean;
   titleGeneration: boolean;

@@ -229,10 +229,6 @@ export class ProviderRuntime {
         args: profile.args,
         profileId: profile.id,
       });
-      const compatibilityModels = await connection.listProviderModels();
-      if (compatibilityModels.length > 0) {
-        discovered.models = compatibilityModels.map(({ model }) => model);
-      }
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
       }
@@ -247,12 +243,10 @@ export class ProviderRuntime {
           ? advertisedModelId
           : models[0].id;
       const { reasoningOptionsByModel, fastModeOptionsByModel } =
-        await discoverProviderModelOptions(
-          profile,
-          connection,
-          { ...discovered, selectedModelId },
-          compatibilityModels,
-        );
+        await discoverProviderModelOptions(profile, connection, {
+          ...discovered,
+          selectedModelId,
+        });
       const selectedReasoning = reasoningOptionsByModel[selectedModelId];
       const selectedFastMode = fastModeOptionsByModel[selectedModelId];
       this.#catalogs[profile.id] = {
@@ -913,9 +907,7 @@ export async function discoverProviderModelOptions(
   profile: ProviderDefinition,
   connection: Pick<AcpConnection, "setModel">,
   state: AcpModelState,
-  compatibilityStates: Awaited<ReturnType<AcpConnection["listProviderModels"]>> = [],
 ) {
-  if (compatibilityStates.length > 0) return modelOptionsFromStates(compatibilityStates);
   if (profile.probeModelOptions) return discoverModelOptions(connection, state);
   const model = state.models.find((item) => item.id === state.selectedModelId);
   return modelOptionsFromStates(model ? [{ ...state, model }] : []);

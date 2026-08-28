@@ -4,10 +4,8 @@ import type {
   SessionConfigOption,
   SetSessionConfigOptionResponse,
 } from "@agentclientprotocol/sdk";
-import { z } from "zod";
 
 import type { FastModeValueType, ModelOption } from "../types/index.ts";
-import type { JsonValue } from "./json.ts";
 
 export interface AcpModelState {
   modelConfigId?: string;
@@ -30,16 +28,14 @@ type ConfigState = Pick<
 export function readModelState(value: ConfigState): AcpModelState {
   const configOptions = value.configOptions ?? [];
   const modelConfig = findModelConfig(configOptions);
-  const legacyModelState = readLegacyModelState(value);
-  const models = configChoices(modelConfig);
   const reasoningConfig =
     configOptions.find(isExplicitReasoningConfig) ?? configOptions.find(isReasoningConfig);
   const fastModeConfig = configOptions.find(isFastModeConfig);
 
   return {
-    modelConfigId: modelConfig?.id ?? legacyModelState?.modelConfigId,
-    models: models.length > 0 ? models : (legacyModelState?.models ?? []),
-    selectedModelId: selectedConfigValue(modelConfig) ?? legacyModelState?.selectedModelId,
+    modelConfigId: modelConfig?.id,
+    models: configChoices(modelConfig),
+    selectedModelId: selectedConfigValue(modelConfig),
     reasoningConfigId: reasoningConfig?.id,
     reasoningOptions: configChoices(reasoningConfig),
     selectedReasoningId: selectedConfigValue(reasoningConfig),
@@ -69,34 +65,6 @@ function selectedConfigValue(config: SessionConfigOption | undefined) {
 function configValueType(config: SessionConfigOption | undefined): FastModeValueType | undefined {
   if (config?.type === "boolean") return "boolean";
   if (config?.type === "select") return "string";
-}
-
-const legacyModelStateSchema = z.object({
-  models: z.object({
-    currentModelId: z.string().trim().min(1),
-    availableModels: z.array(
-      z.object({
-        modelId: z.string().trim().min(1),
-        name: z.string().trim().min(1).optional(),
-        description: z.string().nullable().optional(),
-      }),
-    ),
-  }),
-});
-
-function readLegacyModelState(value: unknown): AcpModelState | undefined {
-  const parsed = legacyModelStateSchema.safeParse(value);
-  if (!parsed.success) return;
-  return {
-    modelConfigId: "model",
-    models: parsed.data.models.availableModels.map((model) => ({
-      id: model.modelId,
-      name: model.name ?? model.modelId,
-      description: model.description ?? undefined,
-    })),
-    selectedModelId: parsed.data.models.currentModelId,
-    reasoningOptions: [],
-  };
 }
 
 function configChoices(config: SessionConfigOption | undefined): ModelOption[] {
@@ -139,60 +107,4 @@ function configBooleanValue(option: SessionConfigOption | undefined) {
   if (option.currentValue === "true") return true;
   if (option.currentValue === "false") return false;
   return undefined;
-}
-
-export interface AcpAvailableModel extends AcpModelState {
-  model: ModelOption;
-}
-
-const configChoiceSchema = z.object({
-  value: z.string(),
-  name: z.string(),
-  description: z.string().nullable().optional(),
-});
-const sessionConfigOptionBase = {
-  id: z.string(),
-  name: z.string(),
-  description: z.string().nullable().optional(),
-  category: z.string().nullable().optional(),
-};
-const sessionConfigOptionSchema = z.discriminatedUnion("type", [
-  z.object({
-    ...sessionConfigOptionBase,
-    type: z.literal("select"),
-    currentValue: z.string(),
-    options: z.union([
-      z.array(configChoiceSchema),
-      z.array(
-        z.object({
-          group: z.string(),
-          name: z.string(),
-          options: z.array(configChoiceSchema),
-        }),
-      ),
-    ]),
-  }),
-  z.object({
-    ...sessionConfigOptionBase,
-    type: z.literal("boolean"),
-    currentValue: z.boolean(),
-  }),
-]);
-const cursorModelCatalogSchema = z.object({
-  models: z.array(
-    z.object({
-      value: z.string().trim().min(1),
-      name: z.string().trim().min(1),
-      configOptions: z.array(sessionConfigOptionSchema).optional(),
-    }),
-  ),
-});
-
-export function readCursorAvailableModels(payload: JsonValue): AcpAvailableModel[] {
-  const parsed = cursorModelCatalogSchema.safeParse(payload);
-  if (!parsed.success) throw new Error("Cursor returned an invalid model catalog");
-  return parsed.data.models.map((entry) => {
-    const state = readModelState({ configOptions: entry.configOptions ?? [] });
-    return { model: { id: entry.value, name: entry.name }, ...state };
-  });
 }

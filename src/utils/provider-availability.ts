@@ -86,35 +86,24 @@ export function titleGenerationSelection(
 
 export type ProviderDisplayStatus =
   | "Authenticated"
-  | "Connected"
   | "Disabled"
   | "Not installed"
   | "Not logged in";
 
-export function providerCanToggle(
-  profileId: string,
-  catalog: ProviderModelCatalog | undefined,
-  authenticated?: boolean,
-) {
-  return catalog?.status === "ready" && (profileId !== "claude" || authenticated === true);
+export function providerCanToggle(catalog: ProviderModelCatalog | undefined) {
+  return catalog?.status === "ready";
 }
 
 export function providerDisplayStatus(
-  profileId: string,
   enabled: boolean,
   catalog: ProviderModelCatalog | undefined,
-  authenticated?: boolean,
 ): ProviderDisplayStatus {
   if (!enabled) return "Disabled";
   if (catalog?.status === "unavailable" && catalog.unavailableReason === "missing-executable") {
     return "Not installed";
   }
-  if (catalog?.status !== "ready" || (profileId === "claude" && authenticated !== true)) {
-    return "Not logged in";
-  }
-  return profileId === "fx" || profileId === "opencode" || profileId === "pi"
-    ? "Connected"
-    : "Authenticated";
+  if (catalog?.status !== "ready") return "Not logged in";
+  return "Authenticated";
 }
 
 export function providerVersionLabel(

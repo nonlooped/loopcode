@@ -1,16 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readCursorAvailableModels, readModelState } from "../src/utils/model-state.ts";
+import { readModelState } from "../src/utils/model-state.ts";
 
-void test("rejects malformed Cursor model catalogs", () => {
-  assert.throws(
-    () => readCursorAvailableModels({ models: [{ value: "", name: "Broken" }] }),
-    /invalid model catalog/,
-  );
-});
-
-void test("prefers the model selector when fx advertises provider and model categories", () => {
+void test("prefers the model selector when an agent advertises provider and model categories", () => {
   const state = readModelState({
     configOptions: [
       {

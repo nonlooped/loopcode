@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-Run Codex, Claude, Cursor, OpenCode, Grok, Pi, and fx with project-bound threads, visible tool activity, and permission controls. LoopCode is a local desktop workspace for ACP coding agents, not a CLI task orchestrator.
+Run Codex with project-bound threads, visible tool activity, and permission controls. LoopCode is a local desktop workspace for ACP coding agents, not a CLI task orchestrator.
 
 ![LoopCode workspace with an agent thread](assets/screenshot.png)
 
@@ -21,7 +21,6 @@ Run Codex, Claude, Cursor, OpenCode, Grok, Pi, and fx with project-bound threads
 
 Agent CLIs work well for one task. They get messy when you juggle projects, providers, terminal tabs, and old conversations. LoopCode keeps the whole job in one window.
 
-- **Pick the right agent.** Use any supported provider per thread.
 - **Keep project context.** Threads, drafts, file references, and history survive restarts.
 - **See what changed.** Messages, commands, file edits, questions, and approvals share one timeline.
 - **Stay in control.** Restricted mode asks before sensitive actions. Full Access removes the prompts when you trust the agent.
@@ -30,19 +29,15 @@ Agent CLIs work well for one task. They get messy when you juggle projects, prov
 
 ## Supported agents
 
-| Agent    | Install                                                                                                                                                       | Login                         |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Codex    | `npm install --global @openai/codex`                                                                                                                          | `codex login`                 |
-| Claude   | `npm install --global @anthropic-ai/claude-code`                                                                                                              | `claude auth login`           |
-| Cursor   | Linux and macOS: `curl https://cursor.com/install -fsS \| bash`<br>Windows: `irm 'https://cursor.com/install?win32=true' \| iex`                              | `agent login`                 |
-| OpenCode | `npm install --global opencode-ai`                                                                                                                            | `opencode auth login`         |
-| Grok     | Linux and macOS: `curl -fsSL https://x.ai/cli/install.sh \| bash -s 1.0.5`<br>Windows: `irm https://x.ai/cli/install.ps1 \| iex; grok update --version 1.0.5` | `grok login`                  |
-| Pi       | `npm install --global @earendil-works/pi-coding-agent@0.84.2`                                                                                                 | Run `pi`, then enter `/login` |
-| fx       | `curl -fsSL https://fx.sh/setup.sh \| bash` on Linux and macOS                                                                                                | `fx login` or `fx setup`      |
+| Agent | Install                              | Login         |
+| ----- | ------------------------------------ | ------------- |
+| Codex | `npm install --global @openai/codex` | `codex login` |
 
-LoopCode downloads the pinned Codex, Claude, and Pi ACP adapters on first use. fx is visible but unavailable on Windows because its official release supports Linux and macOS only.
+LoopCode downloads the pinned Codex ACP adapter on first use.
 
-Models, reasoning levels, and fast modes come from each agent, so every thread gets the controls its provider supports.
+Models, reasoning levels, and fast modes come from the agent, so every thread gets the controls it supports.
+
+More providers are on the way. LoopCode previously shipped Claude, Cursor, OpenCode, Grok, Pi, and fx; they were removed so each one can return with full support for its features rather than a lowest-common-denominator subset.
 
 ## Install a release
 
@@ -93,4 +88,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development checks, code conventions,
 
 LoopCode is [MIT](LICENSE) licensed.
 
-It is not affiliated with OpenAI, Anthropic, Cursor, OpenCode, xAI, or the other agents it can run. Those names are their trademarks.
+It is not affiliated with OpenAI or the other agents it can run. Those names are their trademarks.

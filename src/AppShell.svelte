@@ -16,7 +16,6 @@
   import { preferredAllowOptionId } from './services/acp';
   import {
     getInitialWorkingDirectory,
-    getProviderAuthStatus,
     getProviderVersion,
     loadWorkspace,
     openProjectPath,
@@ -114,7 +113,6 @@
   let initialWorkingFolder = $state('');
   let providerCatalogs = $state<Record<string, ProviderModelCatalog>>(initialCatalogs);
   let providerVersions = $state<Record<string, string>>({});
-  let providerAuthStatuses = $state<Record<string, boolean>>({});
   const workspaceState = $state(createWorkspaceState('', providerCatalogs));
   const projects = $derived(workspaceState.projects);
   const selectedProjectId = $derived(workspaceState.selectedProjectId);
@@ -155,7 +153,6 @@
   let zoomNoticeTimer: number | undefined;
   let closing = false;
   const providerVersionGenerations = new Map<string, number>();
-  const providerAuthGenerations = new Map<string, number>();
   let stopSidebarResize: (() => void) | undefined;
   let stopTerminalResize: (() => void) | undefined;
   let sidebarResizing = $state(false);
@@ -173,7 +170,7 @@
     profiles.filter((profile) => preferences.providerSettings[profile.id]?.enabled !== false),
   );
   const selectableProfiles = $derived(
-    enabledProfiles.filter((profile) => providerCanToggle(profile.id, providerCatalogs[profile.id], providerAuthStatuses[profile.id])),
+    enabledProfiles.filter((profile) => providerCanToggle(providerCatalogs[profile.id])),
   );
   const layoutStyle = $derived([
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
@@ -785,12 +782,8 @@
 
   async function loadProviderMetadata(profile: HarnessProfile) {
     const catalog = providerCatalogs[profile.id];
-    await Promise.all([
-      catalog?.status === 'unavailable' && catalog.unavailableReason === 'missing-executable'
-        ? Promise.resolve()
-        : loadProviderVersion(profile),
-      loadProviderAuthStatus(profile),
-    ]);
+    if (catalog?.status === 'unavailable' && catalog.unavailableReason === 'missing-executable') return;
+    await loadProviderVersion(profile);
   }
 
   async function loadProviderVersion(profile: HarnessProfile) {
@@ -805,22 +798,6 @@
     } catch {
       if (providerVersionGenerations.get(profile.id) === generation) {
         delete providerVersions[profile.id];
-      }
-    }
-  }
-
-  async function loadProviderAuthStatus(profile: HarnessProfile) {
-    if (!profile.authCommand || !profile.authArgs) return;
-    const generation = (providerAuthGenerations.get(profile.id) ?? 0) + 1;
-    providerAuthGenerations.set(profile.id, generation);
-    try {
-      const authenticated = await getProviderAuthStatus(profile.authCommand, profile.authArgs);
-      if (providerAuthGenerations.get(profile.id) !== generation) return;
-      if (authenticated === null) delete providerAuthStatuses[profile.id];
-      else providerAuthStatuses[profile.id] = authenticated;
-    } catch {
-      if (providerAuthGenerations.get(profile.id) === generation) {
-        delete providerAuthStatuses[profile.id];
       }
     }
   }
@@ -1052,7 +1029,6 @@
         baseProfiles={officialProfiles}
         catalogs={providerCatalogs}
         {providerVersions}
-        {providerAuthStatuses}
         {permissionMode}
         {reducedMotion}
         {setPreference}
