@@ -68,13 +68,7 @@ export class SessionUpdateHandler {
     update: (ToolCall | ToolCallUpdate) & { sessionUpdate: "tool_call" | "tool_call_update" },
   ) {
     const existing = thread.tools.find((tool) => tool.id === update.toolCallId);
-    const content = update.content?.map(toolContentText).filter(Boolean).join("\n");
-    const rawOutput = jsonValueSchema.safeParse(update.rawOutput).data;
-    const rawInput = jsonValueSchema.safeParse(update.rawInput).data;
-    const detail =
-      content ||
-      (rawOutput === undefined ? undefined : formattedValue(rawOutput)) ||
-      (rawInput === undefined ? undefined : formattedValue(rawInput));
+    const detail = toolDetail(update);
     const locations = update.locations?.map((location) => location.path) ?? [];
     const next: ToolActivity = {
       id: update.toolCallId,
@@ -117,4 +111,15 @@ function contentText(content: ContentBlock) {
 function toolContentText(content: NonNullable<ToolCallUpdate["content"]>[number]) {
   if (content.type !== "content") return "";
   return contentText(content.content);
+}
+
+function toolDetail(update: ToolCall | ToolCallUpdate) {
+  const content = update.content?.map(toolContentText).filter(Boolean).join("\n");
+  const rawOutput = jsonValueSchema.safeParse(update.rawOutput).data;
+  const rawInput = jsonValueSchema.safeParse(update.rawInput).data;
+  return (
+    content ||
+    (rawOutput === undefined ? undefined : formattedValue(rawOutput)) ||
+    (rawInput === undefined ? undefined : formattedValue(rawInput))
+  );
 }

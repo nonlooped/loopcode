@@ -67,6 +67,9 @@ export default defineConfig({
       typeAware: true,
       typeCheck: true,
     },
+    rules: {
+      complexity: "error",
+    },
   },
   fmt: {
     ignorePatterns,

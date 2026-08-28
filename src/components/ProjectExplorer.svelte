@@ -76,6 +76,7 @@
   let tree = $state<HTMLUListElement>();
   let focusedPath = $state<string | null>(null);
   let view = $state<'files' | 'changes'>('files');
+  const verticalTreeKeys = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End']);
 
   onMount(() => {
     let disposed = false;
@@ -150,13 +151,9 @@
     if (!current || !tree) return;
     const items = Array.from(tree.querySelectorAll<HTMLButtonElement>('[role="treeitem"]'));
     const index = items.indexOf(current);
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+    if (verticalTreeKeys.has(event.key)) {
       event.preventDefault();
-      focusTreeItem(event.key === 'Home'
-        ? items[0]
-        : event.key === 'End'
-          ? items.at(-1)
-          : items[index + (event.key === 'ArrowDown' ? 1 : -1)]);
+      focusTreeItem(verticalTreeItem(event.key, items, index));
       return;
     }
     if (event.key === 'ArrowRight' && current.hasAttribute('aria-expanded')) {
@@ -175,6 +172,12 @@
         focusTreeItem(parent);
       }
     }
+  }
+
+  function verticalTreeItem(key: string, items: HTMLButtonElement[], index: number) {
+    if (key === 'Home') return items[0];
+    if (key === 'End') return items.at(-1);
+    return items[index + (key === 'ArrowDown' ? 1 : -1)];
   }
 
   function setView(value: string) {
