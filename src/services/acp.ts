@@ -6,6 +6,7 @@ import type {
   AcpErrorDetails,
   ConnectRequest,
   ConnectionStatus,
+  PermissionFileChange,
   PermissionMode,
   PermissionRequest,
   QuestionAnswer,
@@ -630,13 +631,67 @@ function permissionFromAcp(
       required: true,
     };
   }
+  const fileChanges = fileChangesFromMeta(params._meta);
+  const planMarkdown = planFromInput(rawInput);
   return {
     requestId,
     type: "permission",
-    title: params.toolCall.title ?? "Allow the harness to continue?",
-    detail,
+    title: permissionTitle(params, fileChanges),
+    detail: planMarkdown ?? (fileChanges ? "" : detail),
     options,
+    fileChanges,
+    planMarkdown,
   };
+}
+
+function permissionTitle(
+  params: acp.RequestPermissionRequest,
+  fileChanges: PermissionFileChange[] | undefined,
+) {
+  if (params.toolCall.title) return params.toolCall.title;
+  if (!fileChanges?.length) return "Allow the harness to continue?";
+  const [first] = fileChanges;
+  const name = first.path.split(/[/\\]/).pop() || first.path;
+  return fileChanges.length === 1
+    ? `Apply changes to ${name}?`
+    : `Apply ${fileChanges.length} file changes?`;
+}
+
+/**
+ * Codex sends edit approvals with an empty tool call and the real change under `_meta`, so
+ * without this the prompt would ask to approve a write it never describes.
+ */
+const codexFileChangeSchema = z.object({
+  codex: z.object({
+    params: z.object({
+      changes: z
+        .array(
+          z.object({
+            path: z.string().min(1),
+            diff: z.string().optional(),
+            kind: z.object({ type: z.enum(["add", "update", "delete"]) }).optional(),
+          }),
+        )
+        .optional(),
+    }),
+  }),
+});
+
+function fileChangesFromMeta(meta: unknown): PermissionFileChange[] | undefined {
+  const changes = codexFileChangeSchema.safeParse(meta).data?.codex.params.changes;
+  if (!changes?.length) return undefined;
+  const fileChanges = changes.map((change) => ({
+    path: change.path,
+    kind: change.kind?.type ?? "update",
+    diff: change.diff ?? "",
+  }));
+  return fileChanges.some((change) => change.diff) ? fileChanges : undefined;
+}
+
+const planInputSchema = z.object({ plan: z.string().min(1) });
+
+function planFromInput(rawInput: JsonValue) {
+  return planInputSchema.safeParse(rawInput).data?.plan;
 }
 
 function questionsFromElicitation(params: acp.CreateElicitationRequest): QuestionSpec[] {

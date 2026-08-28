@@ -106,5 +106,52 @@ void test("reads model and reasoning selectors from typed ACP config options", (
     fastModeEnabled: true,
     fastModeValueType: "boolean",
     fastModeDescription: "Faster responses at a higher cost.",
+    modeConfigId: undefined,
+    modes: [],
+    selectedModeId: undefined,
+    collaborationConfigId: undefined,
+    collaborationModes: [],
+    selectedCollaborationModeId: undefined,
   });
+});
+
+void test("reads Codex mode and collaboration mode selectors", () => {
+  const state = readModelState({
+    configOptions: [
+      {
+        id: "mode",
+        name: "Mode",
+        category: "mode",
+        type: "select",
+        currentValue: "agent",
+        options: [
+          { value: "read-only", name: "Read-only", description: "Requires approval to edit." },
+          { value: "agent", name: "Agent", description: "Read and edit files." },
+        ],
+      },
+      {
+        id: "collaboration_mode",
+        name: "Collaboration mode",
+        category: "collaboration_mode",
+        type: "select",
+        currentValue: "plan",
+        options: [
+          { value: "default", name: "Default" },
+          { value: "plan", name: "Plan", description: "Plan before making changes" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(state.modeConfigId, "mode");
+  assert.equal(state.selectedModeId, "agent");
+  assert.deepEqual(
+    state.modes?.map(({ id }) => id),
+    ["read-only", "agent"],
+  );
+  assert.equal(state.collaborationConfigId, "collaboration_mode");
+  assert.equal(state.selectedCollaborationModeId, "plan");
+  // The mode selectors must not be mistaken for the model picker.
+  assert.equal(state.modelConfigId, undefined);
+  assert.deepEqual(state.models, []);
 });

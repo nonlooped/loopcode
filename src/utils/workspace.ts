@@ -57,6 +57,34 @@ const toolSchema = z.object({
   kind: nonEmptyString,
   status: nonEmptyString,
   detail: z.string().optional(),
+  diffs: z
+    .array(
+      z.object({
+        path: z.string(),
+        oldText: z.string().nullable(),
+        newText: z.string().nullable(),
+        kind: z.enum(["add", "update", "delete"]).optional(),
+      }),
+    )
+    .optional()
+    .catch(undefined),
+  terminal: z
+    .object({
+      terminalId: z.string(),
+      output: z.string(),
+      exitCode: z.number().nullable().optional(),
+    })
+    .optional()
+    .catch(undefined),
+  plan: z
+    .array(
+      z.object({
+        content: nonEmptyString,
+        status: z.enum(["pending", "in_progress", "completed"]).catch("pending"),
+      }),
+    )
+    .optional()
+    .catch(undefined),
   locations: z.array(z.string()).catch([]),
   createdAt: z.number().finite(),
 });
@@ -109,7 +137,13 @@ export function workspaceSnapshot(
         content: message.content?.map(copyPromptPart),
         images: message.images?.map((image) => ({ ...image })),
       })),
-      tools: thread.tools.map((tool) => ({ ...tool, locations: [...tool.locations] })),
+      tools: thread.tools.map((tool) => ({
+        ...tool,
+        diffs: tool.diffs?.map((diff) => ({ ...diff })),
+        terminal: tool.terminal ? { ...tool.terminal } : undefined,
+        plan: tool.plan?.map((entry) => ({ ...entry })),
+        locations: [...tool.locations],
+      })),
       draft: thread.draft,
       draftReferences: thread.draftReferences.map((reference) => ({ ...reference })),
       updatedAt: thread.updatedAt,

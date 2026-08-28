@@ -694,6 +694,30 @@ export class ProviderRuntime {
     }
   }
 
+  async selectSessionOption(thread: ThreadState, select: SessionSelectId, valueId: string) {
+    const spec = sessionSelects[select];
+    const provider = thread.providers[thread.profileId];
+    const configId = spec.configId(provider);
+    if (!configId || spec.selected(provider) === valueId) return;
+    if (!spec.options(provider).some((option) => option.id === valueId)) return;
+    const previous = spec.selected(provider);
+    spec.assign(provider, valueId);
+    provider.error = undefined;
+    if (provider.connectionStatus !== "ready" || provider.turnStatus !== "idle") return;
+    try {
+      const connection = this.connection(thread.id, thread.profileId);
+      if (!connection) {
+        throw new Error(`${this.#profileById(thread.profileId).label} is not connected`);
+      }
+      applyProviderConfigState(provider, await connection.setConfigOption(configId, valueId));
+    } catch (error) {
+      spec.assign(provider, previous);
+      const message = error instanceof Error ? error.message : String(error);
+      provider.error = message;
+      addMessage(thread, "error", `Could not change ${spec.label}: ${message}`);
+    }
+  }
+
   async removeThread(threadId: string) {
     this.#threads = this.#threads.filter((thread) => thread.id !== threadId);
     this.#turnTokens.delete(threadId);
@@ -982,4 +1006,45 @@ export function applyProviderConfigState(provider: ProviderSessionState, state: 
   provider.fastModeEnabled = state.fastModeEnabled;
   provider.fastModeValueType = state.fastModeValueType;
   provider.fastModeDescription = state.fastModeDescription;
+  applySessionSelects(provider, state);
 }
+
+function applySessionSelects(provider: ProviderSessionState, state: AcpModelState) {
+  if (state.modeConfigId) {
+    provider.modeConfigId = state.modeConfigId;
+    provider.modes = state.modes;
+    provider.selectedModeId = state.selectedModeId;
+  }
+  if (state.collaborationConfigId) {
+    provider.collaborationConfigId = state.collaborationConfigId;
+    provider.collaborationModes = state.collaborationModes;
+    provider.selectedCollaborationModeId = state.selectedCollaborationModeId;
+  }
+}
+
+/**
+ * Codex exposes its sandbox preset and plan mode as plain select config options, so both
+ * share one apply path instead of repeating the optimistic-update-and-roll-back dance.
+ */
+export const sessionSelects = {
+  mode: {
+    label: "mode",
+    configId: (provider: ProviderSessionState) => provider.modeConfigId,
+    options: (provider: ProviderSessionState) => provider.modes ?? [],
+    selected: (provider: ProviderSessionState) => provider.selectedModeId,
+    assign: (provider: ProviderSessionState, value: string | undefined) => {
+      provider.selectedModeId = value;
+    },
+  },
+  collaboration: {
+    label: "collaboration mode",
+    configId: (provider: ProviderSessionState) => provider.collaborationConfigId,
+    options: (provider: ProviderSessionState) => provider.collaborationModes ?? [],
+    selected: (provider: ProviderSessionState) => provider.selectedCollaborationModeId,
+    assign: (provider: ProviderSessionState, value: string | undefined) => {
+      provider.selectedCollaborationModeId = value;
+    },
+  },
+} as const;
+
+export type SessionSelectId = keyof typeof sessionSelects;

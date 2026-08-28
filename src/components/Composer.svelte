@@ -5,6 +5,7 @@
     IconPaperclip,
     IconPlayerStop,
     IconPlugConnected,
+    IconSlash,
     IconSparkles,
     IconX,
   } from '@tabler/icons-svelte';
@@ -12,7 +13,9 @@
   import ContextMenu from './ContextMenu.svelte';
   import GitControls from './GitControls.svelte';
   import ImagePreview from './ImagePreview.svelte';
+  import ContextMeter from './ContextMeter.svelte';
   import ModelPicker from './ModelPicker.svelte';
+  import ModePicker from './ModePicker.svelte';
   import MotionFly from './motion/MotionFly.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
   import ReasoningPicker from './ReasoningPicker.svelte';
@@ -26,8 +29,10 @@
     HarnessProfile,
     ModelOption,
     ProviderModelCatalog,
+    SlashCommand,
     ThreadState,
   } from '../types';
+  import type { SessionSelectId } from '../services/provider-runtime';
   import type { SendShortcut } from '../utils/app-settings';
   import { copyImage, saveImage } from '../utils/clipboard';
   import { composerLayoutKeyframes, usesExpandedComposerLayout, type LayoutBox } from '../utils/composer-layout';
@@ -71,6 +76,7 @@
     selectModel: (profileId: string, model: ModelOption) => void;
     selectReasoning: (reasoningId: string) => void;
     selectFastMode: (enabled: boolean) => void;
+    selectSessionOption: (option: SessionSelectId, valueId: string) => void;
     activateProvider: (profileId: string) => void;
     retryDiscovery: (profileId: string) => void;
     switchGitBranch: (branch: string) => Promise<void>;
@@ -80,6 +86,7 @@
   const props: Props = $props();
   let modelPickerOpen = $state(false);
   let reasoningPickerOpen = $state(false);
+  let modePickerOpen = $state(false);
   let expanded = $state(false);
   let composerElement = $state<HTMLElement>();
   let attachButton = $state<HTMLButtonElement>();
@@ -89,7 +96,7 @@
   let imagePreview = $state<{ src: string; name: string }>();
   let completionEntries = $state<ComposerCompletionEntry[]>([]);
   let completionStatus = $state<'loading' | 'ready' | 'error'>('loading');
-  let completionPrefix = $state<'$' | '@'>();
+  let completionPrefix = $state<'$' | '@' | '/'>();
   let completionQuery = $state('');
   let completionIndex = $state(0);
   let completionRange: Range | undefined;
@@ -108,8 +115,21 @@
       ? `${profile.label} does not support image prompts.`
       : '',
   );
+  const commandResults = $derived.by(() => {
+    if (completionPrefix !== '/') return [];
+    const query = completionQuery;
+    return (provider.commands ?? [])
+      .flatMap((command) => {
+        const score = query ? fuzzyScore(`${command.name} ${command.description}`, query) : 0;
+        return score === undefined ? [] : [{ command, score }];
+      })
+      .sort((left, right) => right.score - left.score || left.command.name.localeCompare(right.command.name))
+      .slice(0, 40)
+      .map(({ command }) => command);
+  });
   const completionResults = $derived.by(() => {
     const prefix = completionPrefix;
+    if (prefix === '/') return commandResults;
     if (!prefix || completionStatus !== 'ready') return [];
     const query = completionQuery;
     return completionEntries
@@ -282,21 +302,55 @@
       return;
     }
     const text = node.textContent?.slice(0, selection?.anchorOffset ?? 0) ?? '';
-    const match = /(?:^|\s)([$@])([^\s$@]*)$/.exec(text);
+    const command = commandCompletion(node, text);
+    const match = command ?? /(?:^|\s)([$@])([^\s$@]*)$/.exec(text);
     if (!match) {
       closeCompletion();
       return;
     }
-    if (!completionPrefix && completionStatus !== 'ready') {
+    if (!command && !completionPrefix && completionStatus !== 'ready') {
       void loadCompletionEntries(props.thread.cwd);
     }
-    completionPrefix = match[1] === '$' ? '$' : '@';
+    completionPrefix = match[1] === '$' ? '$' : match[1] === '/' ? '/' : '@';
     completionQuery = match[2];
     completionIndex = 0;
     const end = selection?.anchorOffset ?? 0;
     completionRange = document.createRange();
     completionRange.setStart(node, end - completionQuery.length - 1);
     completionRange.setEnd(node, end);
+  }
+
+  /** Codex only reads a leading `/name`, so the command menu never opens mid-prompt. */
+  function commandCompletion(node: Node, text: string) {
+    if ((provider.commands ?? []).length === 0) return undefined;
+    if (promptEditor?.firstChild !== node) return undefined;
+    return /^\/([^\s/]*)$/.exec(text);
+  }
+
+  function chooseCommand(command: SlashCommand) {
+    const range = completionRange?.cloneRange();
+    if (!promptEditor || !range || !promptEditor.contains(range.commonAncestorContainer)) return;
+    range.deleteContents();
+    const text = document.createTextNode(`/${command.name} `);
+    range.insertNode(text);
+    range.setStart(text, text.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    closeCompletion();
+    syncDraftFromEditor();
+    resizePromptEditor();
+    promptEditor.focus();
+  }
+
+  function isCommand(entry: ComposerCompletionEntry | SlashCommand): entry is SlashCommand {
+    return !('kind' in entry);
+  }
+
+  function applyCompletion(entry: ComposerCompletionEntry | SlashCommand) {
+    if (isCommand(entry)) chooseCommand(entry);
+    else chooseCompletion(entry);
   }
 
   function referenceAvailable(reference: ComposerReference) {
@@ -485,7 +539,7 @@
         const entry = completionResults[completionIndex];
         if (entry) {
           event.preventDefault();
-          chooseCompletion(entry);
+          applyCompletion(entry);
           return;
         }
         closeCompletion();
@@ -544,7 +598,7 @@
 <MotionFly y={props.reducedMotion ? 0 : 4} duration={props.reducedMotion ? 0 : 180}>
   <section
     class="composer-wrap relative z-[3] shrink-0 bg-transparent px-4 pb-3 pt-2 [.thread-view:not(.empty)_&]:pt-[22px] [.thread-view:not(.empty)_&]:before:pointer-events-none [.thread-view:not(.empty)_&]:before:absolute [.thread-view:not(.empty)_&]:before:inset-x-0 [.thread-view:not(.empty)_&]:before:top-0 [.thread-view:not(.empty)_&]:before:h-[22px] [.thread-view:not(.empty)_&]:before:bg-gradient-to-b [.thread-view:not(.empty)_&]:before:from-transparent [.thread-view:not(.empty)_&]:before:to-shell [.thread-view:not(.empty)_&]:before:content-['']"
-    class:z-[15]={modelPickerOpen || reasoningPickerOpen}
+    class:z-[15]={modelPickerOpen || reasoningPickerOpen || modePickerOpen}
   >
   <div
     bind:this={composerElement}
@@ -621,15 +675,15 @@
       onblur={() => { window.setTimeout(closeCompletion, 100); }}
     ></div>
     {#if completionPrefix}
-      <div id="composer-autocomplete" class="absolute bottom-[calc(100%+6px)] left-[38px] z-20 max-h-[min(280px,42vh)] w-[min(380px,calc(100%-52px))] overflow-y-auto rounded-overlay border border-line-strong bg-floating p-1 shadow-overlay backdrop-blur-overlay" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : 'Workspace files'}>
-        {#if completionStatus === 'loading'}
+      <div id="composer-autocomplete" class="absolute bottom-[calc(100%+6px)] left-[38px] z-20 max-h-[min(280px,42vh)] w-[min(380px,calc(100%-52px))] overflow-y-auto rounded-overlay border border-line-strong bg-floating p-1 shadow-overlay backdrop-blur-overlay" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : completionPrefix === '/' ? 'Commands' : 'Workspace files'}>
+        {#if completionPrefix !== '/' && completionStatus === 'loading'}
           <p class="m-0 p-[9px] text-[11px] text-muted">Loading…</p>
-        {:else if completionStatus === 'error'}
+        {:else if completionPrefix !== '/' && completionStatus === 'error'}
           <p class="m-0 p-[9px] text-[11px] text-muted">Autocomplete unavailable.</p>
         {:else if completionResults.length === 0}
           <p class="m-0 p-[9px] text-[11px] text-muted">No matches.</p>
         {:else}
-          {#each completionResults as entry, index (`${entry.kind}-${entry.path}`)}
+          {#each completionResults as entry, index (isCommand(entry) ? `/${entry.name}` : `${entry.kind}-${entry.path}`)}
             <button
               id={`composer-completion-${index}`}
               type="button"
@@ -640,19 +694,27 @@
               onpointerenter={() => { completionIndex = index; }}
               onpointerdown={(event) => {
                 event.preventDefault();
-                chooseCompletion(entry);
+                applyCompletion(entry);
               }}
             >
-              {#if entry.kind === 'skill'}
-                <span class="grid size-4 shrink-0 place-items-center text-muted"><IconSparkles size={14} stroke={1.55} /></span>
+              {#if isCommand(entry)}
+                <span class="grid size-4 shrink-0 place-items-center text-muted"><IconSlash size={14} stroke={1.55} /></span>
+                <span class="flex min-w-0 items-baseline gap-2">
+                  <strong class="min-w-0 max-w-[55%] shrink grow basis-auto overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold">/{entry.name}{#if entry.hint}<span class="ml-1 font-normal text-faint">{entry.hint}</span>{/if}</strong>
+                  <small class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-snug text-muted">{entry.description}</small>
+                </span>
               {:else}
-                {@const icon = entry.kind === 'folder' ? materialFolderIcon(entry.name, false) : materialFileIcon(entry.name)}
-                {#if icon}<img class="size-4 shrink-0 opacity-[0.64] [filter:var(--provider-filter)]" src={icon} alt="" />{/if}
+                {#if entry.kind === 'skill'}
+                  <span class="grid size-4 shrink-0 place-items-center text-muted"><IconSparkles size={14} stroke={1.55} /></span>
+                {:else}
+                  {@const icon = entry.kind === 'folder' ? materialFolderIcon(entry.name, false) : materialFileIcon(entry.name)}
+                  {#if icon}<img class="size-4 shrink-0 opacity-[0.64] [filter:var(--provider-filter)]" src={icon} alt="" />{/if}
+                {/if}
+                <span class="flex min-w-0 items-baseline gap-2">
+                  <strong class="min-w-0 max-w-[55%] shrink grow basis-auto overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold">{entry.name}</strong>
+                  <small class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-snug text-muted">{entry.description ?? entry.relativePath}</small>
+                </span>
               {/if}
-              <span class="flex min-w-0 items-baseline gap-2">
-                <strong class="min-w-0 max-w-[55%] shrink grow basis-auto overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold">{entry.name}</strong>
-                <small class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-snug text-muted">{entry.description ?? entry.relativePath}</small>
-              </span>
             </button>
           {/each}
         {/if}
@@ -676,7 +738,7 @@
                 profiles={props.selectableProfiles}
                 label={activeModelName()}
                 open={modelPickerOpen}
-                setOpen={(open) => { reasoningPickerOpen = false; modelPickerOpen = open; }}
+                setOpen={(open) => { reasoningPickerOpen = false; modePickerOpen = false; modelPickerOpen = open; }}
                 choose={chooseModel}
                 retryDiscovery={props.retryDiscovery}
               />
@@ -691,9 +753,17 @@
           <ReasoningPicker
             {provider}
             open={reasoningPickerOpen}
-            setOpen={(open) => { modelPickerOpen = false; reasoningPickerOpen = open; }}
+            setOpen={(open) => { modelPickerOpen = false; modePickerOpen = false; reasoningPickerOpen = open; }}
             select={props.selectReasoning}
             selectFastMode={props.selectFastMode}
+          />
+        {/if}
+        {#if (provider.modes?.length ?? 0) > 1 || (provider.collaborationModes?.length ?? 0) > 1}
+          <ModePicker
+            {provider}
+            open={modePickerOpen}
+            setOpen={(open) => { modelPickerOpen = false; reasoningPickerOpen = false; modePickerOpen = open; }}
+            select={props.selectSessionOption}
           />
         {/if}
       </div>
@@ -724,6 +794,7 @@
         />
       {/if}
     </div>
+    <ContextMeter {provider} />
   </div>
   </section>
 </MotionFly>

@@ -46,12 +46,37 @@ export interface TimelineMessage {
   createdAt: number;
 }
 
+export type ToolDiffKind = "add" | "update" | "delete";
+
+export interface ToolDiff {
+  path: string;
+  oldText: string | null;
+  newText: string | null;
+  kind?: ToolDiffKind;
+}
+
+export interface ToolTerminal {
+  terminalId: string;
+  output: string;
+  exitCode?: number | null;
+}
+
+export type PlanEntryStatus = "pending" | "in_progress" | "completed";
+
+export interface PlanEntry {
+  content: string;
+  status: PlanEntryStatus;
+}
+
 export interface ToolActivity {
   id: string;
   title: string;
   kind: string;
   status: string;
   detail?: string;
+  diffs?: ToolDiff[];
+  terminal?: ToolTerminal;
+  plan?: PlanEntry[];
   locations: string[];
   createdAt: number;
 }
@@ -132,6 +157,12 @@ export interface FastModeOption {
   description?: string;
 }
 
+export interface SlashCommand {
+  name: string;
+  description: string;
+  hint?: string;
+}
+
 export interface ProviderSessionState {
   connectionStatus: ConnectionStatus;
   turnStatus: TurnStatus;
@@ -150,6 +181,15 @@ export interface ProviderSessionState {
   fastModeEnabled?: boolean;
   fastModeValueType?: FastModeValueType;
   fastModeDescription?: string;
+  modeConfigId?: string;
+  modes?: ModelOption[];
+  selectedModeId?: string;
+  collaborationConfigId?: string;
+  collaborationModes?: ModelOption[];
+  selectedCollaborationModeId?: string;
+  contextUsed?: number;
+  contextSize?: number;
+  commands?: SlashCommand[];
   error?: string;
   errorDetails?: AcpErrorDetails;
 }
@@ -197,8 +237,18 @@ interface InteractionRequest {
   options: PermissionOption[];
 }
 
+export interface PermissionFileChange {
+  path: string;
+  kind: "add" | "update" | "delete";
+  diff: string;
+}
+
 export interface PermissionDecisionRequest extends InteractionRequest {
   type: "permission";
+  /** Populated for edit approvals so the prompt shows the change rather than a raw payload. */
+  fileChanges?: PermissionFileChange[];
+  /** Populated for plan approvals, which carry the proposed plan as Markdown. */
+  planMarkdown?: string;
 }
 
 export interface QuestionRequest extends InteractionRequest {

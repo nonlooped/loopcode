@@ -420,6 +420,7 @@
                 selectModel={(profileId, model) => { void selectModel(profileId, model); }}
                 selectReasoning={(reasoningId) => { void providers.selectReasoning(selectedThread, reasoningId); }}
                 selectFastMode={(enabled) => { void providers.selectFastMode(selectedThread, enabled); }}
+                selectSessionOption={(option, valueId) => { void providers.selectSessionOption(selectedThread, option, valueId); }}
                 {activateProvider}
                 retryDiscovery={(profileId) => {
                   const profile = profiles.find((candidate) => candidate.id === profileId);

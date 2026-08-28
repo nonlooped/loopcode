@@ -1,10 +1,25 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { IconAlertTriangle, IconChevronDown, IconChevronRight, IconTool } from '@tabler/icons-svelte';
+  import {
+    IconAlertTriangle,
+    IconArrowRight,
+    IconBulb,
+    IconChevronDown,
+    IconChevronRight,
+    IconFileText,
+    IconListCheck,
+    IconPencil,
+    IconSearch,
+    IconTerminal2,
+    IconTool,
+    IconTrash,
+    IconWorld,
+  } from '@tabler/icons-svelte';
   import { Collapsible } from 'bits-ui';
 
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import ImagePreview from './ImagePreview.svelte';
+  import ToolContent from './ToolContent.svelte';
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
   import MotionBreathe from './motion/MotionBreathe.svelte';
   import MotionEnter from './motion/MotionEnter.svelte';
@@ -236,6 +251,22 @@
     return status.replaceAll('_', ' ');
   }
 
+  const toolIcons: Record<string, typeof IconTool> = {
+    delete: IconTrash,
+    edit: IconPencil,
+    execute: IconTerminal2,
+    fetch: IconWorld,
+    move: IconArrowRight,
+    read: IconFileText,
+    search: IconSearch,
+    think: IconBulb,
+  };
+
+  function toolIcon(tool: ToolActivity) {
+    if (tool.plan) return IconListCheck;
+    return toolIcons[tool.kind] ?? IconTool;
+  }
+
   function messageMenuItems(message: TimelineMessage): ContextMenuItem[] {
     return [
       {
@@ -377,14 +408,15 @@
                     >
                       <MotionEnter y={toolFly.y} duration={toolFly.duration}>
                         <Collapsible.Trigger class={toolTriggerClass}>
-                          <span class="grid size-6 shrink-0 place-items-center border-0 text-faint"><IconTool size={16} stroke={1.55} /></span>
+                          {@const ToolIcon = toolIcon(tool)}
+                          <span class="grid size-6 shrink-0 place-items-center border-0 text-faint"><ToolIcon size={16} stroke={1.55} /></span>
                           <span class="flex min-w-0 items-baseline gap-2">
                             <strong class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-medium text-text-soft">{tool.title}</strong>
                             <small class="shrink-0 text-[11px] capitalize text-faint">{toolStatus(tool.status)}</small>
                           </span>
                         </Collapsible.Trigger>
                         <Collapsible.Content class={collapsibleContentClass}>
-                          {#if tool.detail}<pre class="mx-[5px] mb-[5px] ml-[27px] max-h-[260px] overflow-auto rounded-[5px] border border-line bg-recessed p-[7px_8px] font-mono text-[11px] leading-snug whitespace-pre-wrap break-anywhere text-muted">{tool.detail}</pre>{/if}
+                          <ToolContent {tool} {openFile} />
                           {#if tool.locations.length > 0}
                             <div class="mx-[5px] mb-[5px] ml-[27px] grid gap-1 font-mono text-[11px] text-muted">
                               {#each tool.locations as location (location)}

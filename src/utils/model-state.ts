@@ -14,6 +14,12 @@ export interface AcpModelState {
   reasoningConfigId?: string;
   reasoningOptions: ModelOption[];
   selectedReasoningId?: string;
+  modeConfigId?: string;
+  modes?: ModelOption[];
+  selectedModeId?: string;
+  collaborationConfigId?: string;
+  collaborationModes?: ModelOption[];
+  selectedCollaborationModeId?: string;
   fastModeConfigId?: string;
   fastModeEnabled?: boolean;
   fastModeValueType?: FastModeValueType;
@@ -31,6 +37,8 @@ export function readModelState(value: ConfigState): AcpModelState {
   const reasoningConfig =
     configOptions.find(isExplicitReasoningConfig) ?? configOptions.find(isReasoningConfig);
   const fastModeConfig = configOptions.find(isFastModeConfig);
+  const modeConfig = configOptions.find(isModeConfig);
+  const collaborationConfig = configOptions.find(isCollaborationModeConfig);
 
   return {
     modelConfigId: modelConfig?.id,
@@ -43,7 +51,26 @@ export function readModelState(value: ConfigState): AcpModelState {
     fastModeEnabled: configBooleanValue(fastModeConfig),
     fastModeValueType: configValueType(fastModeConfig),
     fastModeDescription: fastModeConfig?.description ?? undefined,
+    modeConfigId: modeConfig?.id,
+    modes: configChoices(modeConfig),
+    selectedModeId: selectedConfigValue(modeConfig),
+    collaborationConfigId: collaborationConfig?.id,
+    collaborationModes: configChoices(collaborationConfig),
+    selectedCollaborationModeId: selectedConfigValue(collaborationConfig),
   };
+}
+
+/** Codex's approval and sandbox preset: read-only, workspace write, or full access. */
+function isModeConfig(option: SessionConfigOption) {
+  if (option.type !== "select") return false;
+  return option.category === "mode" || option.id.toLowerCase() === "mode";
+}
+
+/** Codex's plan-versus-default collaboration preset for subsequent turns. */
+function isCollaborationModeConfig(option: SessionConfigOption) {
+  if (option.type !== "select") return false;
+  const key = `${option.id} ${option.category ?? ""}`.toLowerCase().replaceAll("-", "_");
+  return key.includes("collaboration_mode");
 }
 
 function findModelConfig(configOptions: SessionConfigOption[]) {
