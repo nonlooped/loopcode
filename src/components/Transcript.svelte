@@ -71,7 +71,6 @@
   let toolOpen = $state<Record<string, boolean>>({});
   let expandedPrompts = $state<Record<string, boolean>>({});
   let overflowingPrompts = $state<Record<string, boolean>>({});
-  // ponytail: DOM nodes kept out of deep reactivity; read at action time, not render time
   let messageBodies = $state.raw<Record<string, HTMLElement | undefined>>({});
   const entryMotion = $derived(animateEntries && !reducedMotion);
   const latestUserMessage = $derived(
@@ -249,10 +248,6 @@
     return `data:${image.mimeType};base64,${image.data}`;
   }
 
-  function toolStatus(status: string) {
-    return status.replaceAll('_', ' ');
-  }
-
   const toolIcons: Record<string, typeof IconTool> = {
     delete: IconTrash,
     edit: IconPencil,
@@ -263,11 +258,6 @@
     search: IconSearch,
     think: IconBulb,
   };
-
-  function toolIcon(tool: ToolActivity) {
-    if (tool.plan) return IconListCheck;
-    return toolIcons[tool.kind] ?? IconTool;
-  }
 
   function messageMenuItems(message: TimelineMessage): ContextMenuItem[] {
     return [
@@ -420,11 +410,11 @@
                     >
                       <MotionEnter y={toolFly.y} duration={toolFly.duration}>
                         <Collapsible.Trigger class={toolTriggerClass}>
-                          {@const ToolIcon = toolIcon(tool)}
+                          {@const ToolIcon = tool.plan ? IconListCheck : (toolIcons[tool.kind] ?? IconTool)}
                           <span class="grid size-6 shrink-0 place-items-center border-0 text-faint"><ToolIcon size={16} stroke={1.55} /></span>
                           <span class="flex min-w-0 items-baseline gap-2">
                             <strong class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-medium text-text-soft">{tool.title}</strong>
-                            <small class="shrink-0 text-[11px] capitalize text-faint">{toolStatus(tool.status)}</small>
+                            <small class="shrink-0 text-[11px] capitalize text-faint">{tool.status.replaceAll('_', ' ')}</small>
                           </span>
                         </Collapsible.Trigger>
                         <Collapsible.Content class={collapsibleContentClass}>
