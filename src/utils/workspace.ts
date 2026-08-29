@@ -9,7 +9,6 @@ import type {
   ToolActivity,
 } from "../types/index.ts";
 import type { JsonValue } from "./json.ts";
-import { copyPromptPart } from "./messages.ts";
 import { createThread } from "./threads.ts";
 
 export interface RestoredWorkspace {
@@ -176,30 +175,10 @@ export function workspaceSnapshot(
       title: thread.title,
       profileId: thread.profileId,
       cwd: thread.cwd,
-      messages: thread.messages.map((message) => ({
-        ...message,
-        content: message.content?.map(copyPromptPart),
-        images: message.images?.map((image) => ({ ...image })),
-      })),
-      tools: thread.tools.map((tool) => ({
-        ...tool,
-        diffs: tool.diffs?.map((diff) => ({ ...diff })),
-        terminal: tool.terminal ? { ...tool.terminal } : undefined,
-        plan: tool.plan?.map((entry) => ({ ...entry })),
-        media: tool.media?.map((image) => ({ ...image })),
-        subagent: tool.subagent
-          ? {
-              ...tool.subagent,
-              receiverThreadIds: tool.subagent.receiverThreadIds
-                ? [...tool.subagent.receiverThreadIds]
-                : undefined,
-            }
-          : undefined,
-        children: tool.children?.map((entry) => ({ ...entry })),
-        locations: [...tool.locations],
-      })),
+      messages: persistedCopy(thread.messages),
+      tools: persistedCopy(thread.tools),
       draft: thread.draft,
-      draftReferences: thread.draftReferences.map((reference) => ({ ...reference })),
+      draftReferences: persistedCopy(thread.draftReferences),
       updatedAt: thread.updatedAt,
       settled: thread.settled,
       projectId: thread.projectId ?? null,
@@ -208,6 +187,10 @@ export function workspaceSnapshot(
     })),
     projects: projects.map((project) => ({ ...project })),
   };
+}
+
+function persistedCopy<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 export function restoreWorkspace(
