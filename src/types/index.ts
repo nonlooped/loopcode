@@ -89,13 +89,11 @@ export interface RateLimitState {
   } | null;
 }
 
-export type ToolDiffKind = "add" | "update" | "delete";
-
 export interface ToolDiff {
   path: string;
   oldText: string | null;
   newText: string | null;
-  kind?: ToolDiffKind;
+  kind?: "add" | "update" | "delete";
 }
 
 export interface ToolTerminal {
@@ -103,11 +101,9 @@ export interface ToolTerminal {
   exitCode?: number | null;
 }
 
-export type PlanEntryStatus = "pending" | "in_progress" | "completed";
-
 export interface PlanEntry {
   content: string;
-  status: PlanEntryStatus;
+  status: "pending" | "in_progress" | "completed";
 }
 
 export interface ToolActivity {
@@ -127,7 +123,6 @@ export interface ToolActivity {
     threadId?: string;
     path?: string;
     activity?: string;
-    parentToolUseId?: string;
     senderThreadId?: string;
     receiverThreadIds?: string[];
   };

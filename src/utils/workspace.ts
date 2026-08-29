@@ -120,7 +120,6 @@ const toolSchema = z.object({
       threadId: z.string().optional(),
       path: z.string().optional(),
       activity: z.string().optional(),
-      parentToolUseId: z.string().optional(),
       senderThreadId: z.string().optional(),
       receiverThreadIds: z.array(z.string()).optional(),
     })

@@ -32,10 +32,6 @@ const terminalMetaSchema = z.object({
   terminal_exit: terminalExitSchema.optional(),
 });
 const diffMetaSchema = z.object({ kind: z.enum(["add", "update", "delete"]).optional() });
-const commandOutputSchema = z.object({
-  formatted_output: z.string().min(1).optional(),
-  exit_code: z.number().nullable().optional(),
-});
 const toolMetaSchema = z.object({
   contextCompaction: z
     .object({ version: z.literal(1) })
@@ -56,13 +52,10 @@ const toolMetaSchema = z.object({
     })
     .optional(),
   claudeCode: z
-    .object({
-      parentToolUseId: z.string().optional(),
-      subagent: z.literal(true).optional(),
-      toolName: z.string().optional(),
-    })
+    .object({ parentToolUseId: z.string().optional(), subagent: z.literal(true).optional() })
     .optional(),
 });
+
 /**
  * Hard caps on persisted per-tool-call state, which the provider otherwise grows unbounded.
  * The workspace file has a fixed 10 MB load limit (persistence.rs MAX_WORKSPACE_BYTES).
@@ -77,6 +70,10 @@ function truncateHead(text: string, maxLength: number): string {
   return `…(truncated, ${text.length - maxLength} chars omitted)…\n${text.slice(text.length - maxLength)}`;
 }
 
+const commandOutputSchema = z.object({
+  formatted_output: z.string().min(1).optional(),
+  exit_code: z.number().nullable().optional(),
+});
 const backgroundInputSchema = z.object({ run_in_background: z.literal(true) });
 const failureSchema = z.object({
   id: z.string().min(1),
@@ -87,6 +84,10 @@ const failureSchema = z.object({
   details: z.string().optional(),
   actions: z.array(z.enum(["retry", "login", "new_session"])),
 });
+const rateLimitWindowSchema = z
+  .object({ usedPercent: z.number(), resetsAt: z.number().nullable().optional() })
+  .nullable()
+  .optional();
 const goalSchema = z.object({
   objective: z.string(),
   status: z.enum(["active", "paused", "blocked", "limited", "complete"]),
@@ -111,16 +112,11 @@ const metadataSchema = z.object({
       z.object({
         limitId: z.string().nullable().optional(),
         limitName: z.string().nullable().optional(),
-        primary: z
-          .object({ usedPercent: z.number(), resetsAt: z.number().nullable().optional() })
-          .nullable()
-          .optional(),
+        primary: rateLimitWindowSchema,
       }),
     )
     .optional(),
 });
-
-type TerminalMeta = z.infer<typeof terminalMetaSchema> | undefined;
 
 export class SessionUpdateHandler {
   #streamIds = new Map<string, { agent: string; thought: string }>();
@@ -153,78 +149,69 @@ export class SessionUpdateHandler {
     modelState?: AcpModelState,
   ) {
     this.handleMetadata(thread, profileId, update._meta);
-    if (this.#handleTranscriptUpdate(thread, profileId, update)) return;
-    this.#handleStateUpdate(thread, profileId, update, modelState);
+    const provider = thread.providers[profileId];
+    switch (update.sessionUpdate) {
+      case "agent_message_chunk":
+      case "agent_thought_chunk":
+        this.#appendChunk(thread, profileId, update);
+        return;
+      case "tool_call":
+      case "tool_call_update":
+        this.#upsertTool(thread, profileId, update);
+        return;
+      case "config_option_update":
+        if (modelState && provider) this.#applyConfig(provider, modelState);
+        return;
+      case "available_commands_update":
+        if (provider) provider.commands = slashCommands(update.availableCommands);
+        return;
+      case "usage_update":
+        if (provider && update.size > 0) {
+          provider.contextUsed = update.used;
+          provider.contextSize = update.size;
+        }
+        return;
+      case "plan":
+        this.#upsertPlan(thread, profileId, planEntries(update.entries));
+        return;
+      case "plan_update":
+        this.#handlePlanUpdate(thread, profileId, update);
+        return;
+      case "plan_removed":
+        thread.tools = thread.tools.filter((tool) => tool.id !== `plan-${update.planId}`);
+        return;
+      case "compaction_update":
+        this.#upsertCompaction(thread, update);
+        return;
+      case "compaction_summary_chunk":
+        this.#appendCompactionSummary(thread, update.compactionId, contentText(update.content));
+    }
   }
 
-  #handleTranscriptUpdate(thread: ThreadState, profileId: string, update: SessionUpdate) {
-    if (
-      update.sessionUpdate !== "agent_message_chunk" &&
-      update.sessionUpdate !== "agent_thought_chunk" &&
-      update.sessionUpdate !== "tool_call" &&
-      update.sessionUpdate !== "tool_call_update"
-    )
-      return false;
-    if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") {
-      this.#upsertTool(thread, profileId, update);
-      return true;
-    }
+  /** Claude Code streams a subagent's own messages under the parent tool call's id. */
+  #appendChunk(
+    thread: ThreadState,
+    profileId: string,
+    update: Extract<
+      SessionUpdate,
+      { sessionUpdate: "agent_message_chunk" | "agent_thought_chunk" }
+    >,
+  ) {
     const role = update.sessionUpdate === "agent_message_chunk" ? "agent" : "thought";
     const streams =
       this.#streamIds.get(connectionKey(thread.id, profileId)) ??
       this.#resetStreams(thread.id, profileId);
     const messageId = update.messageId ?? streams[role];
     const text = contentText(update.content);
-    if (!text) return true;
-    const parentId = toolMetaSchema.safeParse(update._meta).data?.claudeCode?.parentToolUseId;
-    const parent = parentId ? thread.tools.find((tool) => tool.id === parentId) : undefined;
+    if (!text) return;
+    const parent = this.#parentTool(thread, update._meta);
     if (parent) appendChildMessage(parent, messageId, role, text, () => nextTimestamp(thread));
     else appendMessage(thread, messageId, role, text);
-    return true;
   }
 
-  #handleStateUpdate(
-    thread: ThreadState,
-    profileId: string,
-    update: SessionUpdate,
-    modelState?: AcpModelState,
-  ) {
-    if (update.sessionUpdate === "config_option_update") {
-      if (modelState) this.#applyConfig(thread.providers[profileId], modelState);
-      return;
-    }
-    if (update.sessionUpdate === "available_commands_update") {
-      const provider = thread.providers[profileId];
-      if (provider) provider.commands = slashCommands(update.availableCommands);
-      return;
-    }
-    if (update.sessionUpdate === "usage_update") {
-      const provider = thread.providers[profileId];
-      if (provider && update.size > 0) {
-        provider.contextUsed = update.used;
-        provider.contextSize = update.size;
-      }
-      return;
-    }
-    if (update.sessionUpdate === "plan") {
-      this.#upsertPlan(thread, profileId, planEntries(update.entries));
-      return;
-    }
-    if (update.sessionUpdate === "plan_update") {
-      this.#handlePlanUpdate(thread, profileId, update);
-      return;
-    }
-    if (update.sessionUpdate === "plan_removed") {
-      thread.tools = thread.tools.filter((tool) => tool.id !== `plan-${update.planId}`);
-      return;
-    }
-    if (update.sessionUpdate === "compaction_update") {
-      this.#upsertCompaction(thread, update);
-      return;
-    }
-    if (update.sessionUpdate === "compaction_summary_chunk") {
-      this.#appendCompactionSummary(thread, update.compactionId, contentText(update.content));
-    }
+  #parentTool(thread: ThreadState, meta: unknown) {
+    const parentId = toolMetaSchema.safeParse(meta).data?.claudeCode?.parentToolUseId;
+    return parentId ? thread.tools.find((tool) => tool.id === parentId) : undefined;
   }
 
   #handlePlanUpdate(
@@ -288,66 +275,26 @@ export class SessionUpdateHandler {
    */
   #upsertPlan(thread: ThreadState, profileId: string, plan: PlanEntry[], planId?: string) {
     if (plan.length === 0) return;
-    const id = planId ? `plan-${planId}` : this.#planId(thread.id, profileId);
     const status = plan.every((entry) => entry.status === "completed")
       ? "completed"
       : "in_progress";
-    const existing = thread.tools.find((tool) => tool.id === id);
-    if (existing) {
-      existing.plan = plan;
-      existing.status = status;
-    } else {
-      thread.tools.push({
-        id,
-        title: "Plan",
-        kind: "think",
-        status,
-        plan,
-        locations: [],
-        createdAt: nextTimestamp(thread),
-      });
-    }
-    thread.updatedAt = nextTimestamp(thread);
+    const id = planId ? `plan-${planId}` : this.#planId(thread.id, profileId);
+    upsertTool(thread, id, planDefaults, { plan, status });
   }
 
   #upsertPlanDetail(thread: ThreadState, planId: string, detail: string) {
-    const id = `plan-${planId}`;
-    const existing = thread.tools.find((tool) => tool.id === id);
-    if (existing) existing.detail = detail;
-    else
-      thread.tools.push({
-        id,
-        title: "Plan",
-        kind: "think",
-        status: "in_progress",
-        detail,
-        locations: [],
-        createdAt: nextTimestamp(thread),
-      });
-    thread.updatedAt = nextTimestamp(thread);
+    upsertTool(thread, `plan-${planId}`, planDefaults, { detail });
   }
 
   #upsertCompaction(
     thread: ThreadState,
     update: Extract<SessionUpdate, { sessionUpdate: "compaction_update" }>,
   ) {
-    const id = `compaction-${update.compactionId}`;
-    const existing = thread.tools.find((tool) => tool.id === id);
     const summary = update.summary?.map(contentText).filter(Boolean).join("\n");
-    const detail = update.error ?? summary ?? existing?.detail;
-    if (existing) Object.assign(existing, { status: update.status, detail });
-    else
-      thread.tools.push({
-        id,
-        title: "Context compaction",
-        kind: "think",
-        status: update.status,
-        detail,
-        presentation: "compaction",
-        locations: [],
-        createdAt: nextTimestamp(thread),
-      });
-    thread.updatedAt = nextTimestamp(thread);
+    upsertTool(thread, `compaction-${update.compactionId}`, compactionDefaults, {
+      status: update.status,
+      detail: update.error ?? summary ?? undefined,
+    });
   }
 
   #appendCompactionSummary(thread: ThreadState, compactionId: string, text: string) {
@@ -373,8 +320,7 @@ export class SessionUpdateHandler {
     profileId: string,
     update: (ToolCall | ToolCallUpdate) & { sessionUpdate: "tool_call" | "tool_call_update" },
   ) {
-    const parentId = toolMetaSchema.safeParse(update._meta).data?.claudeCode?.parentToolUseId;
-    const parent = parentId ? thread.tools.find((tool) => tool.id === parentId) : undefined;
+    const parent = this.#parentTool(thread, update._meta);
     if (parent) {
       const existing = parent.children?.find(
         (entry): entry is ToolActivity => "kind" in entry && entry.id === update.toolCallId,
@@ -410,6 +356,34 @@ function connectionKey(threadId: string, profileId: string) {
   return `${threadId}:${profileId}`;
 }
 
+const planDefaults = { title: "Plan", kind: "think", status: "in_progress" } as const;
+const compactionDefaults = {
+  title: "Context compaction",
+  kind: "think",
+  status: "in_progress",
+  presentation: "compaction",
+} as const;
+
+/** Patches the timeline entry with this id, creating it from `defaults` if it is the first update. */
+function upsertTool(
+  thread: ThreadState,
+  id: string,
+  defaults: Pick<ToolActivity, "title" | "kind" | "status"> & Partial<ToolActivity>,
+  patch: Partial<ToolActivity>,
+) {
+  const existing = thread.tools.find((tool) => tool.id === id);
+  if (existing) Object.assign(existing, patch);
+  else
+    thread.tools.push({
+      ...defaults,
+      ...patch,
+      id,
+      locations: [],
+      createdAt: nextTimestamp(thread),
+    });
+  thread.updatedAt = nextTimestamp(thread);
+}
+
 function mergedTool(
   existing: ToolActivity | undefined,
   update: ToolCall | ToolCallUpdate,
@@ -423,6 +397,7 @@ function mergedTool(
   // update carrying the aggregate output would otherwise repeat the terminal panel as text.
   const structured =
     Boolean(diffs?.length) || terminal !== undefined || Boolean(content.media?.length);
+  const locations = update.locations?.map((location) => location.path) ?? [];
   return {
     id: update.toolCallId,
     ...toolLabels(existing, update),
@@ -433,9 +408,21 @@ function mergedTool(
     presentation: toolPresentation(existing, update, meta, content.media),
     subagent: toolSubagent(existing, meta),
     children: existing?.children,
-    locations: toolLocations(existing, update),
+    locations: toolLocations(existing, locations),
     createdAt: existing?.createdAt ?? timestamp(),
   };
+}
+
+function toolLabels(existing: ToolActivity | undefined, update: ToolCall | ToolCallUpdate) {
+  return {
+    title: update.title ?? existing?.title ?? "Agent tool",
+    kind: update.kind ?? existing?.kind ?? "other",
+    status: update.status ?? existing?.status ?? "pending",
+  };
+}
+
+function toolLocations(existing: ToolActivity | undefined, locations: string[]) {
+  return locations.length > 0 ? locations : (existing?.locations ?? []);
 }
 
 function toolPresentation(
@@ -457,10 +444,8 @@ function toolPresentation(
 function toolSubagent(
   existing: ToolActivity | undefined,
   meta: z.infer<typeof toolMetaSchema> | undefined,
-) {
+): ToolActivity["subagent"] {
   const codex = meta?.codex?.subagent;
-  const collaboration = meta?.codex?.collaboration;
-  const claude = meta?.claudeCode;
   if (codex)
     return {
       ...existing?.subagent,
@@ -468,6 +453,7 @@ function toolSubagent(
       path: codex.path,
       activity: codex.activity,
     };
+  const collaboration = meta?.codex?.collaboration;
   if (collaboration)
     return {
       ...existing?.subagent,
@@ -475,22 +461,7 @@ function toolSubagent(
       senderThreadId: collaboration.senderThreadId,
       receiverThreadIds: collaboration.receiverThreadIds,
     };
-  if (claude?.subagent || claude?.parentToolUseId)
-    return { ...existing?.subagent, parentToolUseId: claude.parentToolUseId };
   return existing?.subagent;
-}
-
-function toolLabels(existing: ToolActivity | undefined, update: ToolCall | ToolCallUpdate) {
-  return {
-    title: update.title ?? existing?.title ?? "Agent tool",
-    kind: update.kind ?? existing?.kind ?? "other",
-    status: update.status ?? existing?.status ?? "pending",
-  };
-}
-
-function toolLocations(existing: ToolActivity | undefined, update: ToolCall | ToolCallUpdate) {
-  const locations = update.locations?.map((location) => location.path) ?? [];
-  return locations.length > 0 ? locations : (existing?.locations ?? []);
 }
 
 export function slashCommands(
@@ -522,10 +493,6 @@ function contentText(content: ContentBlock) {
   return "";
 }
 
-/**
- * Splits a tool call's content into the shapes the transcript renders. Anything unrecognised
- * falls back to `rawOutput`/`rawInput` so no update goes on screen empty.
- */
 /**
  * Truncating each side of a diff independently can hide the edit completely: a change past the
  * cap leaves two identical prefixes, which renders as no change at all. An oversized diff drops
