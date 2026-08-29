@@ -3,16 +3,6 @@
   "version": "0.9.0",
   "private": true,
   "description": "A local desktop workspace for ACP coding agents.",
-  "keywords": [
-    "acp",
-    "agent-client-protocol",
-    "ai-coding",
-    "claude",
-    "codex",
-    "coding-agents",
-    "svelte",
-    "tauri"
-  ],
   "homepage": "https://github.com/nonlooped/loopcode",
   "bugs": "https://github.com/nonlooped/loopcode/issues",
   "license": "MIT",
