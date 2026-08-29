@@ -147,6 +147,7 @@ export class AcpConnection {
         {
           command: request.command,
           args: request.args,
+          env: request.env,
           cwd: request.cwd,
           profileId: request.profileId,
           threadId: request.threadId,

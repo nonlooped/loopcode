@@ -13,6 +13,7 @@ export type SettingsCategory =
   | "composer"
   | "agents"
   | "providers"
+  | "usage"
   | "terminal"
   | "about";
 export type SendShortcut = "enter" | "modifier-enter";
@@ -55,7 +56,7 @@ export interface AppPreferences {
   composerSpellcheck: boolean;
   defaultProviderId: string;
   automaticTitleGeneration: boolean;
-  providerModelDefaults: Record<string, string>;
+  recentProviderModels: Record<string, string>;
   providerSettings: Record<string, ProviderPreference>;
   titleProviderId: string;
   titleModelId: string;
@@ -80,7 +81,7 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   composerSpellcheck: true,
   defaultProviderId: "codex",
   automaticTitleGeneration: true,
-  providerModelDefaults: {},
+  recentProviderModels: {},
   providerSettings: {},
   titleProviderId: "codex",
   titleModelId: "",
@@ -105,7 +106,7 @@ const PREFERENCE_KEYS: Record<keyof AppPreferences, string> = {
   composerSpellcheck: "loopcode.composer-spellcheck",
   defaultProviderId: "loopcode.default-provider",
   automaticTitleGeneration: "loopcode.automatic-title-generation",
-  providerModelDefaults: "loopcode.provider-model-defaults",
+  recentProviderModels: "loopcode.recent-provider-models",
   providerSettings: "loopcode.provider-settings",
   titleProviderId: "loopcode.title-provider",
   titleModelId: "loopcode.title-model",
@@ -165,8 +166,8 @@ export function loadAppPreferences(
         storage.getItem(PREFERENCE_KEYS.defaultProviderId)?.trim() ||
         DEFAULT_APP_PREFERENCES.defaultProviderId,
       automaticTitleGeneration: storedBooleanPreference(storage, "automaticTitleGeneration"),
-      providerModelDefaults: storedStringRecord(
-        storage.getItem(PREFERENCE_KEYS.providerModelDefaults),
+      recentProviderModels: storedStringRecord(
+        storage.getItem(PREFERENCE_KEYS.recentProviderModels),
       ),
       providerSettings: storedProviderSettings(storage.getItem(PREFERENCE_KEYS.providerSettings)),
       titleProviderId:
@@ -183,7 +184,7 @@ export function loadAppPreferences(
           : "enter",
     };
   } catch {
-    return { ...DEFAULT_APP_PREFERENCES, providerModelDefaults: {}, providerSettings: {} };
+    return { ...DEFAULT_APP_PREFERENCES, recentProviderModels: {}, providerSettings: {} };
   }
 }
 

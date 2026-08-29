@@ -87,7 +87,7 @@ export function providerDisplayStatus(
   if (catalog?.status === "unavailable" && catalog.unavailableReason === "missing-executable") {
     return "Not installed";
   }
-  if (catalog?.status !== "ready" || catalog.needsAuth) return "Not logged in";
+  if (catalog?.status !== "ready") return "Not logged in";
   return "Authenticated";
 }
 

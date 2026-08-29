@@ -10,6 +10,7 @@ import type {
   ProviderModelCatalog,
   GoalAction,
   ProviderSessionState,
+  RateLimitState,
   SessionSelectId,
   SlashCommand,
   ThreadState,
@@ -35,12 +36,13 @@ import {
   type AcpModelState,
   type PromptContent,
 } from "./acp.ts";
-import { recordDiagnostic } from "./native.ts";
+import { getProviderExecutablePath, recordDiagnostic } from "./native.ts";
 import { SessionUpdateHandler, slashCommands } from "./session-updates.ts";
 
 interface RuntimeHooks {
   permission: (value: { threadId: string; profileId: string; request: PermissionRequest }) => void;
   clearPermission: (threadId: string, profileId?: string) => void;
+  usage: (profileId: string, limits: RateLimitState[]) => void;
 }
 
 export interface ProviderRuntimeConfiguration {
@@ -67,6 +69,8 @@ export class ProviderRuntime {
   #titleConnections = new Map<string, AcpConnection>();
   #titlePreference?: TitleGenerationPreference;
   #updates = new SessionUpdateHandler(applyProviderConfigState);
+  #reportedUsage = new Map<string, string>();
+  #executablePaths = new Map<string, Promise<string | null>>();
 
   constructor(
     catalogs: Record<string, ProviderModelCatalog>,
@@ -83,6 +87,32 @@ export class ProviderRuntime {
 
   connection(threadId: string, profileId: string) {
     return this.#connections.get(connectionKey(threadId, profileId));
+  }
+
+  /**
+   * ACP adapters bundle their own copy of the provider CLI, and the bundled build lags the one a
+   * user installs. `claude-agent-acp@0.70.0` bundles Claude Code 2.1.232, whose rate-limit events
+   * omit the utilization percentages 2.1.251 reports. Each adapter documents an override, so point
+   * it at the installed CLI whenever there is one and let it fall back to the bundle otherwise.
+   */
+  async #providerEnvironment(profile: ProviderDefinition) {
+    let lookup = this.#executablePaths.get(profile.id);
+    if (!lookup) {
+      lookup = getProviderExecutablePath(profile.versionCommand).catch(() => null);
+      this.#executablePaths.set(profile.id, lookup);
+    }
+    const executable = await lookup;
+    return executable ? { [profile.executableEnvVar]: executable } : undefined;
+  }
+
+  /** Publishes rate-limit windows once per change so the settings page can cache them. */
+  #reportUsage(profileId: string, provider: ProviderSessionState) {
+    const limits = provider.rateLimits;
+    if (!limits?.length) return;
+    const fingerprint = JSON.stringify(limits);
+    if (this.#reportedUsage.get(profileId) === fingerprint) return;
+    this.#reportedUsage.set(profileId, fingerprint);
+    this.#hooks.usage(profileId, limits);
   }
 
   setPermissionMode(mode: PermissionMode) {
@@ -208,15 +238,12 @@ export class ProviderRuntime {
     };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
     let agentVersion: string | undefined;
-    let needsAuth = false;
     let commands: SlashCommand[] | undefined;
     const connection = new AcpConnection({
       connectionStatus: () => {},
       turnStatus: () => {},
-      initialized: (agentInfo, authMethods) => {
+      initialized: (agentInfo) => {
         agentVersion = agentInfo?.version;
-        // LoopCode cannot drive provider auth flows, so surface them as "Not logged in."
-        needsAuth = Boolean(authMethods?.length);
       },
       ready: (session) => {
         discovered = session;
@@ -238,6 +265,7 @@ export class ProviderRuntime {
         cwd,
         command: profile.command,
         args: profile.args,
+        env: await this.#providerEnvironment(profile),
         profileId: profile.id,
       });
       if (discovered.models.length === 0) {
@@ -276,7 +304,6 @@ export class ProviderRuntime {
         selects: discovered.selects,
         supportsFollowups: discovered.supportsFollowups,
         commands,
-        needsAuth,
       };
     } catch (error) {
       this.#baseModels.set(profile.id, []);
@@ -378,9 +405,12 @@ export class ProviderRuntime {
         const modelState =
           update.sessionUpdate === "config_option_update" ? readModelState(update) : undefined;
         this.#updates.handle(thread, profile.id, update, modelState);
+        this.#reportUsage(profile.id, provider);
       },
       metadata: (metadata) => {
-        if (isCurrent()) this.#updates.handleMetadata(thread, profile.id, metadata);
+        if (!isCurrent()) return;
+        this.#updates.handleMetadata(thread, profile.id, metadata);
+        this.#reportUsage(profile.id, provider);
       },
       permission: (request) => {
         if (isCurrent()) {
@@ -428,6 +458,7 @@ export class ProviderRuntime {
         cwd: thread.cwd,
         command: profile.command,
         args: profile.args,
+        env: await this.#providerEnvironment(profile),
         profileId: profile.id,
         threadId: thread.id,
         sessionId: existingSessionId,
@@ -633,6 +664,7 @@ export class ProviderRuntime {
           cwd: thread.cwd,
           command: selection.profile.command,
           args: selection.profile.args,
+          env: await this.#providerEnvironment(selection.profile),
           profileId: selection.profile.id,
         });
         title = normalizeThreadTitle(

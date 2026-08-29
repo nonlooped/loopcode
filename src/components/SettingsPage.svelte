@@ -23,6 +23,8 @@
     providerDisplayStatus,
     providerVersionLabel,
   } from '../utils/provider-availability';
+  import type { ProviderUsage } from '../utils/provider-usage';
+  import { relativeTime } from '../utils/threads';
 
   interface Props {
     category: SettingsCategory;
@@ -31,6 +33,7 @@
     baseProfiles: HarnessProfile[];
     catalogs: Record<string, ProviderModelCatalog>;
     providerVersions: Record<string, string>;
+    providerUsage: ProviderUsage;
     permissionMode: PermissionMode;
     reducedMotion: boolean;
     setPreference: <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => void;
@@ -48,6 +51,7 @@
     baseProfiles,
     catalogs,
     providerVersions,
+    providerUsage,
     permissionMode,
     reducedMotion,
     setPreference,
@@ -134,6 +138,12 @@
   const providerModelRowLabel = 'grid min-w-0 gap-1 text-[11px] text-faint max-[680px]:col-start-1';
   const providerModelRemove =
     'grid size-[30px] place-items-center rounded-[7px] border border-transparent bg-transparent text-muted hover:border-line hover:bg-panel-hover hover:text-danger max-[680px]:col-start-2 max-[680px]:row-span-2 max-[680px]:self-center';
+  const usageProviderHeader = 'flex items-center gap-3.5 px-5 pt-4 pb-1 max-[680px]:px-3.5';
+  const usageLimitList = 'grid gap-3.5 px-5 pt-2.5 pb-4 max-[680px]:px-3.5';
+  const usageLimitRow = 'grid gap-1.5';
+  const usageLimitLabel = 'flex items-baseline justify-between gap-3 text-xs text-muted';
+  const usageLimitTrack = 'block h-1.5 overflow-hidden rounded-full bg-panel-active';
+  const usageEmpty = 'px-5 pt-1 pb-4 text-xs leading-snug text-muted max-[680px]:px-3.5';
   const settingsAboutRow = 'flex items-center gap-3.5 p-5';
   const settingsAboutLogo = 'size-10 shrink-0 [filter:var(--provider-filter)]';
   const settingsProviderIcon = 'size-[18px] opacity-[0.72] [filter:var(--provider-filter)]';
@@ -167,6 +177,7 @@
     composer: ['Composer', 'Choose how prompt editing and sending behave.'],
     agents: ['Agents and permissions', 'Control agent access and thread title generation.'],
     providers: ['Providers', 'Manage provider availability, defaults, connections, and models.'],
+    usage: ['Subscription usage', 'Plan limits last reported by each connected provider.'],
     terminal: ['Terminal', 'Tune the terminal drawer and its retained output.'],
     about: ['About', 'Startup behavior, app details, diagnostics, and interface defaults.'],
   } satisfies Record<SettingsCategory, [string, string]>;
@@ -199,18 +210,6 @@
     if (theme) setPreference('theme', theme.id);
   }
 
-  function providerModelValue(profileId: string) {
-    const saved = preferences.providerModelDefaults[profileId];
-    return catalogs[profileId]?.models.some((model) => model.id === saved) ? saved : '';
-  }
-
-  function setProviderModelDefault(profileId: string, modelId: string) {
-    const defaults = { ...preferences.providerModelDefaults };
-    if (modelId) defaults[profileId] = modelId;
-    else delete defaults[profileId];
-    setPreference('providerModelDefaults', defaults);
-  }
-
   function setTitleProvider(profileId: string) {
     setPreference('titleProviderId', profileId);
     setPreference('titleModelId', '');
@@ -231,6 +230,29 @@
 
   function providerStatus(profileId: string) {
     return providerDisplayStatus(providerPreference(profileId).enabled !== false, catalogs[profileId]);
+  }
+
+  const usageProviders = $derived(
+    profiles
+      .filter(
+        (profile) =>
+          providerPreference(profile.id).enabled !== false && providerCanToggle(catalogs[profile.id]),
+      )
+      .map((profile) => ({ profile, usage: providerUsage[profile.id] })),
+  );
+
+  /** Windows arrive as percent used; the meter reads as remaining headroom. */
+  function limitRemaining(usedPercent: number) {
+    return Math.min(100, Math.max(0, Math.round(100 - usedPercent)));
+  }
+
+  function usageUpdated(updatedAt: number) {
+    const elapsed = relativeTime(updatedAt);
+    return elapsed === 'now' ? 'Updated just now' : `Updated ${elapsed} ago`;
+  }
+
+  function limitReset(resetsAt: number | null | undefined) {
+    return resetsAt ? `Resets ${new Date(resetsAt * 1000).toLocaleString()}` : 'Reset time unavailable';
   }
 
   function providerVersion(profileId: string) {
@@ -284,7 +306,6 @@
   function resetSelectedProvider() {
     if (!selectedProvider) return;
     setProviderPreference(selectedProvider.id, {});
-    setProviderModelDefault(selectedProvider.id, '');
   }
 </script>
 
@@ -586,27 +607,8 @@
     {:else if category === 'providers'}
       {#if selectedProvider && selectedBaseProvider}
         {@const setting = providerPreference(selectedProvider.id)}
-        {@const catalog = catalogs[selectedProvider.id]}
         <div class={settingsCard}>
-          <div class={settingsRow}>
-            <span class={settingsRowCopy}>
-              <strong class={settingsRowStrong}>Default model</strong>
-              <small class={settingsRowSmall}>{catalog?.status === 'ready' ? `Use this model when a new ${selectedProvider.label} thread starts.` : catalog?.status === 'unavailable' ? catalog.error : `Loading ${selectedProvider.label} models…`}</small>
-            </span>
-            <select
-              class="{settingsSelect} {settingsModelSelect}"
-              aria-label={`${selectedProvider.label} default model`}
-              disabled={catalog?.status !== 'ready' || setting.enabled === false}
-              value={providerModelValue(selectedProvider.id)}
-              onchange={(event) => setProviderModelDefault(selectedProvider.id, selectValue(event))}
-            >
-              <option value="">Provider default</option>
-              {#each catalog?.models ?? [] as model (model.id)}
-                <option value={model.id}>{model.name}</option>
-              {/each}
-            </select>
-          </div>
-          <label class="{settingsRow} {settingsRowSeparated}">
+          <label class={settingsRow}>
               <span class={settingsRowCopy}>
               <strong class={settingsRowStrong}>Provider command path</strong>
               <small class={settingsRowSmall}>Override the provider executable while keeping its required ACP arguments.</small>
@@ -663,11 +665,11 @@
               </div>
             {/if}
           </div>
-          {#if Object.keys(setting).length > 0 || preferences.providerModelDefaults[selectedProvider.id]}
+          {#if Object.keys(setting).length > 0}
             <div class="{settingsRow} {settingsRowSeparated}">
               <span class={settingsRowCopy}>
                 <strong class={settingsRowStrong}>Restore provider defaults</strong>
-                <small class={settingsRowSmall}>Reset the command path, custom models, enabled state, and default model.</small>
+                <small class={settingsRowSmall}>Reset the command path, custom models, and enabled state.</small>
               </span>
               <button class={settingsAction} onclick={resetSelectedProvider}>Reset</button>
             </div>
@@ -723,6 +725,48 @@
             </div>
           {/each}
         </div>
+      {/if}
+    {:else if category === 'usage'}
+      {#if usageProviders.length === 0}
+        <div class={settingsCard}>
+          <p class="{usageEmpty} pt-4">Connect a provider to see its plan limits here.</p>
+        </div>
+      {:else}
+        {#each usageProviders as { profile, usage } (profile.id)}
+          <div class={settingsCard}>
+            <div class={usageProviderHeader}>
+              <span class={providerSettingsIcon} aria-hidden="true"><img class:brand-color-icon={profile.iconMode === 'brand'} class={settingsProviderIcon} src={profile.icon} alt="" /></span>
+              <span class={settingsRowCopy}>
+                <strong class={settingsRowStrong}>{profile.label}</strong>
+                <small class={settingsRowSmall}>{usage ? usageUpdated(usage.updatedAt) : 'No limits reported yet'}</small>
+              </span>
+            </div>
+            {#if usage?.limits.length}
+              <div class={usageLimitList}>
+                {#each usage.limits as limit (limit.id)}
+                  {#if limit.primary}
+                    {@const remaining = limitRemaining(limit.primary.usedPercent)}
+                    <div class={usageLimitRow}>
+                      <span class={usageLimitLabel}>
+                        <span class="min-w-0 truncate">{limit.name}</span>
+                        <span class="shrink-0 tabular-nums" class:text-danger={remaining <= 10} class:text-warning={remaining > 10 && remaining <= 25}>{remaining}% left</span>
+                      </span>
+                      <span class={usageLimitTrack} role="progressbar" aria-valuenow={remaining} aria-valuemin={0} aria-valuemax={100} aria-label={`${profile.label} ${limit.name} remaining`}>
+                        <span
+                          class="block h-full rounded-full transition-[width] duration-300 {remaining <= 10 ? 'bg-danger' : remaining <= 25 ? 'bg-warning' : 'bg-accent'}"
+                          style:width={`${remaining}%`}
+                        ></span>
+                      </span>
+                      <small class={settingsRowSmall}>{limitReset(limit.primary.resetsAt)}</small>
+                    </div>
+                  {/if}
+                {/each}
+              </div>
+            {:else}
+              <p class={usageEmpty}>{profile.label} reports its plan limits during a turn. Send a prompt to populate them.</p>
+            {/if}
+          </div>
+        {/each}
       {/if}
     {:else if category === 'terminal'}
       <div class={settingsCard}>

@@ -63,6 +63,10 @@ void test("provider display status distinguishes ready, disabled, and missing CL
   };
 
   assert.equal(providerDisplayStatus(true, ready("codex-model")), "Authenticated");
+  assert.equal(
+    providerDisplayStatus(true, { ...ready("codex-model"), needsAuth: true }),
+    "Authenticated",
+  );
   assert.equal(providerDisplayStatus(true, undefined), "Not logged in");
   assert.equal(providerDisplayStatus(true, missing), "Not installed");
   assert.equal(providerDisplayStatus(false, missing), "Disabled");

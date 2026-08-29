@@ -42,7 +42,7 @@ function thread(connectionStatus) {
   };
 }
 
-const hooks = { permission() {}, clearPermission() {} };
+const hooks = { permission() {}, clearPermission() {}, usage() {} };
 
 const [codexProfile] = providerDefinitions;
 const secondaryProfile = { ...codexProfile, id: "secondary", label: "Secondary" };

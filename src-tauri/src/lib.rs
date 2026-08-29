@@ -1,5 +1,6 @@
 mod app_commands;
 mod broker;
+mod codex_usage;
 mod diagnostics;
 mod git;
 mod persistence;
@@ -23,13 +24,14 @@ pub(crate) fn native_command(command: &str) -> tokio::process::Command {
 #[cfg(windows)]
 use app_commands::configure_native_window;
 use app_commands::{
-    export_diagnostics, initial_working_directory, load_workspace, pick_folder, provider_version,
-    record_diagnostic, save_workspace,
+    export_diagnostics, initial_working_directory, load_workspace, pick_folder,
+    provider_executable_path, provider_version, record_diagnostic, save_workspace,
 };
 use broker::{
     Broker, FrontendGeneration, launch_harness, register_frontend, send_rpc, stop_all_harnesses,
     stop_harness,
 };
+use codex_usage::codex_rate_limits;
 use diagnostics::Diagnostics;
 use git::{
     create_git_worktree, get_git_branch, get_git_file_diff, list_git_branches, list_git_changes,
@@ -122,6 +124,8 @@ pub fn run() {
             switch_git_branch,
             create_git_worktree,
             provider_version,
+            provider_executable_path,
+            codex_rate_limits,
             list_composer_completions,
             read_project_directory,
             read_project_file,

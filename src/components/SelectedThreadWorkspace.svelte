@@ -56,6 +56,7 @@
     setProjectExplorerOpen: (open: boolean) => void;
     projectExplorerCollapsed: boolean;
     defaultWorkingFolder: string;
+    rememberProviderModel: (profileId: string, modelId: string) => void;
     attachImages: (files: File[]) => void;
     removeImage: (imageId: string) => void;
     clearAttachments: () => void;
@@ -97,6 +98,7 @@
     setProjectExplorerOpen,
     projectExplorerCollapsed = $bindable(),
     defaultWorkingFolder,
+    rememberProviderModel,
     attachImages,
     removeImage,
     clearAttachments,
@@ -323,9 +325,17 @@
   }
 
   async function selectModel(profileId: string, model: ModelOption) {
-    if (!selectedThread) return;
-    const currentModelId = selectedThread.providers[profileId].selectedModelId;
-    if (model.id !== currentModelId) await providers.selectModel(selectedThread, profileId, model.id);
+    const thread = selectedThread;
+    if (!thread) return;
+    const currentModelId = thread.providers[profileId].selectedModelId;
+    if (model.id === currentModelId) {
+      rememberProviderModel(profileId, model.id);
+      return;
+    }
+    await providers.selectModel(thread, profileId, model.id);
+    if (thread.providers[profileId].selectedModelId === model.id) {
+      rememberProviderModel(profileId, model.id);
+    }
   }
 
   function toggleProjectExplorer() {

@@ -9,6 +9,7 @@ import { z } from "zod";
 import type {
   PlanEntry,
   ProviderSessionState,
+  RateLimitState,
   SessionFailure,
   SlashCommand,
   ThreadState,
@@ -99,6 +100,20 @@ const goalSchema = z.object({
   timeBudgetSeconds: z.number().nullable().optional(),
   timeUsedSeconds: z.number().optional(),
 });
+/**
+ * The Claude SDK's declared `SDKRateLimitInfo` still describes a single `utilization` field, but
+ * the shipping payload carries every window under `unifiedWindows`, as a 0-1 fraction. Verified
+ * against `/usage`: 0.47 here prints as "49% used" there.
+ */
+const claudeRateLimitSchema = z.object({
+  unifiedWindows: z
+    .record(
+      z.string().min(1),
+      z.object({ utilization: z.number(), resetsAt: z.number().nullable().optional() }).nullable(),
+    )
+    .optional(),
+});
+
 const metadataSchema = z.object({
   goal: z.union([goalSchema, z.null()]).optional(),
   quota: z
@@ -116,7 +131,33 @@ const metadataSchema = z.object({
       }),
     )
     .optional(),
+  "_claude/rateLimit": claudeRateLimitSchema.optional(),
 });
+
+/** Mirrors the window names Codex uses, so both providers read the same way. */
+const CLAUDE_LIMIT_NAMES: Record<string, string> = {
+  five_hour: "5h",
+  seven_day: "weekly",
+  seven_day_opus: "weekly Opus",
+  seven_day_sonnet: "weekly Sonnet",
+  overage: "overage",
+};
+
+function claudeRateLimits(
+  windows: Record<string, { utilization: number; resetsAt?: number | null } | null>,
+): RateLimitState[] {
+  return Object.entries(windows).flatMap(([id, window]) =>
+    window
+      ? [
+          {
+            id,
+            name: CLAUDE_LIMIT_NAMES[id] ?? id.replace(/_/g, " "),
+            primary: { usedPercent: window.utilization * 100, resetsAt: window.resetsAt ?? null },
+          },
+        ]
+      : [],
+  );
+}
 
 export class SessionUpdateHandler {
   #streamIds = new Map<string, { agent: string; thought: string }>();
@@ -245,6 +286,12 @@ export class SessionUpdateHandler {
         name: limit.limitName ?? limit.limitId ?? "Limit",
         primary: limit.primary,
       }));
+    const claudeWindows = parsed.data["_claude/rateLimit"]?.unifiedWindows;
+    if (claudeWindows) {
+      // Every window ships on every event, so this replaces rather than merges.
+      const limits = claudeRateLimits(claudeWindows);
+      if (limits.length > 0) provider.rateLimits = limits;
+    }
     const failure = parsed.data.jetbrains?.air.sessionFailure;
     if (failure) this.#upsertFailure(thread, failure);
   }

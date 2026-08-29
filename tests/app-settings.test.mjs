@@ -51,7 +51,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
     composerSpellcheck: true,
     defaultProviderId: "codex",
     automaticTitleGeneration: true,
-    providerModelDefaults: {},
+    recentProviderModels: {},
     providerSettings: {},
     titleProviderId: "codex",
     titleModelId: "",
@@ -61,6 +61,9 @@ void test("app preferences use safe defaults and validate persisted values", () 
   };
   assert.deepEqual(loadAppPreferences(storage), defaults);
 
+  values.set("loopcode.provider-model-defaults", JSON.stringify({ codex: "old-default" }));
+  assert.deepEqual(loadAppPreferences(storage).recentProviderModels, {});
+
   saveAppPreference("colorMode", "light", storage);
   saveAppPreference("theme", "rose", storage);
   saveAppPreference("compactSessionRows", true, storage);
@@ -69,7 +72,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
   saveAppPreference("interfaceZoom", 140, storage);
   saveAppPreference("defaultWorkingFolder", "C:\\work", storage);
   saveAppPreference("automaticTitleGeneration", false, storage);
-  saveAppPreference("providerModelDefaults", { codex: "gpt-5" }, storage);
+  saveAppPreference("recentProviderModels", { codex: "gpt-5" }, storage);
   saveAppPreference(
     "providerSettings",
     {
@@ -94,7 +97,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
     interfaceZoom: 140,
     defaultWorkingFolder: "C:\\work",
     automaticTitleGeneration: false,
-    providerModelDefaults: { codex: "gpt-5" },
+    recentProviderModels: { codex: "gpt-5" },
     providerSettings: {
       codex: {
         enabled: false,
@@ -111,7 +114,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
   values.set("loopcode.theme", "not-a-theme");
   values.set("loopcode.interface-zoom", "500");
   values.set("loopcode.content-width", "200");
-  values.set("loopcode.provider-model-defaults", "invalid");
+  values.set("loopcode.recent-provider-models", "invalid");
   values.set(
     "loopcode.provider-settings",
     JSON.stringify({
@@ -125,7 +128,7 @@ void test("app preferences use safe defaults and validate persisted values", () 
   assert.equal(loadAppPreferences(storage).theme, "indigo");
   assert.equal(loadAppPreferences(storage).interfaceZoom, 200);
   assert.equal(loadAppPreferences(storage).contentWidth, 600);
-  assert.deepEqual(loadAppPreferences(storage).providerModelDefaults, {});
+  assert.deepEqual(loadAppPreferences(storage).recentProviderModels, {});
   assert.deepEqual(loadAppPreferences(storage).providerSettings, {});
   assert.equal(loadAppPreferences(storage).terminalFontSize, 12);
   assert.equal(loadAppPreferences(storage).terminalScrollback, 5_000);
@@ -149,7 +152,7 @@ void test("interface reset preserves provider and permission settings", () => {
   assert.ok(removed.includes("loopcode.interface-zoom"));
   assert.ok(removed.includes("loopcode.terminal-height"));
   assert.ok(!removed.includes("loopcode.default-provider"));
-  assert.ok(!removed.includes("loopcode.provider-model-defaults"));
+  assert.ok(!removed.includes("loopcode.recent-provider-models"));
   assert.ok(!removed.includes("loopcode.provider-settings"));
   assert.ok(!removed.includes("loopcode.title-provider"));
   assert.ok(!removed.includes("loopcode.permission-mode"));

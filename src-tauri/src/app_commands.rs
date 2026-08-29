@@ -146,6 +146,43 @@ pub(crate) async fn provider_version(
     Ok(first_version_line(&output.stdout, &output.stderr))
 }
 
+/// Resolves a provider CLI to an absolute path so an ACP adapter can be pointed at the version the
+/// user installed rather than the one it bundles. Returns `None` when the CLI is not on `PATH`.
+#[tauri::command]
+pub(crate) async fn provider_executable_path(command: String) -> Result<Option<String>, String> {
+    validate_provider_command(&command, &[])?;
+    let command = command.trim().to_owned();
+    tauri::async_runtime::spawn_blocking(move || resolve_executable(&command))
+        .await
+        .map_err(|error| format!("Could not join the executable lookup task: {error}"))
+}
+
+fn resolve_executable(command: &str) -> Option<String> {
+    let candidate = std::path::Path::new(command);
+    if candidate.is_absolute() {
+        return candidate.is_file().then(|| command.to_owned());
+    }
+    let extensions: Vec<String> = if cfg!(windows) {
+        std::env::var("PATHEXT")
+            .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into())
+            .split(';')
+            .filter(|extension| !extension.is_empty())
+            .map(str::to_owned)
+            .collect()
+    } else {
+        vec![String::new()]
+    };
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path).find_map(|directory| {
+        extensions.iter().find_map(|extension| {
+            let candidate = directory.join(format!("{command}{extension}"));
+            candidate
+                .is_file()
+                .then(|| candidate.to_string_lossy().into_owned())
+        })
+    })
+}
+
 fn validate_provider_command(command: &str, args: &[String]) -> Result<(), String> {
     if command.trim().is_empty() || command.len() > 4096 {
         return Err("Enter a valid provider executable".into());
@@ -171,7 +208,37 @@ fn first_version_line(stdout: &[u8], stderr: &[u8]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_version_line, validate_provider_command};
+    use super::{first_version_line, resolve_executable, validate_provider_command};
+
+    #[test]
+    fn resolves_an_installed_cli_through_path_and_rejects_a_missing_one() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory
+            .path()
+            .join(if cfg!(windows) { "acme.exe" } else { "acme" });
+        std::fs::write(&executable, b"").unwrap();
+
+        let original = std::env::var_os("PATH");
+        // SAFETY: single-threaded test that restores the previous value below.
+        unsafe { std::env::set_var("PATH", directory.path()) };
+        let resolved = resolve_executable("acme");
+        let missing = resolve_executable("not-installed-anywhere");
+        match original {
+            Some(path) => unsafe { std::env::set_var("PATH", path) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
+        assert_eq!(resolved.as_deref(), executable.to_str());
+        assert_eq!(missing, None);
+        assert_eq!(
+            resolve_executable(executable.to_str().unwrap()).as_deref(),
+            executable.to_str(),
+        );
+        assert_eq!(
+            resolve_executable(directory.path().join("absent").to_str().unwrap()),
+            None,
+        );
+    }
 
     #[test]
     fn provider_version_output_prefers_stdout_and_is_bounded() {

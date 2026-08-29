@@ -304,6 +304,42 @@ void test("goal, quota, and rate-limit metadata land on shared provider state", 
   assert.equal(thread.providers.codex.rateLimits[0].primary.usedPercent, 25);
 });
 
+void test("Claude rate-limit windows arrive together as 0-1 utilization fractions", () => {
+  const thread = { ...newThread(), providers: { claude: {} } };
+  const updates = new SessionUpdateHandler(() => {});
+
+  updates.handleMetadata(thread, "claude", {
+    "_claude/rateLimit": {
+      status: "allowed",
+      rateLimitType: "five_hour",
+      unifiedWindows: {
+        five_hour: { utilization: 0.47, resetsAt: 1788014400 },
+        seven_day: { utilization: 0.3, resetsAt: 1788303600 },
+        seven_day_opus: null,
+      },
+    },
+  });
+
+  assert.deepEqual(thread.providers.claude.rateLimits, [
+    { id: "five_hour", name: "5h", primary: { usedPercent: 47, resetsAt: 1788014400 } },
+    { id: "seven_day", name: "weekly", primary: { usedPercent: 30, resetsAt: 1788303600 } },
+  ]);
+});
+
+void test("a Claude event without windows leaves the last known limits alone", () => {
+  const thread = { ...newThread(), providers: { claude: {} } };
+  const updates = new SessionUpdateHandler(() => {});
+
+  updates.handleMetadata(thread, "claude", {
+    "_claude/rateLimit": { unifiedWindows: { five_hour: { utilization: 0.1 } } },
+  });
+  updates.handleMetadata(thread, "claude", { "_claude/rateLimit": { status: "allowed" } });
+
+  assert.deepEqual(thread.providers.claude.rateLimits, [
+    { id: "five_hour", name: "5h", primary: { usedPercent: 10, resetsAt: null } },
+  ]);
+});
+
 void test("keeps Claude subagent messages and tools inside their parent", () => {
   const thread = newThread();
   const updates = new SessionUpdateHandler(() => {});

@@ -261,6 +261,11 @@ export interface HarnessProfile {
   command: string;
   args: string[];
   versionCommand: string;
+  /**
+   * The override each ACP adapter documents for running the provider CLI installed on this machine
+   * instead of the one it bundles. The bundled CLI can lag, and older builds report less.
+   */
+  executableEnvVar: string;
   installCommand: string;
   loginCommand: string;
 }
@@ -269,6 +274,7 @@ export interface ConnectRequest {
   cwd: string;
   command: string;
   args: string[];
+  env?: Record<string, string>;
   profileId?: string;
   threadId?: string;
   sessionId?: string;
@@ -336,7 +342,6 @@ interface ProviderModelCatalogState {
   selects?: SessionSelects;
   supportsFollowups?: boolean;
   commands?: SlashCommand[];
-  needsAuth?: boolean;
 }
 
 export type ProviderModelCatalog = ProviderModelCatalogState &

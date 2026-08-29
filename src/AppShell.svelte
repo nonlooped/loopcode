@@ -15,6 +15,7 @@
   import { profileById, profiles as officialProfiles } from './config/providers';
   import { preferredAllowOptionId } from './services/acp';
   import {
+    getCodexRateLimits,
     getInitialWorkingDirectory,
     getProviderVersion,
     loadWorkspace,
@@ -70,6 +71,7 @@
     providerCanToggle,
     readyProviderId,
   } from './utils/provider-availability';
+  import { codexUsageRecord, loadProviderUsage, recordProviderUsage } from './utils/provider-usage';
   import { activeProvider, compareSidebarThreads } from './utils/threads';
   import { shellLayoutDuration } from './utils/shell-layout-motion';
 
@@ -87,9 +89,9 @@
     ? colorPreference.matches ? 'dark' : 'light'
     : loadedPreferences.colorMode;
   loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId)?.id ?? officialProfiles[0].id;
-  loadedPreferences.providerModelDefaults = Object.fromEntries(
+  loadedPreferences.recentProviderModels = Object.fromEntries(
     officialProfiles.flatMap((profile) => {
-      const modelId = loadedPreferences.providerModelDefaults[profile.id];
+      const modelId = loadedPreferences.recentProviderModels[profile.id];
       return modelId ? [[profile.id, modelId]] : [];
     }),
   );
@@ -114,6 +116,7 @@
   let initialWorkingFolder = $state('');
   let providerCatalogs = $state<Record<string, ProviderModelCatalog>>(initialCatalogs);
   let providerVersions = $state<Record<string, string>>({});
+  let providerUsage = $state(loadProviderUsage());
   const workspaceState = $state(createWorkspaceState('', providerCatalogs));
   const projects = $derived(workspaceState.projects);
   const selectedProjectId = $derived(workspaceState.selectedProjectId);
@@ -188,6 +191,9 @@
   );
   const providers = new ProviderRuntime(providerCatalogs, {
     permission: (value) => { interactions[interactionKey(value.threadId, value.profileId)] = value; },
+    usage: (profileId, limits) => {
+      providerUsage = recordProviderUsage(providerUsage, profileId, { updatedAt: Date.now(), limits });
+    },
     clearPermission: (threadId, profileId) => {
       for (const [key, interaction] of Object.entries(interactions)) {
         if (interaction.threadId === threadId && (!profileId || interaction.profileId === profileId)) {
@@ -390,9 +396,16 @@
       ? preferences.defaultProviderId
       : thread.profileId);
     providers.activate(thread, defaultProviderId, false);
-    for (const [profileId, modelId] of Object.entries(preferences.providerModelDefaults)) {
+    for (const [profileId, modelId] of Object.entries(preferences.recentProviderModels)) {
       if (thread.providers[profileId]) void providers.selectModel(thread, profileId, modelId);
     }
+  }
+
+  function rememberProviderModel(profileId: string, modelId: string) {
+    setPreference('recentProviderModels', {
+      ...preferences.recentProviderModels,
+      [profileId]: modelId,
+    });
   }
 
   function addThread() {
@@ -651,6 +664,7 @@
   function setSettingsCategory(category: SettingsCategory) {
     settingsCategory = category;
     if (category === 'providers') void Promise.all(profiles.map(loadProviderMetadata));
+    if (category === 'usage') void refreshCodexUsage();
     if (!compactLayout) return;
     sidebarOpen = false;
     void tick().then(() => document.getElementById('settings-title')?.focus());
@@ -677,6 +691,7 @@
         applyNewThreadDefaults(selectedThread);
       }
       if (!webPreview) await providers.discoverAll(defaultWorkingFolder, threads);
+      void refreshCodexUsage();
       void Promise.all(initialProfiles.map(loadProviderMetadata));
     } catch (error) {
       const thread = selectedThread ?? threads[0];
@@ -785,6 +800,22 @@
   async function rediscoverProvider(profile: HarnessProfile) {
     await providers.discover(profile, defaultWorkingFolder, threads);
     await loadProviderMetadata(profile);
+  }
+
+  /**
+   * `codex-acp` drops the app-server's rate-limit notifications, so Codex's own rollout files are
+   * the only structured copy. They are already on disk; reading them queries nothing.
+   */
+  async function refreshCodexUsage() {
+    if (webPreview) return;
+    try {
+      const record = codexUsageRecord(await getCodexRateLimits());
+      if (record && record.updatedAt > (providerUsage.codex?.updatedAt ?? 0)) {
+        providerUsage = recordProviderUsage(providerUsage, 'codex', record);
+      }
+    } catch {
+      // Usage is informational; a missing or unreadable Codex home is not worth surfacing.
+    }
   }
 
   async function loadProviderMetadata(profile: HarnessProfile) {
@@ -1012,6 +1043,7 @@
     {setProjectExplorerOpen}
     bind:projectExplorerCollapsed
     {defaultWorkingFolder}
+    {rememberProviderModel}
     attachImages={(files) => { if (selectedThread) void attachImages(files, selectedThread.id); }}
     removeImage={(imageId) => { if (selectedThread) removeComposerImage(selectedThread.id, imageId); }}
     clearAttachments={() => {
@@ -1038,6 +1070,7 @@
         baseProfiles={officialProfiles}
         catalogs={providerCatalogs}
         {providerVersions}
+        {providerUsage}
         {permissionMode}
         {reducedMotion}
         {setPreference}
