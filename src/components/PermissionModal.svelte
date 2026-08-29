@@ -3,11 +3,11 @@
   import { z } from 'zod';
 
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
-  import type { PermissionOption, PermissionRequest } from '../types';
-  import { fileChangeDiffLines } from '../utils/text-diff';
+  import type { PermissionDecisionRequest, PermissionOption } from '../types';
+  import { diffLineClass, fileChangeDiffLines } from '../utils/text-diff';
 
   interface Props {
-    request: PermissionRequest;
+    request: PermissionDecisionRequest;
     answer: (optionId: string) => void;
     decline: () => void;
   }
@@ -19,21 +19,10 @@
       request.options.find((option) => option.kind?.startsWith('allow'))?.optionId,
   );
   const detail = $derived(parsePermissionDetail(request.detail));
-  const fileChanges = $derived(
-    request.type === 'permission' ? (request.fileChanges ?? []) : [],
-  );
-  const planMarkdown = $derived(request.type === 'permission' ? request.planMarkdown : undefined);
-  const changeDiffs = $derived(
-    fileChanges.map((change) => ({
-      change,
-      lines: fileChangeDiffLines(change.diff, change.kind),
-    })),
-  );
-  const title = $derived(request.title);
+  const fileChanges = $derived(request.fileChanges ?? []);
+  const planMarkdown = $derived(request.planMarkdown);
   const description = $derived(
-    request.type === 'permission' && request.description
-      ? request.description
-      : describe(detail.command, fileChanges.length, planMarkdown),
+    request.description ?? describe(detail.command, fileChanges.length, planMarkdown),
   );
 
   function describe(command: string | undefined, changeCount: number, plan: string | undefined) {
@@ -44,13 +33,6 @@
   }
 
   const changeVerb = { add: 'Create', update: 'Edit', delete: 'Delete' };
-
-  const diffLineClass = (kind: string) =>
-    `block px-2.5 break-anywhere whitespace-pre-wrap ${
-      kind === 'add' ? 'bg-[color-mix(in_srgb,var(--success)_13%,transparent)]' : ''
-    } ${kind === 'del' ? 'bg-[color-mix(in_srgb,var(--danger)_13%,transparent)]' : ''} ${
-      kind === 'hunk' ? 'bg-[color-mix(in_srgb,var(--muted)_8%,transparent)] text-faint' : ''
-    }`;
   const options = $derived([...request.options].sort(byPromptOrder));
 
   const permissionDetailSchema = z.object({
@@ -122,7 +104,7 @@
       class="{modalShell} {modalHeading} {modalDescription}"
       onOpenAutoFocus={focusPreferredOption}
     >
-      <AlertDialog.Title>{title}</AlertDialog.Title>
+      <AlertDialog.Title>{request.title}</AlertDialog.Title>
       <AlertDialog.Description>{description}</AlertDialog.Description>
 
       <div class="mt-[14px] max-h-[min(300px,42vh)] overflow-auto">
@@ -146,17 +128,18 @@
           <div class="rounded-[7px] border border-line bg-recessed p-2.5 text-[13px] leading-[1.55] text-text-soft [&>:last-child]:mb-0">
             <MarkdownMessage id={`plan-${String(request.requestId)}`} source={planMarkdown} />
           </div>
-        {:else if changeDiffs.length > 0}
+        {:else if fileChanges.length > 0}
           <div class="grid gap-2">
-            {#each changeDiffs as entry (entry.change.path)}
+            {#each fileChanges as change, index (`${change.path}#${index}`)}
+              {@const lines = fileChangeDiffLines(change.diff, change.kind)}
               <section class="overflow-hidden rounded-[7px] border border-line bg-recessed">
                 <header
                   class="overflow-hidden text-ellipsis whitespace-nowrap border-b border-line px-2.5 py-1.5 font-mono text-[10px] leading-snug text-faint"
-                  title={entry.change.path}
-                >{changeVerb[entry.change.kind]} {entry.change.path}</header>
+                  title={change.path}
+                >{changeVerb[change.kind]} {change.path}</header>
                 <div class="max-h-[220px] overflow-auto py-1 font-mono text-[11.5px] leading-relaxed tabular-nums">
-                  {#each entry.lines as line, lineIndex (`${lineIndex}:${line.kind}`)}
-                    <span class={diffLineClass(line.kind)}>{line.text || ' '}</span>
+                  {#each lines as line, lineIndex (`${lineIndex}:${line.kind}`)}
+                    <span class={diffLineClass(line.kind, 'px-2.5')}>{line.text || ' '}</span>
                   {/each}
                 </div>
               </section>

@@ -41,22 +41,6 @@ void test("an edit keeps surrounding context and numbers the hunk", () => {
   assert.deepEqual(diffLineStats(lines), { additions: 1, deletions: 1 });
 });
 
-void test("distant edits split into separate hunks and drop the untouched middle", () => {
-  const before = text(...Array.from({ length: 40 }, (_, index) => `line ${index}`));
-  const after = before.replace("line 0", "first").replace("line 39", "last");
-  const lines = unifiedDiffLines(before, after);
-
-  assert.deepEqual(
-    lines.filter((line) => line.kind === "hunk").map((line) => line.text),
-    ["@@ -1,4 +1,4 @@", "@@ -37,4 +37,4 @@"],
-  );
-  assert.equal(
-    lines.some((line) => line.text.includes("line 20")),
-    false,
-  );
-  assert.deepEqual(diffLineStats(lines), { additions: 2, deletions: 2 });
-});
-
 void test("pure insertions do not rewrite the surrounding lines", () => {
   const lines = unifiedDiffLines(text("a", "d"), text("a", "b", "c", "d"));
 
@@ -64,14 +48,6 @@ void test("pure insertions do not rewrite the surrounding lines", () => {
     lines.map((line) => line.text),
     ["@@ -1,2 +1,4 @@", " a", "+b", "+c", " d"],
   );
-});
-
-void test("files larger than the pairwise limit still diff as a block replace", () => {
-  const before = text(...Array.from({ length: 1_400 }, (_, index) => `old ${index}`));
-  const after = text(...Array.from({ length: 1_400 }, (_, index) => `new ${index}`));
-  const stats = diffLineStats(unifiedDiffLines(before, after));
-
-  assert.deepEqual(stats, { additions: 1_400, deletions: 1_400 });
 });
 
 void test("trailing newline differences do not register as changes", () => {

@@ -12,7 +12,7 @@
   import type { PlanEntry, ToolActivity, ToolDiff } from '../types';
   import { copyText } from '../utils/clipboard';
   import { materialFileIcon } from '../utils/material-file-icons';
-  import { diffLineStats, unifiedDiffLines } from '../utils/text-diff';
+  import { diffLineClass, diffLineStats, unifiedDiffLines } from '../utils/text-diff';
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
 
   interface Props {
@@ -65,12 +65,6 @@
     return status === 'in_progress' ? IconCircleDot : IconCircle;
   }
 
-  const diffLineClass = (kind: string) =>
-    `block px-2 break-anywhere whitespace-pre-wrap ${
-      kind === 'add' ? 'bg-[color-mix(in_srgb,var(--success)_13%,transparent)]' : ''
-    } ${kind === 'del' ? 'bg-[color-mix(in_srgb,var(--danger)_13%,transparent)]' : ''} ${
-      kind === 'hunk' ? 'bg-[color-mix(in_srgb,var(--muted)_8%,transparent)] text-faint' : ''
-    }`;
 </script>
 
 {#if tool.plan}
@@ -140,7 +134,7 @@
   </section>
 {/if}
 
-{#each renderedDiffs as entry (entry.diff.path)}
+{#each renderedDiffs as entry, index (`${entry.diff.path}#${index}`)}
   {@const KindIcon = diffKindIcon[entry.diff.kind ?? 'update']}
   <ContextMenu items={diffMenuItems(entry)}>
     {#snippet children({ props })}
@@ -173,7 +167,7 @@
         {:else}
           <div class="max-h-[280px] overflow-auto py-1 {monospace} tabular-nums">
             {#each entry.lines as line, lineIndex (`${lineIndex}:${line.kind}`)}
-              <span class={diffLineClass(line.kind)}>{line.text || ' '}</span>
+              <span class={diffLineClass(line.kind, 'px-2')}>{line.text || ' '}</span>
             {/each}
           </div>
         {/if}
