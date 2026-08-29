@@ -13,6 +13,7 @@ import type {
   SessionSelectId,
   SlashCommand,
   ThreadState,
+  TimelineMessage,
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { jsonValueSchema } from "../utils/json.ts";
@@ -145,8 +146,11 @@ export class ProviderRuntime {
     if (provider.turnStatus === "running") {
       if (!provider.supportsFollowups || provider.connectionStatus !== "ready") return;
       addMessage(thread, "user", text, images, content);
-      this.#updates.startTurn(thread.id, profileId);
-      return this.#completeFollowUp(thread, profileId, text, images, content);
+      // `followUp` keeps timelineEntries from closing out the still-running turn segment.
+      const followUpMessage = thread.messages.at(-1)!;
+      followUpMessage.followUp = true;
+      this.#updates.startFollowUp(thread.id, profileId);
+      return this.#completeFollowUp(thread, profileId, followUpMessage, text, images, content);
     }
     if (provider.turnStatus !== "idle") return;
     if (provider.connectionStatus !== "disconnected" && provider.connectionStatus !== "ready")
@@ -582,6 +586,7 @@ export class ProviderRuntime {
   async #completeFollowUp(
     thread: ThreadState,
     profileId: string,
+    message: TimelineMessage,
     text: string,
     images: MessageImage[],
     content?: PromptPart[],
@@ -591,8 +596,15 @@ export class ProviderRuntime {
       if (!connection) throw new Error(`${this.#profileById(profileId).label} is not connected`);
       await connection.followUp(acpPrompt(content, text, images));
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      addMessage(thread, "error", `Could not send follow-up: ${message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      message.failure = {
+        id: crypto.randomUUID(),
+        revision: 1,
+        category: "request",
+        severity: "error",
+        title: `Could not send follow-up: ${errorMessage}`,
+        actions: ["retry"],
+      };
     }
   }
 
@@ -804,11 +816,43 @@ export class ProviderRuntime {
   }
 
   async retryLastTurn(thread: ThreadState) {
+    const profileId = thread.profileId;
+    const provider = thread.providers[profileId];
+    this.#clearFailures(thread);
+    // A failure notice can arrive on a turn that completed normally; then retry only dismisses it.
+    if (provider.turnStatus !== "failed") return;
     const prompt = [...thread.messages].reverse().find((message) => message.role === "user");
     if (!prompt) return;
-    const provider = thread.providers[thread.profileId];
-    if (provider.connectionStatus !== "ready") await this.connect(thread, thread.profileId);
+    if (provider.connectionStatus !== "ready") await this.connect(thread, profileId);
+    // Nothing else resets a turn-scoped "failed", so runTurn's idle guard would no-op.
+    if (provider.turnStatus === "failed") this.#setTurnStatus(thread, profileId, "idle");
     return this.runTurn(thread, prompt.text, prompt.images, prompt.content);
+  }
+
+  async retryMessage(thread: ThreadState, messageId: string) {
+    const index = thread.messages.findIndex((message) => message.id === messageId);
+    if (index === -1) return;
+    const profileId = thread.profileId;
+    const provider = thread.providers[profileId];
+    // The turn may have ended since the failure; recover as retryLastTurn does so this resends.
+    if (provider.turnStatus !== "running") {
+      if (provider.connectionStatus !== "ready") await this.connect(thread, profileId);
+      if (provider.turnStatus === "failed") this.#setTurnStatus(thread, profileId, "idle");
+    }
+    const [message] = thread.messages.splice(index, 1);
+    const turn = this.runTurn(thread, message.text, message.images ?? [], message.content);
+    // Not accepting prompts: put the message back rather than swallowing the user's text.
+    if (!turn) thread.messages.splice(index, 0, message);
+    return turn;
+  }
+
+  #clearFailures(thread: ThreadState) {
+    // A failure notice is synthesized from the failure, so dismissing it drops the whole message.
+    for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
+      const message = thread.messages[index];
+      if (message.id.startsWith("failure-")) thread.messages.splice(index, 1);
+      else if (message.failure) message.failure = undefined;
+    }
   }
 
   async newSession(thread: ThreadState) {

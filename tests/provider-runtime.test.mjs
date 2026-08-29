@@ -132,6 +132,158 @@ void test("a running provider can accept an advertised follow-up", async () => {
   assert.equal(state.messages.at(-1).text, "Also run the tests");
 });
 
+void test("a failed follow-up attaches its failure to the sent message instead of losing it", async () => {
+  const connection = {
+    async followUp() {
+      throw new Error("session closed");
+    },
+  };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return connection;
+    }
+  }
+
+  const state = thread();
+  state.providers.codex.turnStatus = "running";
+  state.providers.codex.supportsFollowups = true;
+  const runtime = new Runtime(catalogs, hooks);
+
+  await runtime.runTurn(state, "Also run the tests");
+
+  const message = state.messages.at(-1);
+  assert.equal(message.role, "user");
+  assert.equal(message.followUp, true);
+  assert.equal(message.failure?.title, "Could not send follow-up: session closed");
+  assert.deepEqual(message.failure.actions, ["retry"]);
+});
+
+void test("retrying a failed follow-up resends it without leaving a duplicate behind", async () => {
+  const calls = [];
+  const connection = {
+    async followUp(content) {
+      calls.push(content);
+      if (calls.length === 1) throw new Error("session closed");
+    },
+  };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return connection;
+    }
+  }
+
+  const state = thread();
+  state.providers.codex.turnStatus = "running";
+  state.providers.codex.supportsFollowups = true;
+  const runtime = new Runtime(catalogs, hooks);
+
+  await runtime.runTurn(state, "Also run the tests");
+  await runtime.retryMessage(state, state.messages.at(-1).id);
+
+  assert.equal(calls.length, 2);
+  const sent = state.messages.filter((message) => message.role === "user");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].text, "Also run the tests");
+  assert.equal(sent[0].failure, undefined);
+});
+
+void test("a retry the provider cannot accept keeps the message and its failure on screen", async () => {
+  const connection = {
+    async followUp() {
+      throw new Error("session closed");
+    },
+  };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return connection;
+    }
+  }
+
+  const state = thread();
+  state.providers.codex.turnStatus = "running";
+  state.providers.codex.supportsFollowups = true;
+  const runtime = new Runtime(catalogs, hooks);
+
+  await runtime.runTurn(state, "Also run the tests");
+  const failed = state.messages.at(-1);
+  // The connection dropped between the failure and the retry, so runTurn refuses the prompt.
+  state.providers.codex.connectionStatus = "disconnected";
+
+  await runtime.retryMessage(state, failed.id);
+
+  assert.deepEqual(
+    state.messages.map((message) => message.text),
+    ["Also run the tests"],
+  );
+  assert.equal(state.messages[0].failure?.title, "Could not send follow-up: session closed");
+});
+
+void test("retryLastTurn resends after a turn-scoped failure", async () => {
+  const calls = [];
+  const connection = {
+    async prompt(content) {
+      calls.push(content);
+    },
+  };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return connection;
+    }
+  }
+
+  const state = thread();
+  state.messages.push({ id: "user-1", role: "user", text: "Do the thing", createdAt: 1 });
+  // A turn-scoped failure leaves connectionStatus "ready" with turnStatus stuck at "failed" —
+  // nothing else resets it, so this reproduces the state retryLastTurn has to recover from.
+  state.providers.codex.turnStatus = "failed";
+  const runtime = new Runtime(catalogs, hooks);
+
+  await runtime.retryLastTurn(state);
+
+  assert.deepEqual(calls, [[{ type: "text", text: "Do the thing" }]]);
+});
+
+void test("retryLastTurn dismisses an informational failure without resending a completed turn", async () => {
+  const calls = [];
+  const connection = {
+    async prompt(content) {
+      calls.push(content);
+    },
+  };
+  class Runtime extends ProviderRuntime {
+    connection() {
+      return connection;
+    }
+  }
+
+  const state = thread();
+  state.messages.push({
+    // The id #upsertFailure assigns a synthesized failure notice.
+    id: "failure-f1",
+    role: "error",
+    text: "Approaching your rate limit",
+    failure: {
+      id: "f1",
+      revision: 1,
+      category: "limit",
+      severity: "warning",
+      title: "Approaching your rate limit",
+      actions: ["retry"],
+    },
+    createdAt: 1,
+  });
+  // turnStatus is left "idle" (the default), matching a session-failure notice reported as
+  // metadata on a turn that otherwise completed normally.
+
+  const runtime = new Runtime(catalogs, hooks);
+  await runtime.retryLastTurn(state);
+
+  assert.deepEqual(calls, []);
+  // The notice is nothing but its failure, so dismissing it drops the whole row rather than
+  // leaving the red text behind with its buttons stripped.
+  assert.deepEqual(state.messages, []);
+});
+
 void test("a running turn prevents switching providers", () => {
   const state = thread();
   state.providers.codex.turnStatus = "running";

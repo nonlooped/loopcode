@@ -333,10 +333,13 @@
     else projectExplorerCollapsed = !projectExplorerCollapsed;
   }
 
-  function recoverFailure(action: SessionFailureAction) {
+  // `messageId` is set when the failure sits on a user message that never reached the agent:
+  // that exact message is resent, instead of replaying the thread's last turn.
+  function recoverFailure(action: SessionFailureAction, messageId?: string) {
     const thread = selectedThread;
     if (!thread) return;
-    if (action === 'retry') void providers.retryLastTurn(thread);
+    if (action === 'retry')
+      void (messageId ? providers.retryMessage(thread, messageId) : providers.retryLastTurn(thread));
     else if (action === 'new_session') void providers.newSession(thread);
     else {
       const command = profiles.find((profile) => profile.id === thread.profileId)?.loginCommand;

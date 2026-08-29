@@ -93,6 +93,31 @@ void test("does not mark the previous turn's response as streaming while the nex
   assert.equal(isStreamingMessage(value, currentResponse), true);
 });
 
+void test("keeps a still-running turn active across a marked follow-up message", () => {
+  const value = thread("running");
+  value.messages.push(
+    { id: "follow-up", role: "user", text: "Also check tests", followUp: true, createdAt: 7 },
+    { id: "response", role: "agent", text: "Checking tests now", createdAt: 8 },
+  );
+  value.updatedAt = 8;
+
+  const entries = timelineEntries(value);
+
+  // A follow-up sent mid-turn must not close out the still-running turn: exactly one active
+  // work group spanning both the original turn and the follow-up's response, not two turns
+  // with the first one frozen at the follow-up.
+  const workEntries = entries.filter((entry) => entry.type === "work");
+  assert.equal(workEntries.length, 1);
+  assert.equal(workEntries[0].active, true);
+  assert.equal(workEntries[0].durationMs, null);
+  assert.ok(
+    workEntries[0].entries.some(
+      (entry) => entry.type === "message" && entry.message.id === "response",
+    ),
+  );
+  assert.ok(entries.some((entry) => entry.type === "message" && entry.message.id === "follow-up"));
+});
+
 const workEntry = (active) => ({
   type: "work",
   id: "work-1",

@@ -49,7 +49,7 @@
     sendShortcut: SendShortcut;
     openFile: (path: string) => void;
     resendPrompt: (text: string, references: ComposerReference[]) => boolean;
-    recoverFailure: (action: SessionFailureAction) => void;
+    recoverFailure: (action: SessionFailureAction, messageId?: string) => void;
   }
 
   const { thread, entries, profiles, reducedMotion, sendShortcut, openFile, resendPrompt, recoverFailure }: Props =
@@ -344,6 +344,16 @@
   {/if}
 {/snippet}
 
+{#snippet failureActions(message: TimelineMessage)}
+  {#if message.failure?.actions.length}
+    <div class="mt-2 flex flex-wrap gap-1.5">
+      {#each message.failure.actions as action (action)}
+        <button type="button" class="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-text-soft hover:bg-panel-hover" onclick={() => recoverFailure(action, message.role === 'user' ? message.id : undefined)}>{action === 'new_session' ? 'New session' : action[0].toUpperCase() + action.slice(1)}</button>
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
 <div class="relative min-h-0 flex-1 [container-type:size]">
   <MotionEnter duration={reducedMotion ? 0 : 150}>
   <section
@@ -476,13 +486,7 @@
             <div class="min-w-0">
               <span>{message.text}</span>
               {#if message.failure?.details}<p class="mt-1 mb-0 whitespace-pre-wrap text-faint">{message.failure.details}</p>{/if}
-              {#if message.failure?.actions.length}
-                <div class="mt-2 flex flex-wrap gap-1.5">
-                  {#each message.failure.actions as action (action)}
-                    <button type="button" class="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-text-soft hover:bg-panel-hover" onclick={() => recoverFailure(action)}>{action === 'new_session' ? 'New session' : action[0].toUpperCase() + action.slice(1)}</button>
-                  {/each}
-                </div>
-              {/if}
+              {@render failureActions(message)}
             </div>
           </div>
           </MotionEnter>
@@ -615,6 +619,15 @@
                   <IconChevronDown size={14} stroke={1.55} />
                 {/if}
               </button>
+            {/if}
+            {#if message.failure}
+              <div class="mt-2 flex items-start gap-2 text-xs leading-snug text-danger">
+                <IconAlertTriangle size={15} stroke={1.55} />
+                <div class="min-w-0">
+                  <span>{message.failure.title}</span>
+                  {@render failureActions(message)}
+                </div>
+              </div>
             {/if}
           </article>
               </MotionEnter>

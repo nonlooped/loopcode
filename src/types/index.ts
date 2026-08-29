@@ -45,6 +45,9 @@ export interface TimelineMessage {
   images?: MessageImage[];
   createdAt: number;
   failure?: SessionFailure;
+  /** Set on a user message sent as a mid-turn follow-up, so timelineEntries keeps it in the
+   * still-running turn's segment instead of treating it as the start of a new turn. */
+  followUp?: boolean;
 }
 
 export type SessionFailureAction = "retry" | "login" | "new_session";

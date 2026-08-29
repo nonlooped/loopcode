@@ -144,6 +144,11 @@ export class SessionUpdateHandler {
     this.#planIds.set(connectionKey(threadId, profileId), `plan-${crypto.randomUUID()}`);
   }
 
+  /** Like startTurn, but keeps the plan id: the turn never ended, so the Plan card is the same. */
+  startFollowUp(threadId: string, profileId: string) {
+    this.#resetStreams(threadId, profileId);
+  }
+
   clear(threadId: string, profileId: string) {
     this.#streamIds.delete(connectionKey(threadId, profileId));
     this.#planIds.delete(connectionKey(threadId, profileId));

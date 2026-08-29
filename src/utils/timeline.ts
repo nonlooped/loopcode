@@ -17,7 +17,8 @@ export function timelineEntries(thread: ThreadState): TimelineDisplayEntry[] {
 
   for (let index = 0; index <= entries.length; index += 1) {
     const entry = entries[index];
-    const startsNextTurn = entry?.type === "message" && entry.message.role === "user";
+    const startsNextTurn =
+      entry?.type === "message" && entry.message.role === "user" && !entry.message.followUp;
     if (index > segmentStart && (startsNextTurn || index === entries.length)) {
       displayEntries.push(
         ...collapseTurnActivity(

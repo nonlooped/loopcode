@@ -61,6 +61,7 @@ const messageSchema = z.object({
     .optional(),
   createdAt: z.number().finite(),
   failure: failureSchema.optional(),
+  followUp: z.boolean().optional(),
 });
 const childToolSchema = z
   .object({
