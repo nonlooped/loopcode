@@ -155,11 +155,8 @@
   const selectedBaseProvider = $derived(baseProfiles.find((profile) => profile.id === selectedProviderId));
   const titleProfiles = $derived(
     profiles.filter((profile) =>
-      profile.titleGeneration
-      && (
-        profile.id === preferences.titleProviderId
-        || (preferences.providerSettings[profile.id]?.enabled !== false && catalogs[profile.id]?.status === 'ready')
-      )
+      profile.id === preferences.titleProviderId
+      || (preferences.providerSettings[profile.id]?.enabled !== false && catalogs[profile.id]?.status === 'ready'),
     ),
   );
   const titleCatalog = $derived(catalogs[preferences.titleProviderId]);

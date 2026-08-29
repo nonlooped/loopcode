@@ -108,11 +108,6 @@
       ?? officialProfiles[0],
   );
   const status = $derived(threadStatus(props.thread));
-  const imageSupportError = $derived(
-    props.images.length > 0 && !profile.supportsImages
-      ? `${profile.label} does not support image prompts.`
-      : '',
-  );
   const commandResults = $derived.by(() => {
     if (completionPrefix !== '/') return [];
     const query = completionQuery;
@@ -201,8 +196,7 @@
     return canEdit()
       && props.catalogs[props.thread.profileId]?.status === 'ready'
       && props.selectableProfiles.some((candidate) => candidate.id === props.thread.profileId)
-      && Boolean(provider.selectedModelId)
-      && !imageSupportError;
+      && Boolean(provider.selectedModelId);
   }
 
   function resizePromptEditor() {
@@ -583,7 +577,7 @@
       });
     const text = event.clipboardData?.getData('text/plain') ?? '';
     if (text) insertText(text);
-    if (files.length > 0 && profile.supportsImages) props.attachImages(files);
+    if (files.length > 0) props.attachImages(files);
   }
 
   function chooseModel(profileId: string, model: ModelOption) {
@@ -603,7 +597,7 @@
     class="relative mx-auto grid min-h-[49px] w-[min(var(--content-width,720px),100%)] grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-[7px] rounded-[18px] border border-line-strong bg-raised p-[7px] shadow-overlay backdrop-blur-overlay focus-within:border-focus-ring"
     class:expanded={expanded}
   >
-    {#if props.images.length > 0 || props.attachmentError || imageSupportError}
+    {#if props.images.length > 0 || props.attachmentError}
       <div class="col-span-full flex min-w-0 items-center gap-[7px] overflow-x-auto px-px pb-[3px] pt-px" aria-label="Attached images">
         {#each props.images as image (image.id)}
           <ContextMenu items={imageMenuItems(image)}>
@@ -622,20 +616,19 @@
             {/snippet}
           </ContextMenu>
         {/each}
-        {#if imageSupportError}<span class="text-[11px] text-danger">{imageSupportError}</span>{/if}
         {#if props.attachmentError}<span class="text-[11px] text-danger">{props.attachmentError}</span>{/if}
       </div>
     {/if}
-    <input bind:this={imageInput} class="hidden" type="file" accept="image/*" multiple disabled={!canEdit() || !profile.supportsImages} onchange={handleImageSelection} />
+    <input bind:this={imageInput} class="hidden" type="file" accept="image/*" multiple disabled={!canEdit()} onchange={handleImageSelection} />
     <button
       bind:this={attachButton}
       class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-transparent p-0 text-muted hover:bg-panel-hover hover:text-text-soft disabled:opacity-40"
       class:order-2={expanded}
       class:col-start-1={expanded}
       type="button"
-      aria-label={profile.supportsImages ? 'Attach images' : `${profile.label} does not support images`}
-      title={profile.supportsImages ? 'Attach images (you can also paste them)' : `${profile.label} does not support image prompts`}
-      disabled={!canEdit() || !profile.supportsImages}
+      aria-label="Attach images"
+      title="Attach images (you can also paste them)"
+      disabled={!canEdit()}
       onclick={() => imageInput?.click()}
     >
       <IconPaperclip size={16} stroke={1.55} />

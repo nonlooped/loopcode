@@ -2,7 +2,7 @@ import type { FastModeOption, ModelOption, ReasoningModelOption } from "../types
 import type { AcpModelState } from "./model-state.ts";
 
 interface ModelConfigConnection {
-  setModel: (configId: string, modelId: string) => Promise<AcpModelState>;
+  setConfigOption: (configId: string, value: string) => Promise<AcpModelState>;
 }
 
 type ModelState = AcpModelState & { model: ModelOption };
@@ -37,7 +37,7 @@ export async function discoverModelOptions(
       const modelState =
         model.id === state.selectedModelId
           ? state
-          : await connection.setModel(state.modelConfigId, model.id);
+          : await connection.setConfigOption(state.modelConfigId, model.id);
       if (modelState.selectedModelId === model.id) states.push({ model, ...modelState });
     } catch {
       // A model that cannot be selected during discovery is simply unavailable.

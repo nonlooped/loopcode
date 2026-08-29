@@ -1,7 +1,4 @@
-import {
-  providerSupportsPlatform,
-  type ProviderDefinition,
-} from "../config/provider-definitions.ts";
+import type { ProviderDefinition } from "../config/provider-definitions.ts";
 import type {
   HarnessProfile,
   ModelOption,
@@ -12,18 +9,6 @@ import type {
 export interface TitleGenerationPreference {
   profileId: string;
   modelId: string;
-}
-
-export function initialProviderCatalog(profile: HarnessProfile): ProviderModelCatalog {
-  return providerSupportsPlatform(profile)
-    ? { status: "loading", models: [], reasoningOptions: [] }
-    : {
-        status: "unavailable",
-        models: [],
-        reasoningOptions: [],
-        unavailableReason: "unsupported-platform",
-        error: `${profile.label} is not available on this platform.`,
-      };
 }
 
 export function previewProviderCatalog(profile: HarnessProfile): ProviderModelCatalog {
@@ -76,7 +61,7 @@ export function titleGenerationSelection(
   profiles: ProviderDefinition[],
   catalogs: Record<string, ProviderModelCatalog>,
 ): { profile: ProviderDefinition; model: ModelOption } | undefined {
-  const profile = profiles.find((item) => item.id === preference.profileId && item.titleGeneration);
+  const profile = profiles.find((item) => item.id === preference.profileId);
   const catalog = profile ? catalogs[profile.id] : undefined;
   if (!profile || catalog?.status !== "ready") return;
   const modelId = preference.modelId || catalog.selectedModelId;

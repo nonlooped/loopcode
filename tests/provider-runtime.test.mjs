@@ -46,13 +46,6 @@ const hooks = { permission() {}, clearPermission() {} };
 
 const [codexProfile] = providerDefinitions;
 const secondaryProfile = { ...codexProfile, id: "secondary", label: "Secondary" };
-const noImageProfile = {
-  ...codexProfile,
-  id: "no-images",
-  label: "No images",
-  supportsImages: false,
-};
-
 function configuration(
   profiles = providerDefinitions,
   { customModels = {}, disabledProfileIds = [] } = {},
@@ -330,22 +323,6 @@ void test("connection startup restores preselected session options", async () =>
   ]);
   assert.equal(state.providers.codex.selectedModeId, "plan");
   assert.equal(state.providers.codex.selectedAgentId, "reviewer");
-});
-
-void test("image turns are rejected before timeline changes when a provider lacks image support", () => {
-  const state = thread();
-  state.profileId = noImageProfile.id;
-  state.providers[noImageProfile.id] = provider();
-  const runtime = new ProviderRuntime({ ...catalogs, [noImageProfile.id]: catalogs.codex }, hooks);
-  runtime.configure(configuration([codexProfile, noImageProfile]), [state]);
-
-  assert.equal(
-    runtime.runTurn(state, "Describe this", [
-      { data: "image-data", mimeType: "image/png", name: "reference.png" },
-    ]),
-    undefined,
-  );
-  assert.deepEqual(state.messages, []);
 });
 
 void test("reconnect waits for a replaced provider process to stop", async () => {

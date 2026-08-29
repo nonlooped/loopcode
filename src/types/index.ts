@@ -268,8 +268,6 @@ export interface ProviderSessionState {
   rateLimits?: RateLimitState[];
 }
 
-export type DesktopPlatform = "linux" | "macos" | "windows";
-
 export interface HarnessProfile {
   id: string;
   label: string;
@@ -278,11 +276,6 @@ export interface HarnessProfile {
   command: string;
   args: string[];
   versionCommand: string;
-  versionArgs: string[];
-  platforms: DesktopPlatform[];
-  supportsImages: boolean;
-  titleGeneration: boolean;
-  probeModelOptions: boolean;
   installCommand: string;
   loginCommand: string;
 }
@@ -341,11 +334,7 @@ export interface QuestionAnswer {
   customAnswer?: string;
 }
 
-export type ProviderUnavailableReason =
-  | "authentication"
-  | "discovery"
-  | "missing-executable"
-  | "unsupported-platform";
+export type ProviderUnavailableReason = "authentication" | "discovery" | "missing-executable";
 
 interface ProviderModelCatalogState {
   agentVersion?: string;

@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  CLAUDE_ACP_VERSION,
-  desktopPlatform,
-  providerDefinitions,
-  providerSupportsPlatform,
-} from "../src/config/provider-definitions.ts";
+import { providerDefinitions } from "../src/config/provider-definitions.ts";
 import {
   providerCanToggle,
   providerDisplayStatus,
@@ -23,24 +18,7 @@ const ready = (modelId) => ({
   reasoningOptions: [],
 });
 
-void test("provider availability covers platform, discovery, executable, and auth failures", () => {
-  assert.equal(desktopPlatform("darwin"), "macos");
-  assert.equal(desktopPlatform("macos"), "macos");
-  assert.equal(desktopPlatform("windows"), "windows");
-  assert.equal(desktopPlatform("linux"), "linux");
-  assert.equal(desktopPlatform(undefined), "linux");
-  assert.ok(providerDefinitions.every((profile) => profile.platforms.includes("macos")));
-  assert.deepEqual(
-    providerDefinitions.map(({ id }) => id),
-    ["codex", "claude"],
-  );
-  assert.ok(
-    providerDefinitions
-      .find(({ id }) => id === "claude")
-      ?.args.includes(`@agentclientprotocol/claude-agent-acp@${CLAUDE_ACP_VERSION}`),
-  );
-  assert.equal(providerSupportsPlatform({ platforms: ["linux", "macos"] }, "macos"), true);
-  assert.equal(providerSupportsPlatform({ platforms: ["linux", "macos"] }, "windows"), false);
+void test("provider availability classifies discovery, executable, and auth failures", () => {
   assert.equal(unavailableReason(new Error("Authentication required")), "authentication");
   assert.equal(
     unavailableReason(new Error("Could not start codex: No such file or directory")),
@@ -64,28 +42,14 @@ void test("an unavailable saved default falls back", () => {
   assert.equal(readyProviderId("retired", providerDefinitions, catalogs), "codex");
 });
 
-void test("title generation resolves only a ready safe provider and model", () => {
-  const profiles = [
-    { id: "codex", titleGeneration: true },
-    { id: "untitled", titleGeneration: false },
-  ];
-  const catalogs = {
-    codex: ready("codex-model"),
-    untitled: ready("untitled-model"),
-  };
+void test("title generation resolves a ready provider and model", () => {
+  const profiles = [{ id: "codex" }];
+  const catalogs = { codex: ready("codex-model") };
 
   assert.equal(
     titleGenerationSelection({ profileId: "codex", modelId: "codex-model" }, profiles, catalogs)
       ?.model.id,
     "codex-model",
-  );
-  assert.equal(
-    titleGenerationSelection(
-      { profileId: "untitled", modelId: "untitled-model" },
-      profiles,
-      catalogs,
-    ),
-    undefined,
   );
 });
 

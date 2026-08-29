@@ -16,7 +16,7 @@ void test("discovers reasoning variants for every advertised model", async () =>
     reasoningOptions: [],
   };
   const connection = {
-    async setModel(_configId, modelId) {
+    async setConfigOption(_configId, modelId) {
       if (modelId === "unsupported/model") return initial;
       return {
         ...initial,

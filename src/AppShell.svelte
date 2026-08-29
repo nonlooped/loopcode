@@ -66,7 +66,6 @@
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
   import {
-    initialProviderCatalog,
     previewProviderCatalog,
     providerCanToggle,
     readyProviderId,
@@ -102,10 +101,12 @@
   );
   loadedPreferences.titleProviderId = profileById(loadedPreferences.titleProviderId)?.id ?? officialProfiles[0].id;
   const initialProfiles = configuredProviderProfiles(officialProfiles, loadedPreferences.providerSettings);
-  const initialCatalogs = Object.fromEntries(
+  const initialCatalogs: Record<string, ProviderModelCatalog> = Object.fromEntries(
     initialProfiles.map((profile) => [
       profile.id,
-      webPreview ? previewProviderCatalog(profile) : initialProviderCatalog(profile),
+      webPreview
+        ? previewProviderCatalog(profile)
+        : { status: 'loading', models: [], reasoningOptions: [] },
     ]),
   );
 
@@ -796,7 +797,7 @@
     const generation = (providerVersionGenerations.get(profile.id) ?? 0) + 1;
     providerVersionGenerations.set(profile.id, generation);
     try {
-      const output = await getProviderVersion(profile.versionCommand, profile.versionArgs);
+      const output = await getProviderVersion(profile.versionCommand, ['--version']);
       if (providerVersionGenerations.get(profile.id) !== generation) return;
       const version = output ? providerVersionFromOutput(output) : undefined;
       if (version) providerVersions[profile.id] = version;

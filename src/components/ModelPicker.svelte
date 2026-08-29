@@ -74,7 +74,6 @@
 
   function setupCommands() {
     if (pickerCatalog.status !== 'unavailable') return [];
-    if (pickerCatalog.unavailableReason === 'unsupported-platform') return [];
     if (pickerCatalog.unavailableReason === 'authentication') return [pickerProfile.loginCommand];
     return [pickerProfile.installCommand, pickerProfile.loginCommand];
   }
@@ -179,8 +178,7 @@
                   {/each}
                   <button
                     class="h-7 rounded-[7px] border border-line-strong bg-panel-hover px-2.5 text-[11px] text-text-soft hover:bg-panel-active disabled:opacity-[0.55]"
-                    disabled={pickerCatalog.unavailableReason === 'unsupported-platform'}
-                    title={pickerCatalog.unavailableReason === 'unsupported-platform' ? 'This provider does not support the current platform' : 'Retry provider discovery'}
+                    title="Retry provider discovery"
                     onclick={() => props.retryDiscovery(pickerProfile.id)}
                   >Retry</button>
                 </div>

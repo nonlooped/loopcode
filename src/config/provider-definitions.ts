@@ -1,19 +1,8 @@
-import type { DesktopPlatform, HarnessProfile } from "../types/index.ts";
+import type { HarnessProfile } from "../types/index.ts";
 
 export type ProviderDefinition = Omit<HarnessProfile, "icon" | "iconMode">;
 
-export const CLAUDE_ACP_VERSION = "0.70.0";
-
-export function desktopPlatform(
-  tauriPlatform = import.meta.env?.TAURI_ENV_PLATFORM,
-): DesktopPlatform {
-  if (tauriPlatform === "windows") return "windows";
-  if (tauriPlatform === "darwin" || tauriPlatform === "macos") return "macos";
-  return "linux";
-}
-
-export const currentPlatform: DesktopPlatform = desktopPlatform();
-const isWindows = currentPlatform === "windows";
+const isWindows = import.meta.env?.TAURI_ENV_PLATFORM === "windows";
 const npx = isWindows ? "npx.cmd" : "npx";
 
 export const providerDefinitions: ProviderDefinition[] = [
@@ -23,11 +12,6 @@ export const providerDefinitions: ProviderDefinition[] = [
     command: npx,
     args: ["--yes", "@agentclientprotocol/codex-acp@1.4.0"],
     versionCommand: isWindows ? "codex.cmd" : "codex",
-    versionArgs: ["--version"],
-    platforms: ["linux", "macos", "windows"],
-    supportsImages: true,
-    titleGeneration: true,
-    probeModelOptions: true,
     installCommand: "npm install --global @openai/codex",
     loginCommand: "codex login",
   },
@@ -35,24 +19,12 @@ export const providerDefinitions: ProviderDefinition[] = [
     id: "claude",
     label: "Claude",
     command: npx,
-    args: ["--yes", `@agentclientprotocol/claude-agent-acp@${CLAUDE_ACP_VERSION}`],
+    args: ["--yes", "@agentclientprotocol/claude-agent-acp@0.70.0"],
     versionCommand: isWindows ? "claude.cmd" : "claude",
-    versionArgs: ["--version"],
-    platforms: ["linux", "macos", "windows"],
-    supportsImages: true,
-    titleGeneration: true,
-    probeModelOptions: true,
     installCommand: "npm install --global @anthropic-ai/claude-code",
     loginCommand: "claude auth login",
   },
 ];
-
-export function providerSupportsPlatform(
-  profile: Pick<ProviderDefinition, "platforms">,
-  platform = currentPlatform,
-) {
-  return profile.platforms.includes(platform);
-}
 
 export function providerDefinitionById(profileId: string) {
   return providerDefinitions.find((profile) => profile.id === profileId);

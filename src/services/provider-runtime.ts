@@ -1,8 +1,4 @@
-import {
-  providerDefinitions,
-  providerSupportsPlatform,
-  type ProviderDefinition,
-} from "../config/provider-definitions.ts";
+import { providerDefinitions, type ProviderDefinition } from "../config/provider-definitions.ts";
 import type {
   AcpErrorDetails,
   ConnectionStatus,
@@ -20,7 +16,7 @@ import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { jsonValueSchema } from "../utils/json.ts";
 import { loadWorkspaceMcpServers } from "../utils/mcp-servers.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
-import { discoverModelOptions, modelOptionsFromStates } from "../utils/model-options.ts";
+import { discoverModelOptions } from "../utils/model-options.ts";
 import {
   firstReadyProviderId,
   titleGenerationSelection,
@@ -147,7 +143,6 @@ export class ProviderRuntime {
     const provider = thread.providers[profileId];
     if (this.#disabledProfiles.has(profileId)) return;
     if (!text && images.length === 0) return;
-    if (images.length > 0 && !this.#profileById(profileId).supportsImages) return;
     if (provider.turnStatus === "running") {
       if (!provider.supportsFollowups || provider.connectionStatus !== "ready") return;
       addMessage(thread, "user", text, images, content);
@@ -203,18 +198,11 @@ export class ProviderRuntime {
   async discover(profile: ProviderDefinition, cwd: string, threads: ThreadState[]) {
     this.#threads = [...threads];
     if (this.#disabledProfiles.has(profile.id)) return;
-    if (!providerSupportsPlatform(profile)) {
-      this.#catalogs[profile.id] = {
-        status: "unavailable",
-        models: [],
-        reasoningOptions: [],
-        unavailableReason: "unsupported-platform",
-        error: `${profile.label} is not available on this platform.`,
-      };
-      this.applyCatalog(profile.id, threads);
-      return;
-    }
-    this.#catalogs[profile.id] = { status: "loading", models: [], reasoningOptions: [] };
+    this.#catalogs[profile.id] = {
+      status: "loading",
+      models: [],
+      reasoningOptions: [],
+    };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
     let agentVersion: string | undefined;
     let commands: SlashCommand[] | undefined;
@@ -261,11 +249,10 @@ export class ProviderRuntime {
         advertisedModelId && models.some((model) => model.id === advertisedModelId)
           ? advertisedModelId
           : models[0].id;
-      const { reasoningOptionsByModel, fastModeOptionsByModel } =
-        await discoverProviderModelOptions(profile, connection, {
-          ...discovered,
-          selectedModelId,
-        });
+      const { reasoningOptionsByModel, fastModeOptionsByModel } = await discoverModelOptions(
+        connection,
+        { ...discovered, selectedModelId },
+      );
       const selectedReasoning = reasoningOptionsByModel[selectedModelId];
       const selectedFastMode = fastModeOptionsByModel[selectedModelId];
       this.#catalogs[profile.id] = {
@@ -1041,16 +1028,6 @@ export class ProviderRuntime {
     this.#setError(thread, profileId, details);
     if (thread.profileId === profileId) addMessage(thread, "error", details.message);
   }
-}
-
-export async function discoverProviderModelOptions(
-  profile: ProviderDefinition,
-  connection: Pick<AcpConnection, "setModel">,
-  state: AcpModelState,
-) {
-  if (profile.probeModelOptions) return discoverModelOptions(connection, state);
-  const model = state.models.find((item) => item.id === state.selectedModelId);
-  return modelOptionsFromStates(model ? [{ ...state, model }] : []);
 }
 
 export function mergeProviderModels(
