@@ -93,7 +93,6 @@ const goalSchema = z.object({
   iterations: z.number().int().nonnegative().optional(),
   lastReason: z.string().nullable().optional(),
   createdAt: z.number().optional(),
-  updatedAt: z.number().optional(),
   tokenBudget: z.number().nullable().optional(),
   tokensUsed: z.number().optional(),
   timeBudgetSeconds: z.number().nullable().optional(),
@@ -103,16 +102,7 @@ const metadataSchema = z.object({
   goal: z.union([goalSchema, z.null()]).optional(),
   quota: z
     .object({
-      token_count: z
-        .object({
-          totalTokens: z.number().optional(),
-          inputTokens: z.number().optional(),
-          cachedInputTokens: z.number().optional(),
-          outputTokens: z.number().optional(),
-          reasoningOutputTokens: z.number().optional(),
-        })
-        .nullable()
-        .optional(),
+      token_count: z.object({ totalTokens: z.number().optional() }).nullable().optional(),
     })
     .optional(),
   jetbrains: z.object({ air: z.object({ sessionFailure: failureSchema.optional() }) }).optional(),
@@ -122,19 +112,7 @@ const metadataSchema = z.object({
         limitId: z.string().nullable().optional(),
         limitName: z.string().nullable().optional(),
         primary: z
-          .object({
-            usedPercent: z.number(),
-            resetsAt: z.number().nullable().optional(),
-            windowDurationMins: z.number().nullable().optional(),
-          })
-          .nullable()
-          .optional(),
-        secondary: z
-          .object({
-            usedPercent: z.number(),
-            resetsAt: z.number().nullable().optional(),
-            windowDurationMins: z.number().nullable().optional(),
-          })
+          .object({ usedPercent: z.number(), resetsAt: z.number().nullable().optional() })
           .nullable()
           .optional(),
       }),
@@ -279,7 +257,6 @@ export class SessionUpdateHandler {
         id: limit.limitId ?? limit.limitName ?? String(index),
         name: limit.limitName ?? limit.limitId ?? "Limit",
         primary: limit.primary,
-        secondary: limit.secondary,
       }));
     const failure = parsed.data.jetbrains?.air.sessionFailure;
     if (failure) this.#upsertFailure(thread, failure);

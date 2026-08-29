@@ -70,7 +70,6 @@ export interface GoalState {
   iterations?: number;
   lastReason?: string | null;
   createdAt?: number;
-  updatedAt?: number;
   tokenBudget?: number | null;
   tokensUsed?: number;
   timeBudgetSeconds?: number | null;
@@ -79,10 +78,6 @@ export interface GoalState {
 
 export interface QuotaState {
   totalTokens?: number;
-  inputTokens?: number;
-  cachedInputTokens?: number;
-  outputTokens?: number;
-  reasoningOutputTokens?: number;
 }
 
 export interface RateLimitState {
@@ -91,12 +86,6 @@ export interface RateLimitState {
   primary?: {
     usedPercent: number;
     resetsAt?: number | null;
-    windowDurationMins?: number | null;
-  } | null;
-  secondary?: {
-    usedPercent: number;
-    resetsAt?: number | null;
-    windowDurationMins?: number | null;
   } | null;
 }
 
