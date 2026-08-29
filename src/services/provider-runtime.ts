@@ -203,12 +203,15 @@ export class ProviderRuntime {
     };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
     let agentVersion: string | undefined;
+    let needsAuth = false;
     let commands: SlashCommand[] | undefined;
     const connection = new AcpConnection({
       connectionStatus: () => {},
       turnStatus: () => {},
-      initialized: (agentInfo) => {
+      initialized: (agentInfo, authMethods) => {
         agentVersion = agentInfo?.version;
+        // LoopCode cannot drive provider auth flows, so surface them as "Not logged in."
+        needsAuth = Boolean(authMethods?.length);
       },
       ready: (session) => {
         discovered = session;
@@ -268,6 +271,7 @@ export class ProviderRuntime {
         selects: discovered.selects,
         supportsFollowups: discovered.supportsFollowups,
         commands,
+        needsAuth,
       };
     } catch (error) {
       this.#baseModels.set(profile.id, []);

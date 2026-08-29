@@ -351,6 +351,7 @@ interface ProviderModelCatalogState {
   selects?: SessionSelects;
   supportsFollowups?: boolean;
   commands?: SlashCommand[];
+  needsAuth?: boolean;
 }
 
 export type ProviderModelCatalog = ProviderModelCatalogState &

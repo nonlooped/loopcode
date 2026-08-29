@@ -73,7 +73,7 @@ export type PromptContent = acp.ContentBlock;
 export interface AcpCallbacks {
   connectionStatus?: (status: ConnectionStatus) => void;
   turnStatus?: (status: TurnStatus) => void;
-  initialized?: (agentInfo?: acp.Implementation | null) => void;
+  initialized?: (agentInfo?: acp.Implementation | null, authMethods?: acp.AuthMethod[]) => void;
   ready: (session: AcpSessionInfo) => void;
   update: (update: acp.SessionUpdate) => void;
   metadata?: (metadata: unknown) => void;
@@ -179,13 +179,7 @@ export class AcpConnection {
         },
       });
       this.#supportsFollowups = steeringSupportSchema.safeParse(initialized._meta).success;
-      this.#callbacks.initialized?.(initialized.agentInfo);
-
-      if (initialized.authMethods?.length) {
-        this.#callbacks.stderr(
-          "This harness advertises an authentication flow. LoopCode expects its CLI to be signed in already.",
-        );
-      }
+      this.#callbacks.initialized?.(initialized.agentInfo, initialized.authMethods);
 
       let sessionId: string;
       let sessionState:
