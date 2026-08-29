@@ -281,21 +281,16 @@ void test("connection startup restores preselected session options", async () =>
     models: catalogs.codex.models,
     selectedModelId: "model-1",
     reasoningOptions: [],
-    modeConfigId: "mode",
-    modes,
-    selectedModeId: mode,
-    agentConfigId: "agent",
-    agents,
-    selectedAgentId: agent,
+    selects: {
+      mode: { configId: "mode", options: modes, selectedId: mode },
+      agent: { configId: "agent", options: agents, selectedId: agent },
+    },
   });
   let selectedMode = "default";
   let selectedAgent = "default";
   const runtime = new ProviderRuntime(catalogs, hooks, (callbacks) => ({
     async connect() {
       callbacks.ready(sessionState());
-    },
-    async setModel() {
-      return sessionState(selectedMode, selectedAgent);
     },
     async setConfigOption(configId, value) {
       selections.push([configId, value]);
@@ -307,22 +302,21 @@ void test("connection startup restores preselected session options", async () =>
   }));
   const state = thread("disconnected");
   Object.assign(state.providers.codex, {
-    modeConfigId: "mode",
-    modes,
-    selectedModeId: "plan",
-    agentConfigId: "agent",
-    agents,
-    selectedAgentId: "reviewer",
+    selects: {
+      mode: { configId: "mode", options: modes, selectedId: "plan" },
+      agent: { configId: "agent", options: agents, selectedId: "reviewer" },
+    },
   });
 
   await runtime.connect(state, "codex");
 
   assert.deepEqual(selections, [
+    ["model", "model-1"],
     ["mode", "plan"],
     ["agent", "reviewer"],
   ]);
-  assert.equal(state.providers.codex.selectedModeId, "plan");
-  assert.equal(state.providers.codex.selectedAgentId, "reviewer");
+  assert.equal(state.providers.codex.selects.mode.selectedId, "plan");
+  assert.equal(state.providers.codex.selects.agent.selectedId, "reviewer");
 });
 
 void test("reconnect waits for a replaced provider process to stop", async () => {
@@ -345,7 +339,7 @@ void test("reconnect waits for a replaced provider process to stop", async () =>
           reasoningOptions: [],
         });
       },
-      async setModel() {
+      async setConfigOption() {
         return {
           modelConfigId: "model",
           models: catalogs.codex.models,
@@ -387,7 +381,7 @@ void test("a failed reconnect stop drops the defunct connection", async () => {
         reasoningOptions: [],
       });
     },
-    async setModel() {
+    async setConfigOption() {
       return {
         modelConfigId: "model",
         models: catalogs.codex.models,

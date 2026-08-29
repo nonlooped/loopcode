@@ -28,10 +28,10 @@
     HarnessProfile,
     ModelOption,
     ProviderModelCatalog,
+    SessionSelectId,
     SlashCommand,
     ThreadState,
   } from '../types';
-  import type { SessionSelectId } from '../services/provider-runtime';
   import type { SendShortcut } from '../utils/app-settings';
   import { copyImage, saveImage } from '../utils/clipboard';
   import { composerLayoutKeyframes, usesExpandedComposerLayout, type LayoutBox } from '../utils/composer-layout';
@@ -108,6 +108,11 @@
       ?? officialProfiles[0],
   );
   const status = $derived(threadStatus(props.thread));
+  const sessionOptionsAvailable = $derived(
+    provider.reasoningOptions.length > 1
+    || fastModeAvailable(provider)
+    || Object.values(provider.selects ?? {}).some((select) => select.options.length > 1),
+  );
   const commandResults = $derived.by(() => {
     if (completionPrefix !== '/') return [];
     const query = completionQuery;
@@ -742,7 +747,7 @@
               </button>
             {/if}
           </div>
-        {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider) || (provider.modes?.length ?? 0) > 1 || (provider.collaborationModes?.length ?? 0) > 1 || (provider.agents?.length ?? 0) > 1}
+        {#if sessionOptionsAvailable}
           <SessionPicker
             {provider}
             open={sessionPickerOpen}

@@ -106,19 +106,11 @@ void test("reads model and reasoning selectors from typed ACP config options", (
     fastModeEnabled: true,
     fastModeValueType: "boolean",
     fastModeDescription: "Faster responses at a higher cost.",
-    modeConfigId: undefined,
-    modes: [],
-    selectedModeId: undefined,
-    collaborationConfigId: undefined,
-    collaborationModes: [],
-    selectedCollaborationModeId: undefined,
-    agentConfigId: undefined,
-    agents: [],
-    selectedAgentId: undefined,
+    selects: {},
   });
 });
 
-void test("reads Claude permission and custom agent selectors", () => {
+void test("reads provider session selectors without treating them as models", () => {
   const state = readModelState({
     configOptions: [
       {
@@ -130,6 +122,16 @@ void test("reads Claude permission and custom agent selectors", () => {
         options: [
           { value: "default", name: "Manual" },
           { value: "acceptEdits", name: "Accept edits" },
+        ],
+      },
+      {
+        id: "collaboration_mode",
+        name: "Collaboration mode",
+        category: "collaboration_mode",
+        type: "select",
+        currentValue: "plan",
+        options: [
+          { value: "default", name: "Default" },
           { value: "plan", name: "Plan" },
         ],
       },
@@ -146,53 +148,13 @@ void test("reads Claude permission and custom agent selectors", () => {
     ],
   });
 
-  assert.equal(state.modeConfigId, "mode");
-  assert.equal(state.selectedModeId, "acceptEdits");
-  assert.equal(state.agentConfigId, "agent");
-  assert.equal(state.selectedAgentId, "reviewer");
-  assert.deepEqual(state.agents, [
-    { id: "default", name: "Default", description: undefined },
-    { id: "reviewer", name: "Reviewer", description: "Review-focused agent" },
-  ]);
-});
-
-void test("reads Codex mode and collaboration mode selectors", () => {
-  const state = readModelState({
-    configOptions: [
-      {
-        id: "mode",
-        name: "Mode",
-        category: "mode",
-        type: "select",
-        currentValue: "agent",
-        options: [
-          { value: "read-only", name: "Read-only", description: "Requires approval to edit." },
-          { value: "agent", name: "Agent", description: "Read and edit files." },
-        ],
-      },
-      {
-        id: "collaboration_mode",
-        name: "Collaboration mode",
-        category: "collaboration_mode",
-        type: "select",
-        currentValue: "plan",
-        options: [
-          { value: "default", name: "Default" },
-          { value: "plan", name: "Plan", description: "Plan before making changes" },
-        ],
-      },
-    ],
+  assert.equal(state.selects.mode.selectedId, "acceptEdits");
+  assert.equal(state.selects.collaboration.selectedId, "plan");
+  assert.deepEqual(state.selects.agent.options.at(-1), {
+    id: "reviewer",
+    name: "Reviewer",
+    description: "Review-focused agent",
   });
-
-  assert.equal(state.modeConfigId, "mode");
-  assert.equal(state.selectedModeId, "agent");
-  assert.deepEqual(
-    state.modes?.map(({ id }) => id),
-    ["read-only", "agent"],
-  );
-  assert.equal(state.collaborationConfigId, "collaboration_mode");
-  assert.equal(state.selectedCollaborationModeId, "plan");
-  // The mode selectors must not be mistaken for the model picker.
   assert.equal(state.modelConfigId, undefined);
   assert.deepEqual(state.models, []);
 });

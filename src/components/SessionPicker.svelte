@@ -2,9 +2,9 @@
   import { DropdownMenu } from 'bits-ui';
   import { IconBolt, IconCheck, IconChevronRight, IconListCheck } from '@tabler/icons-svelte';
 
-  import type { SessionSelectId } from '../services/provider-runtime';
-  import type { ProviderSessionState } from '../types';
+  import type { ModelOption, ProviderSessionState, SessionSelectId } from '../types';
   import { fastModeAvailable } from '../utils/fast-mode';
+  import { sessionSelectLabels } from '../utils/model-state';
   import MotionScaleIn from './motion/MotionScaleIn.svelte';
 
   interface Props {
@@ -17,24 +17,27 @@
   }
 
   const props: Props = $props();
-  const modes = $derived(props.provider.modes ?? []);
-  const collaborationModes = $derived(props.provider.collaborationModes ?? []);
-  const agents = $derived(props.provider.agents ?? []);
+
+  function chosen(id: SessionSelectId, fallbackToFirst = true) {
+    const select = props.provider.selects?.[id];
+    if (!select) return undefined;
+    return select.options.find((option) => option.id === select.selectedId)
+      ?? (fallbackToFirst ? select.options[0] : undefined);
+  }
+
   const reasoning = $derived(
     props.provider.reasoningOptions.find((option) => option.id === props.provider.selectedReasoningId)
       ?? props.provider.reasoningOptions[0],
   );
-  const mode = $derived(
-    modes.find((option) => option.id === props.provider.selectedModeId) ?? modes[0],
-  );
-  const collaboration = $derived(
-    collaborationModes.find((option) => option.id === props.provider.selectedCollaborationModeId),
-  );
-  const agent = $derived(
-    agents.find((option) => option.id === props.provider.selectedAgentId) ?? agents[0],
-  );
+  const mode = $derived(chosen('mode'));
+  const collaboration = $derived(chosen('collaboration', false));
+  const agent = $derived(chosen('agent'));
   const fastModeEnabled = $derived(props.provider.fastModeEnabled === true);
   const planning = $derived(Boolean(collaboration) && collaboration?.id !== 'default');
+  const speedOptions = $derived<ModelOption[]>([
+    { id: 'standard', name: 'Standard', description: 'Standard speed' },
+    { id: 'fast', name: 'Fast', description: props.provider.fastModeDescription ?? 'Faster responses at a higher cost.' },
+  ]);
   const label = $derived(
     [
       reasoning?.name,
@@ -66,6 +69,28 @@
     'flex min-h-8 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-[color-mix(in_srgb,var(--text)_90%,transparent)] outline-none data-[highlighted]:bg-panel-active data-[highlighted]:text-text hover:bg-panel-active hover:text-text focus-visible:bg-panel-active focus-visible:text-text [&_span]:min-w-0 [&_span]:flex-1 [&_span]:truncate [&_svg]:shrink-0 [&_svg]:text-text-soft';
 </script>
 
+{#snippet submenu(name: string, options: ModelOption[], selectedId: string | undefined, choose: (value: string) => void)}
+  <DropdownMenu.Sub>
+    <DropdownMenu.SubTrigger class={submenuTrigger}>
+      <span>{name}</span>
+      <small>{options.find((option) => option.id === selectedId)?.name}</small>
+      <IconChevronRight size={13} stroke={1.55} />
+    </DropdownMenu.SubTrigger>
+    <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
+      <DropdownMenu.RadioGroup value={selectedId} onValueChange={choose}>
+        {#each options as option (option.id)}
+          <DropdownMenu.RadioItem class={optionClass} value={option.id} title={option.description ?? option.name}>
+            {#snippet children({ checked })}
+              <span>{option.name}</span>
+              {#if checked}<IconCheck size={14} stroke={2} />{/if}
+            {/snippet}
+          </DropdownMenu.RadioItem>
+        {/each}
+      </DropdownMenu.RadioGroup>
+    </DropdownMenu.SubContent>
+  </DropdownMenu.Sub>
+{/snippet}
+
 <DropdownMenu.Root open={props.open} onOpenChange={props.setOpen}>
   <DropdownMenu.Trigger
     class={trigger}
@@ -88,121 +113,21 @@
         aria-label="Session settings"
       >
         {#if props.provider.reasoningOptions.length > 1}
-          <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger class={submenuTrigger}>
-              <span>Reasoning</span>
-              <small>{reasoning?.name}</small>
-              <IconChevronRight size={13} stroke={1.55} />
-            </DropdownMenu.SubTrigger>
-            <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
-              <DropdownMenu.RadioGroup value={reasoning?.id} onValueChange={props.selectReasoning}>
-                {#each props.provider.reasoningOptions as option (option.id)}
-                  <DropdownMenu.RadioItem class={optionClass} value={option.id} title={option.description ?? option.name}>
-                    {#snippet children({ checked })}
-                      <span>{option.name}</span>
-                      {#if checked}<IconCheck size={14} stroke={2} />{/if}
-                    {/snippet}
-                  </DropdownMenu.RadioItem>
-                {/each}
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.SubContent>
-          </DropdownMenu.Sub>
+          {@render submenu('Reasoning', props.provider.reasoningOptions, reasoning?.id, props.selectReasoning)}
         {/if}
-
         {#if fastModeAvailable(props.provider)}
-          <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger class={submenuTrigger}>
-              <span>Speed</span>
-              <small>{fastModeEnabled ? 'Fast' : 'Standard'}</small>
-              <IconChevronRight size={13} stroke={1.55} />
-            </DropdownMenu.SubTrigger>
-            <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
-              <DropdownMenu.RadioGroup
-                value={fastModeEnabled ? 'fast' : 'standard'}
-                onValueChange={(value) => props.selectFastMode(value === 'fast')}
-              >
-                <DropdownMenu.RadioItem class={optionClass} value="standard" title="Standard speed">
-                  {#snippet children({ checked })}
-                    <span>Standard</span>
-                    {#if checked}<IconCheck size={14} stroke={2} />{/if}
-                  {/snippet}
-                </DropdownMenu.RadioItem>
-                <DropdownMenu.RadioItem class={optionClass} value="fast" title={props.provider.fastModeDescription ?? 'Faster responses at a higher cost.'}>
-                  {#snippet children({ checked })}
-                    <span>Fast</span>
-                    {#if checked}<IconCheck size={14} stroke={2} />{:else}<IconBolt size={14} stroke={1.55} />{/if}
-                  {/snippet}
-                </DropdownMenu.RadioItem>
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.SubContent>
-          </DropdownMenu.Sub>
+          {@render submenu('Speed', speedOptions, fastModeEnabled ? 'fast' : 'standard', (value) => props.selectFastMode(value === 'fast'))}
         {/if}
-
-        {#if modes.length > 1}
-          <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger class={submenuTrigger}>
-              <span>Mode</span>
-              <small>{mode?.name}</small>
-              <IconChevronRight size={13} stroke={1.55} />
-            </DropdownMenu.SubTrigger>
-            <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
-              <DropdownMenu.RadioGroup value={mode?.id} onValueChange={(value) => props.selectSessionOption('mode', value)}>
-                {#each modes as option (option.id)}
-                  <DropdownMenu.RadioItem class={optionClass} value={option.id} title={option.description ?? option.name}>
-                    {#snippet children({ checked })}
-                      <span>{option.name}</span>
-                      {#if checked}<IconCheck size={14} stroke={2} />{/if}
-                    {/snippet}
-                  </DropdownMenu.RadioItem>
-                {/each}
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.SubContent>
-          </DropdownMenu.Sub>
-        {/if}
-
-        {#if collaborationModes.length > 1}
-          <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger class={submenuTrigger}>
-              <span>Collaboration</span>
-              <small>{collaboration?.name}</small>
-              <IconChevronRight size={13} stroke={1.55} />
-            </DropdownMenu.SubTrigger>
-            <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
-              <DropdownMenu.RadioGroup value={collaboration?.id} onValueChange={(value) => props.selectSessionOption('collaboration', value)}>
-                {#each collaborationModes as option (option.id)}
-                  <DropdownMenu.RadioItem class={optionClass} value={option.id} title={option.description ?? option.name}>
-                    {#snippet children({ checked })}
-                      <span>{option.name}</span>
-                      {#if checked}<IconCheck size={14} stroke={2} />{/if}
-                    {/snippet}
-                  </DropdownMenu.RadioItem>
-                {/each}
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.SubContent>
-          </DropdownMenu.Sub>
-        {/if}
-
-        {#if agents.length > 1}
-          <DropdownMenu.Sub>
-            <DropdownMenu.SubTrigger class={submenuTrigger}>
-              <span>Agent</span>
-              <small>{agent?.name}</small>
-              <IconChevronRight size={13} stroke={1.55} />
-            </DropdownMenu.SubTrigger>
-            <DropdownMenu.SubContent class={menuShell} sideOffset={6} collisionPadding={12}>
-              <DropdownMenu.RadioGroup value={agent?.id} onValueChange={(value) => props.selectSessionOption('agent', value)}>
-                {#each agents as option (option.id)}
-                  <DropdownMenu.RadioItem class={optionClass} value={option.id} title={option.description ?? option.name}>
-                    {#snippet children({ checked })}
-                      <span>{option.name}</span>
-                      {#if checked}<IconCheck size={14} stroke={2} />{/if}
-                    {/snippet}
-                  </DropdownMenu.RadioItem>
-                {/each}
-              </DropdownMenu.RadioGroup>
-            </DropdownMenu.SubContent>
-          </DropdownMenu.Sub>
-        {/if}
+        {#each Object.entries(props.provider.selects ?? {}) as [id, select] (id)}
+          {#if select.options.length > 1}
+            {@render submenu(
+              sessionSelectLabels[id as SessionSelectId],
+              select.options,
+              chosen(id as SessionSelectId)?.id,
+              (value) => props.selectSessionOption(id as SessionSelectId, value),
+            )}
+          {/if}
+        {/each}
       </DropdownMenu.Content>
     </MotionScaleIn>
   </DropdownMenu.Portal>

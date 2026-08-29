@@ -5,7 +5,12 @@ import type {
   SetSessionConfigOptionResponse,
 } from "@agentclientprotocol/sdk";
 
-import type { FastModeValueType, ModelOption } from "../types/index.ts";
+import type {
+  FastModeValueType,
+  ModelOption,
+  SessionSelectId,
+  SessionSelects,
+} from "../types/index.ts";
 
 export interface AcpModelState {
   modelConfigId?: string;
@@ -14,15 +19,7 @@ export interface AcpModelState {
   reasoningConfigId?: string;
   reasoningOptions: ModelOption[];
   selectedReasoningId?: string;
-  modeConfigId?: string;
-  modes?: ModelOption[];
-  selectedModeId?: string;
-  collaborationConfigId?: string;
-  collaborationModes?: ModelOption[];
-  selectedCollaborationModeId?: string;
-  agentConfigId?: string;
-  agents?: ModelOption[];
-  selectedAgentId?: string;
+  selects?: SessionSelects;
   supportsFollowups?: boolean;
   fastModeConfigId?: string;
   fastModeEnabled?: boolean;
@@ -41,9 +38,6 @@ export function readModelState(value: ConfigState): AcpModelState {
   const reasoningConfig =
     configOptions.find(isExplicitReasoningConfig) ?? configOptions.find(isReasoningConfig);
   const fastModeConfig = configOptions.find(isFastModeConfig);
-  const modeConfig = configOptions.find(isModeConfig);
-  const collaborationConfig = configOptions.find(isCollaborationModeConfig);
-  const agentConfig = configOptions.find(isAgentConfig);
 
   return {
     modelConfigId: modelConfig?.id,
@@ -56,33 +50,37 @@ export function readModelState(value: ConfigState): AcpModelState {
     fastModeEnabled: configBooleanValue(fastModeConfig),
     fastModeValueType: configValueType(fastModeConfig),
     fastModeDescription: fastModeConfig?.description ?? undefined,
-    modeConfigId: modeConfig?.id,
-    modes: configChoices(modeConfig),
-    selectedModeId: selectedConfigValue(modeConfig),
-    collaborationConfigId: collaborationConfig?.id,
-    collaborationModes: configChoices(collaborationConfig),
-    selectedCollaborationModeId: selectedConfigValue(collaborationConfig),
-    agentConfigId: agentConfig?.id,
-    agents: configChoices(agentConfig),
-    selectedAgentId: selectedConfigValue(agentConfig),
+    selects: sessionSelects(configOptions),
   };
 }
 
-/** Provider permission or sandbox modes advertised through the standard mode category. */
-function isModeConfig(option: SessionConfigOption) {
-  if (option.type !== "select") return false;
-  return option.category === "mode" || option.id.toLowerCase() === "mode";
+export const sessionSelectLabels: Record<SessionSelectId, string> = {
+  mode: "Mode",
+  collaboration: "Collaboration",
+  agent: "Agent",
+};
+
+function sessionSelects(configOptions: SessionConfigOption[]): SessionSelects {
+  const selects: SessionSelects = {};
+  for (const config of configOptions) {
+    const id = sessionSelectId(config);
+    if (id)
+      selects[id] = {
+        configId: config.id,
+        options: configChoices(config),
+        selectedId: selectedConfigValue(config),
+      };
+  }
+  return selects;
 }
 
-/** Codex's plan-versus-default collaboration preset for subsequent turns. */
-function isCollaborationModeConfig(option: SessionConfigOption) {
-  if (option.type !== "select") return false;
-  const key = `${option.id} ${option.category ?? ""}`.toLowerCase().replaceAll("-", "_");
-  return key.includes("collaboration_mode");
-}
-
-function isAgentConfig(option: SessionConfigOption) {
-  return option.type === "select" && option.id.toLowerCase() === "agent";
+function sessionSelectId(option: SessionConfigOption): SessionSelectId | undefined {
+  if (option.type !== "select") return;
+  const id = option.id.toLowerCase();
+  const key = `${id} ${option.category ?? ""}`.toLowerCase().replaceAll("-", "_");
+  if (option.category === "mode" || id === "mode") return "mode";
+  if (key.includes("collaboration_mode")) return "collaboration";
+  if (id === "agent") return "agent";
 }
 
 function findModelConfig(configOptions: SessionConfigOption[]) {

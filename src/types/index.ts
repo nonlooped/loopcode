@@ -228,6 +228,16 @@ export interface SlashCommand {
   hint?: string;
 }
 
+export type SessionSelectId = "mode" | "collaboration" | "agent";
+
+export interface SessionSelect {
+  configId: string;
+  options: ModelOption[];
+  selectedId?: string;
+}
+
+export type SessionSelects = Partial<Record<SessionSelectId, SessionSelect>>;
+
 export interface ProviderSessionState {
   connectionStatus: ConnectionStatus;
   turnStatus: TurnStatus;
@@ -246,15 +256,7 @@ export interface ProviderSessionState {
   fastModeEnabled?: boolean;
   fastModeValueType?: FastModeValueType;
   fastModeDescription?: string;
-  modeConfigId?: string;
-  modes?: ModelOption[];
-  selectedModeId?: string;
-  collaborationConfigId?: string;
-  collaborationModes?: ModelOption[];
-  selectedCollaborationModeId?: string;
-  agentConfigId?: string;
-  agents?: ModelOption[];
-  selectedAgentId?: string;
+  selects?: SessionSelects;
   supportsFollowups?: boolean;
   contextUsed?: number;
   contextSize?: number;
@@ -349,15 +351,7 @@ interface ProviderModelCatalogState {
   fastModeEnabled?: boolean;
   fastModeValueType?: FastModeValueType;
   fastModeDescription?: string;
-  modeConfigId?: string;
-  modes?: ModelOption[];
-  selectedModeId?: string;
-  collaborationConfigId?: string;
-  collaborationModes?: ModelOption[];
-  selectedCollaborationModeId?: string;
-  agentConfigId?: string;
-  agents?: ModelOption[];
-  selectedAgentId?: string;
+  selects?: SessionSelects;
   supportsFollowups?: boolean;
   commands?: SlashCommand[];
 }

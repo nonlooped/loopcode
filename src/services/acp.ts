@@ -315,10 +315,6 @@ export class AcpConnection {
     }
   }
 
-  setModel(configId: string, modelId: string) {
-    return this.setConfigOption(configId, modelId);
-  }
-
   async setConfigOption(configId: string, value: string | boolean) {
     const sessionId = this.#requireSessionId();
     const params: acp.SetSessionConfigOptionRequest = isBooleanConfigValue(value)

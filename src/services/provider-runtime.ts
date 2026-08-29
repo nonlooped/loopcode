@@ -9,6 +9,7 @@ import type {
   QuestionAnswer,
   ProviderModelCatalog,
   ProviderSessionState,
+  SessionSelectId,
   SlashCommand,
   ThreadState,
 } from "../types/index.ts";
@@ -17,6 +18,7 @@ import { jsonValueSchema } from "../utils/json.ts";
 import { loadWorkspaceMcpServers } from "../utils/mcp-servers.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
 import { discoverModelOptions } from "../utils/model-options.ts";
+import { sessionSelectLabels } from "../utils/model-state.ts";
 import {
   firstReadyProviderId,
   titleGenerationSelection,
@@ -269,15 +271,7 @@ export class ProviderRuntime {
         fastModeEnabled: selectedFastMode?.enabled,
         fastModeValueType: selectedFastMode?.valueType,
         fastModeDescription: selectedFastMode?.description,
-        modeConfigId: discovered.modeConfigId,
-        modes: discovered.modes,
-        selectedModeId: discovered.selectedModeId,
-        collaborationConfigId: discovered.collaborationConfigId,
-        collaborationModes: discovered.collaborationModes,
-        selectedCollaborationModeId: discovered.selectedCollaborationModeId,
-        agentConfigId: discovered.agentConfigId,
-        agents: discovered.agents,
-        selectedAgentId: discovered.selectedAgentId,
+        selects: discovered.selects,
         supportsFollowups: discovered.supportsFollowups,
         commands,
       };
@@ -321,11 +315,9 @@ export class ProviderRuntime {
     const selectedModelId = provider.selectedModelId;
     const requestedReasoningId = provider.selectedReasoningId;
     const requestedFastModeEnabled = provider.fastModeEnabled;
-    const requestedSessionSelections: Record<SessionSelectId, string | undefined> = {
-      mode: provider.selectedModeId,
-      collaboration: provider.selectedCollaborationModeId,
-      agent: provider.selectedAgentId,
-    };
+    const requestedSelects = Object.entries(provider.selects ?? {}).map(
+      ([select, value]) => [select as SessionSelectId, value.selectedId] as const,
+    );
     const existingSessionId = provider.sessionId;
     if (!selectedModelId || !provider.models.some((model) => model.id === selectedModelId)) {
       this.#setError(thread, profile.id, {
@@ -446,7 +438,7 @@ export class ProviderRuntime {
       if (!provider.modelConfigId) {
         throw new Error(`${profile.label} did not expose a model configuration.`);
       }
-      const updated = await connection.setModel(provider.modelConfigId, selectedModelId);
+      const updated = await connection.setConfigOption(provider.modelConfigId, selectedModelId);
       const appliedModelId = updated.selectedModelId ?? sessionSelectedModelId;
       if (appliedModelId !== selectedModelId) {
         throw new Error(`${profile.label} did not apply model ${selectedModelId}.`);
@@ -461,7 +453,7 @@ export class ProviderRuntime {
         updated.selectedReasoningId,
       );
       await this.#restoreFastMode(connection, provider, requestedFastModeEnabled);
-      await this.#restoreSessionSelections(connection, provider, requestedSessionSelections);
+      await this.#restoreSessionSelections(connection, provider, requestedSelects);
       startupComplete = true;
       provider.error = undefined;
       provider.errorDetails = undefined;
@@ -539,17 +531,15 @@ export class ProviderRuntime {
   async #restoreSessionSelections(
     connection: AcpConnection,
     provider: ProviderSessionState,
-    requested: Record<SessionSelectId, string | undefined>,
+    requested: readonly (readonly [SessionSelectId, string | undefined])[],
   ) {
-    for (const select of Object.keys(sessionSelects) as SessionSelectId[]) {
-      const spec = sessionSelects[select];
-      const value = requested[select];
-      const configId = spec.configId(provider);
-      if (!value || !configId || spec.selected(provider) === value) continue;
-      if (!spec.options(provider).some((option) => option.id === value)) continue;
-      applyProviderConfigState(provider, await connection.setConfigOption(configId, value));
-      if (spec.selected(provider) !== value) {
-        throw new Error(`The agent did not apply ${spec.label} ${value}.`);
+    for (const [select, value] of requested) {
+      const spec = provider.selects?.[select];
+      if (!value || !spec || spec.selectedId === value) continue;
+      if (!spec.options.some((option) => option.id === value)) continue;
+      applyProviderConfigState(provider, await connection.setConfigOption(spec.configId, value));
+      if (provider.selects?.[select]?.selectedId !== value) {
+        throw new Error(`The agent did not apply ${sessionSelectLabels[select]} ${value}.`);
       }
     }
   }
@@ -686,7 +676,7 @@ export class ProviderRuntime {
     try {
       const connection = this.connection(thread.id, profileId);
       if (!connection) throw new Error(`${this.#profileById(profileId).label} is not connected`);
-      const updated = await connection.setModel(provider.modelConfigId, modelId);
+      const updated = await connection.setConfigOption(provider.modelConfigId, modelId);
       applyProviderConfigState(provider, updated);
       provider.selectedModelId = updated.selectedModelId ?? modelId;
     } catch (error) {
@@ -760,13 +750,12 @@ export class ProviderRuntime {
   }
 
   async selectSessionOption(thread: ThreadState, select: SessionSelectId, valueId: string) {
-    const spec = sessionSelects[select];
     const provider = thread.providers[thread.profileId];
-    const configId = spec.configId(provider);
-    if (!configId || spec.selected(provider) === valueId) return;
-    if (!spec.options(provider).some((option) => option.id === valueId)) return;
-    const previous = spec.selected(provider);
-    spec.assign(provider, valueId);
+    const spec = provider.selects?.[select];
+    if (!spec || spec.selectedId === valueId) return;
+    if (!spec.options.some((option) => option.id === valueId)) return;
+    const previous = spec.selectedId;
+    setSelected(provider, select, valueId);
     provider.error = undefined;
     if (provider.connectionStatus !== "ready" || provider.turnStatus !== "idle") return;
     try {
@@ -774,12 +763,12 @@ export class ProviderRuntime {
       if (!connection) {
         throw new Error(`${this.#profileById(thread.profileId).label} is not connected`);
       }
-      applyProviderConfigState(provider, await connection.setConfigOption(configId, valueId));
+      applyProviderConfigState(provider, await connection.setConfigOption(spec.configId, valueId));
     } catch (error) {
-      spec.assign(provider, previous);
+      setSelected(provider, select, previous);
       const message = error instanceof Error ? error.message : String(error);
       provider.error = message;
-      addMessage(thread, "error", `Could not change ${spec.label}: ${message}`);
+      addMessage(thread, "error", `Could not change ${sessionSelectLabels[select]}: ${message}`);
     }
   }
 
@@ -1104,52 +1093,19 @@ export function applyProviderConfigState(provider: ProviderSessionState, state: 
 }
 
 function applySessionSelects(provider: ProviderSessionState, state: AcpModelState) {
-  if (state.modeConfigId) {
-    provider.modeConfigId = state.modeConfigId;
-    provider.modes = state.modes;
-    provider.selectedModeId = state.selectedModeId;
-  }
-  if (state.collaborationConfigId) {
-    provider.collaborationConfigId = state.collaborationConfigId;
-    provider.collaborationModes = state.collaborationModes;
-    provider.selectedCollaborationModeId = state.selectedCollaborationModeId;
-  }
-  if (state.agentConfigId) {
-    provider.agentConfigId = state.agentConfigId;
-    provider.agents = state.agents;
-    provider.selectedAgentId = state.selectedAgentId;
-  }
+  if (state.selects) provider.selects = { ...provider.selects, ...state.selects };
 }
 
-/** Session-level select options share one optimistic update and rollback path. */
-export const sessionSelects = {
-  mode: {
-    label: "mode",
-    configId: (provider: ProviderSessionState) => provider.modeConfigId,
-    options: (provider: ProviderSessionState) => provider.modes ?? [],
-    selected: (provider: ProviderSessionState) => provider.selectedModeId,
-    assign: (provider: ProviderSessionState, value: string | undefined) => {
-      provider.selectedModeId = value;
-    },
-  },
-  collaboration: {
-    label: "collaboration mode",
-    configId: (provider: ProviderSessionState) => provider.collaborationConfigId,
-    options: (provider: ProviderSessionState) => provider.collaborationModes ?? [],
-    selected: (provider: ProviderSessionState) => provider.selectedCollaborationModeId,
-    assign: (provider: ProviderSessionState, value: string | undefined) => {
-      provider.selectedCollaborationModeId = value;
-    },
-  },
-  agent: {
-    label: "agent",
-    configId: (provider: ProviderSessionState) => provider.agentConfigId,
-    options: (provider: ProviderSessionState) => provider.agents ?? [],
-    selected: (provider: ProviderSessionState) => provider.selectedAgentId,
-    assign: (provider: ProviderSessionState, value: string | undefined) => {
-      provider.selectedAgentId = value;
-    },
-  },
-} as const;
-
-export type SessionSelectId = keyof typeof sessionSelects;
+/** Replaces the select rather than mutating it, so catalog-shared objects never alias. */
+function setSelected(
+  provider: ProviderSessionState,
+  select: SessionSelectId,
+  valueId: string | undefined,
+) {
+  const current = provider.selects?.[select];
+  if (current)
+    provider.selects = {
+      ...provider.selects,
+      [select]: { ...current, selectedId: valueId },
+    };
+}
