@@ -93,7 +93,6 @@ const toolSchema = z.object({
     .catch(undefined),
   terminal: z
     .object({
-      terminalId: z.string(),
       output: z.string(),
       exitCode: z.number().nullable().optional(),
     })

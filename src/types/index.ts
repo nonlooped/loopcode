@@ -110,7 +110,6 @@ export interface ToolDiff {
 }
 
 export interface ToolTerminal {
-  terminalId: string;
   output: string;
   exitCode?: number | null;
 }

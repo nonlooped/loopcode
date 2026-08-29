@@ -63,6 +63,20 @@ const toolMetaSchema = z.object({
     })
     .optional(),
 });
+/**
+ * Hard caps on persisted per-tool-call state, which the provider otherwise grows unbounded.
+ * The workspace file has a fixed 10 MB load limit (persistence.rs MAX_WORKSPACE_BYTES).
+ */
+const MAX_DIFF_TEXT_LENGTH = 200_000;
+const MAX_TERMINAL_OUTPUT_LENGTH = 200_000;
+/** Images persist as base64, so the cap is on the encoded length that actually gets written. */
+const MAX_MEDIA_BASE64_LENGTH = 4_000_000;
+
+function truncateHead(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `…(truncated, ${text.length - maxLength} chars omitted)…\n${text.slice(text.length - maxLength)}`;
+}
+
 const backgroundInputSchema = z.object({ run_in_background: z.literal(true) });
 const failureSchema = z.object({
   id: z.string().min(1),
@@ -535,6 +549,29 @@ function contentText(content: ContentBlock) {
  * Splits a tool call's content into the shapes the transcript renders. Anything unrecognised
  * falls back to `rawOutput`/`rawInput` so no update goes on screen empty.
  */
+/**
+ * Truncating each side of a diff independently can hide the edit completely: a change past the
+ * cap leaves two identical prefixes, which renders as no change at all. An oversized diff drops
+ * both sides and says so instead.
+ */
+function boundedDiff(
+  entry: { path: string; oldText?: string | null; newText?: string | null },
+  kind: ToolDiff["kind"],
+): ToolDiff {
+  const oldText = entry.oldText ?? null;
+  const newText = entry.newText ?? null;
+  const longest = Math.max(oldText?.length ?? 0, newText?.length ?? 0);
+  if (longest > MAX_DIFF_TEXT_LENGTH) {
+    return {
+      path: entry.path,
+      oldText: null,
+      newText: `…(diff omitted: ${longest} chars exceeds the ${MAX_DIFF_TEXT_LENGTH} char display limit)…`,
+      kind,
+    };
+  }
+  return { path: entry.path, oldText, newText, kind };
+}
+
 function toolContent(update: ToolCall | ToolCallUpdate) {
   const texts: string[] = [];
   const diffs: ToolDiff[] = [];
@@ -543,16 +580,15 @@ function toolContent(update: ToolCall | ToolCallUpdate) {
 
   for (const entry of update.content ?? []) {
     if (entry.type === "diff") {
-      diffs.push({
-        path: entry.path,
-        oldText: entry.oldText ?? null,
-        newText: entry.newText ?? null,
-        kind: diffMetaSchema.safeParse(entry._meta).data?.kind,
-      });
+      diffs.push(boundedDiff(entry, diffMetaSchema.safeParse(entry._meta).data?.kind));
     } else if (entry.type === "terminal") {
-      terminal = { terminalId: entry.terminalId, output: "" };
+      terminal = { output: "" };
     } else if (entry.type === "content") {
       if (entry.content.type === "image") {
+        if (entry.content.data.length > MAX_MEDIA_BASE64_LENGTH) {
+          texts.push("[image omitted: exceeds the persisted size limit]");
+          continue;
+        }
         media.push({
           data: entry.content.data,
           mimeType: entry.content.mimeType,
@@ -600,10 +636,6 @@ function toolDetail(update: ToolCall | ToolCallUpdate, text: string) {
   );
 }
 
-/**
- * Command output streams in as `_meta` deltas across many updates, so terminal state has to
- * accumulate rather than be replaced by each one.
- */
 function mergeTerminal(
   existing: ToolTerminal | undefined,
   started: ToolTerminal | undefined,
@@ -611,26 +643,24 @@ function mergeTerminal(
 ): ToolTerminal | undefined {
   const meta = terminalMetaSchema.safeParse(update._meta).data;
   const base = existing ?? started ?? streamedTerminal(meta);
-  if (!base) return undefined;
+  if (!base) return;
   const terminal = { ...base };
-  applyTerminalOutput(terminal, meta, update);
-  return terminal;
-}
-
-function streamedTerminal(meta: TerminalMeta): ToolTerminal | undefined {
-  const terminalId = meta?.terminal_output?.terminal_id ?? meta?.terminal_output_delta?.terminal_id;
-  return terminalId ? { terminalId, output: "" } : undefined;
-}
-
-function applyTerminalOutput(
-  terminal: ToolTerminal,
-  meta: TerminalMeta,
-  update: ToolCall | ToolCallUpdate,
-) {
-  if (meta?.terminal_output) terminal.output = meta.terminal_output.data;
-  if (meta?.terminal_output_delta) terminal.output += meta.terminal_output_delta.data;
+  if (meta?.terminal_output)
+    terminal.output = truncateHead(meta.terminal_output.data, MAX_TERMINAL_OUTPUT_LENGTH);
+  if (meta?.terminal_output_delta)
+    terminal.output = truncateHead(
+      terminal.output + meta.terminal_output_delta.data,
+      MAX_TERMINAL_OUTPUT_LENGTH,
+    );
   const command = commandOutputSchema.safeParse(update.rawOutput).data;
   if (!terminal.output && command?.formatted_output) terminal.output = command.formatted_output;
   if (meta?.terminal_exit) terminal.exitCode = meta.terminal_exit.exit_code ?? null;
   else if (command?.exit_code !== undefined) terminal.exitCode = command.exit_code;
+  return terminal;
+}
+
+function streamedTerminal(
+  meta: z.infer<typeof terminalMetaSchema> | undefined,
+): ToolTerminal | undefined {
+  if (meta?.terminal_output || meta?.terminal_output_delta) return { output: "" };
 }

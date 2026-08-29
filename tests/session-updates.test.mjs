@@ -69,6 +69,35 @@ void test("edit tool calls keep their diffs instead of a raw payload dump", () =
   assert.equal(tool.detail, undefined);
 });
 
+void test("a diff too large to display says so instead of rendering as no change", () => {
+  const thread = newThread();
+  const updates = new SessionUpdateHandler(() => {});
+  const prefix = "x".repeat(300_000);
+
+  updates.handle(thread, "codex", {
+    sessionUpdate: "tool_call",
+    toolCallId: "edit-2",
+    title: "Editing files",
+    kind: "edit",
+    status: "in_progress",
+    content: [
+      {
+        type: "diff",
+        path: "/repo/src/big.ts",
+        // The only difference is past the truncation cap: truncating each side on its own would
+        // leave two identical prefixes and render as an empty diff.
+        oldText: `${prefix}const a = 1;\n`,
+        newText: `${prefix}const a = 2;\n`,
+        _meta: { kind: "update" },
+      },
+    ],
+  });
+
+  const [diff] = thread.tools[0].diffs;
+  assert.equal(diff.oldText, null);
+  assert.match(diff.newText, /diff omitted/);
+});
+
 void test("command output accumulates across streamed terminal deltas", () => {
   const thread = newThread();
   const updates = new SessionUpdateHandler(() => {});
