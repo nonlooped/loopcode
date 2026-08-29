@@ -38,8 +38,6 @@ LoopCode downloads the pinned Codex and Claude ACP adapters on first use.
 
 Models, reasoning levels, and fast modes come from the agent, so every thread gets the controls it supports.
 
-More providers are on the way. LoopCode previously shipped Cursor, OpenCode, Grok, Pi, and fx; they were removed so each one can return with full support for its features rather than a lowest-common-denominator subset.
-
 ## Install a release
 
 Download the latest **stable** packages and `SHA256SUMS.txt` from the [latest release](https://github.com/nonlooped/loopcode/releases/latest). Nightly builds are GitHub pre-releases of `master`. Use Stable for daily use.
