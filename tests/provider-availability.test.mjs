@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  desktopPlatform,
-  providerDefinitions,
-  providerSupportsPlatform,
-} from "../src/config/provider-definitions.ts";
+import { providerDefinitions } from "../src/config/provider-definitions.ts";
 import {
   providerCanToggle,
   providerDisplayStatus,
@@ -22,21 +18,10 @@ const ready = (modelId) => ({
   reasoningOptions: [],
 });
 
-void test("provider availability covers platform, discovery, executable, and auth failures", () => {
-  const fx = providerDefinitions.find((profile) => profile.id === "fx");
-  assert.ok(fx);
-  assert.equal(desktopPlatform("darwin"), "macos");
-  assert.equal(desktopPlatform("macos"), "macos");
-  assert.equal(desktopPlatform("windows"), "windows");
-  assert.equal(desktopPlatform("linux"), "linux");
-  assert.equal(desktopPlatform(undefined), "linux");
-  assert.ok(providerDefinitions.every((profile) => profile.platforms.includes("macos")));
-  assert.equal(providerSupportsPlatform(fx, "linux"), true);
-  assert.equal(providerSupportsPlatform(fx, "macos"), true);
-  assert.equal(providerSupportsPlatform(fx, "windows"), false);
+void test("provider availability classifies discovery, executable, and auth failures", () => {
   assert.equal(unavailableReason(new Error("Authentication required")), "authentication");
   assert.equal(
-    unavailableReason(new Error("Could not start grok: No such file or directory")),
+    unavailableReason(new Error("Could not start codex: No such file or directory")),
     "missing-executable",
   );
   assert.equal(unavailableReason(new Error("Invalid ACP response")), "discovery");
@@ -45,7 +30,7 @@ void test("provider availability covers platform, discovery, executable, and aut
 void test("an unavailable saved default falls back", () => {
   const catalogs = {
     codex: ready("codex-model"),
-    grok: {
+    retired: {
       status: "unavailable",
       models: [],
       reasoningOptions: [],
@@ -54,34 +39,21 @@ void test("an unavailable saved default falls back", () => {
     },
   };
 
-  assert.equal(readyProviderId("grok", providerDefinitions, catalogs), "codex");
+  assert.equal(readyProviderId("retired", providerDefinitions, catalogs), "codex");
 });
 
-void test("title generation resolves only a ready safe provider and model", () => {
-  const catalogs = {
-    pi: ready("pi-model"),
-    grok: ready("grok-model"),
-  };
+void test("title generation resolves a ready provider and model", () => {
+  const profiles = [{ id: "codex" }];
+  const catalogs = { codex: ready("codex-model") };
 
   assert.equal(
-    titleGenerationSelection(
-      { profileId: "pi", modelId: "pi-model" },
-      providerDefinitions,
-      catalogs,
-    )?.model.id,
-    "pi-model",
-  );
-  assert.equal(
-    titleGenerationSelection(
-      { profileId: "grok", modelId: "grok-model" },
-      providerDefinitions,
-      catalogs,
-    ),
-    undefined,
+    titleGenerationSelection({ profileId: "codex", modelId: "codex-model" }, profiles, catalogs)
+      ?.model.id,
+    "codex-model",
   );
 });
 
-void test("provider display status distinguishes auth, connections, and missing CLIs", () => {
+void test("provider display status distinguishes ready, disabled, and missing CLIs", () => {
   const missing = {
     status: "unavailable",
     models: [],
@@ -90,22 +62,18 @@ void test("provider display status distinguishes auth, connections, and missing 
     error: "not found",
   };
 
+  assert.equal(providerDisplayStatus(true, ready("codex-model")), "Authenticated");
   assert.equal(
-    providerDisplayStatus("claude", true, ready("claude-model"), false),
-    "Not logged in",
+    providerDisplayStatus(true, { ...ready("codex-model"), needsAuth: true }),
+    "Authenticated",
   );
-  assert.equal(providerDisplayStatus("claude", true, ready("claude-model"), true), "Authenticated");
-  for (const profileId of ["fx", "opencode", "pi"]) {
-    assert.equal(providerDisplayStatus(profileId, true, ready(`${profileId}-model`)), "Connected");
-  }
-  assert.equal(providerDisplayStatus("grok", true, missing), "Not installed");
-  assert.equal(providerDisplayStatus("grok", false, missing), "Disabled");
+  assert.equal(providerDisplayStatus(true, undefined), "Not logged in");
+  assert.equal(providerDisplayStatus(true, missing), "Not installed");
+  assert.equal(providerDisplayStatus(false, missing), "Disabled");
   assert.equal(providerVersionLabel(missing), "");
 });
 
-void test("only ready and, for claude, authenticated providers can be toggled", () => {
-  assert.equal(providerCanToggle("claude", ready("claude-model"), false), false);
-  assert.equal(providerCanToggle("claude", ready("claude-model"), true), true);
-  assert.equal(providerCanToggle("pi", ready("pi-model"), undefined), true);
-  assert.equal(providerCanToggle("grok", undefined, undefined), false);
+void test("only providers with a ready catalog can be toggled", () => {
+  assert.equal(providerCanToggle(ready("codex-model")), true);
+  assert.equal(providerCanToggle(undefined), false);
 });

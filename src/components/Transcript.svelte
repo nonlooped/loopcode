@@ -1,10 +1,25 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { IconAlertTriangle, IconChevronDown, IconChevronRight, IconTool } from '@tabler/icons-svelte';
+  import {
+    IconAlertTriangle,
+    IconArrowRight,
+    IconBulb,
+    IconChevronDown,
+    IconChevronRight,
+    IconFileText,
+    IconListCheck,
+    IconPencil,
+    IconSearch,
+    IconTerminal2,
+    IconTool,
+    IconTrash,
+    IconWorld,
+  } from '@tabler/icons-svelte';
   import { Collapsible } from 'bits-ui';
 
   import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
   import ImagePreview from './ImagePreview.svelte';
+  import ToolContent from './ToolContent.svelte';
   import MarkdownMessage from './markdown/MarkdownMessage.svelte';
   import MotionBreathe from './motion/MotionBreathe.svelte';
   import MotionEnter from './motion/MotionEnter.svelte';
@@ -16,13 +31,14 @@
     ThreadState,
     TimelineMessage,
     ToolActivity,
+    SessionFailureAction,
   } from '../types';
   import type { TimelineDisplayEntry } from '../types/timeline';
   import type { SendShortcut } from '../utils/app-settings';
   import { copyImage, copyText, saveImage } from '../utils/clipboard';
   import { materialFileIcon, materialFolderIcon } from '../utils/material-file-icons';
   import { composerEnterAction } from '../utils/prompt-content';
-  import { formatElapsedDuration, isStreamingMessage } from '../utils/timeline';
+  import { formatElapsedDuration, isStreamingMessage, streamingMessageId } from '../utils/timeline';
   import { threadHarness, threadStatus } from '../utils/threads';
 
   interface Props {
@@ -33,9 +49,10 @@
     sendShortcut: SendShortcut;
     openFile: (path: string) => void;
     resendPrompt: (text: string, references: ComposerReference[]) => boolean;
+    recoverFailure: (action: SessionFailureAction, messageId?: string) => void;
   }
 
-  const { thread, entries, profiles, reducedMotion, sendShortcut, openFile, resendPrompt }: Props =
+  const { thread, entries, profiles, reducedMotion, sendShortcut, openFile, resendPrompt, recoverFailure }: Props =
     $props();
   let transcriptElement = $state<HTMLElement>();
   let canScrollUp = $state(false);
@@ -54,7 +71,6 @@
   let toolOpen = $state<Record<string, boolean>>({});
   let expandedPrompts = $state<Record<string, boolean>>({});
   let overflowingPrompts = $state<Record<string, boolean>>({});
-  // ponytail: DOM nodes kept out of deep reactivity; read at action time, not render time
   let messageBodies = $state.raw<Record<string, HTMLElement | undefined>>({});
   const entryMotion = $derived(animateEntries && !reducedMotion);
   const latestUserMessage = $derived(
@@ -232,9 +248,16 @@
     return `data:${image.mimeType};base64,${image.data}`;
   }
 
-  function toolStatus(status: string) {
-    return status.replaceAll('_', ' ');
-  }
+  const toolIcons: Record<string, typeof IconTool> = {
+    delete: IconTrash,
+    edit: IconPencil,
+    execute: IconTerminal2,
+    fetch: IconWorld,
+    move: IconArrowRight,
+    read: IconFileText,
+    search: IconSearch,
+    think: IconBulb,
+  };
 
   function messageMenuItems(message: TimelineMessage): ContextMenuItem[] {
     return [
@@ -311,8 +334,18 @@
   {/if}
 {/snippet}
 
+{#snippet failureActions(message: TimelineMessage)}
+  {#if message.failure?.actions.length}
+    <div class="mt-2 flex flex-wrap gap-1.5">
+      {#each message.failure.actions as action (action)}
+        <button type="button" class="rounded-md border border-line px-2 py-1 text-[11px] font-medium text-text-soft hover:bg-panel-hover" onclick={() => recoverFailure(action, message.role === 'user' ? message.id : undefined)}>{action === 'new_session' ? 'New session' : action[0].toUpperCase() + action.slice(1)}</button>
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
 <div class="relative min-h-0 flex-1 [container-type:size]">
-  <MotionEnter duration={reducedMotion ? 0 : 150}>
+  <MotionEnter class="h-full min-h-0" duration={reducedMotion ? 0 : 150}>
   <section
     bind:this={transcriptElement}
     class="h-full min-h-0 overflow-y-auto bg-transparent select-text [scrollbar-gutter:stable]"
@@ -377,14 +410,15 @@
                     >
                       <MotionEnter y={toolFly.y} duration={toolFly.duration}>
                         <Collapsible.Trigger class={toolTriggerClass}>
-                          <span class="grid size-6 shrink-0 place-items-center border-0 text-faint"><IconTool size={16} stroke={1.55} /></span>
+                          {@const ToolIcon = tool.plan ? IconListCheck : (toolIcons[tool.kind] ?? IconTool)}
+                          <span class="grid size-6 shrink-0 place-items-center border-0 text-faint"><ToolIcon size={16} stroke={1.55} /></span>
                           <span class="flex min-w-0 items-baseline gap-2">
                             <strong class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-medium text-text-soft">{tool.title}</strong>
-                            <small class="shrink-0 text-[11px] capitalize text-faint">{toolStatus(tool.status)}</small>
+                            <small class="shrink-0 text-[11px] capitalize text-faint">{tool.status.replaceAll('_', ' ')}</small>
                           </span>
                         </Collapsible.Trigger>
                         <Collapsible.Content class={collapsibleContentClass}>
-                          {#if tool.detail}<pre class="mx-[5px] mb-[5px] ml-[27px] max-h-[260px] overflow-auto rounded-[5px] border border-line bg-recessed p-[7px_8px] font-mono text-[11px] leading-snug whitespace-pre-wrap break-anywhere text-muted">{tool.detail}</pre>{/if}
+                          <ToolContent {tool} {openFile} />
                           {#if tool.locations.length > 0}
                             <div class="mx-[5px] mb-[5px] ml-[27px] grid gap-1 font-mono text-[11px] text-muted">
                               {#each tool.locations as location (location)}
@@ -416,7 +450,7 @@
                       <MarkdownMessage
                         id={workEntry.message.id}
                         source={workEntry.message.text.trim()}
-                        streaming={entry.active}
+                        streaming={workEntry.message.id === streamingMessageId(entry)}
                         fileLinks={{ projectRoot: thread.cwd, open: openFile }}
                       />
                     </div>
@@ -439,7 +473,11 @@
             class:text-danger={message.role === 'error'}
           >
             {#if message.role === 'error'}<IconAlertTriangle size={15} stroke={1.55} />{/if}
-            <span>{message.text}</span>
+            <div class="min-w-0">
+              <span>{message.text}</span>
+              {#if message.failure?.details}<p class="mt-1 mb-0 whitespace-pre-wrap text-faint">{message.failure.details}</p>{/if}
+              {@render failureActions(message)}
+            </div>
           </div>
           </MotionEnter>
         {:else}
@@ -571,6 +609,15 @@
                   <IconChevronDown size={14} stroke={1.55} />
                 {/if}
               </button>
+            {/if}
+            {#if message.failure}
+              <div class="mt-2 flex items-start gap-2 text-xs leading-snug text-danger">
+                <IconAlertTriangle size={15} stroke={1.55} />
+                <div class="min-w-0">
+                  <span>{message.failure.title}</span>
+                  {@render failureActions(message)}
+                </div>
+              </div>
             {/if}
           </article>
               </MotionEnter>

@@ -1,12 +1,13 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { z } from "zod";
 
-import { compatibilityFor, type AcpCompatibility } from "./acp-compatibility.ts";
 import { launchHarness, sendRpc, stopHarness, type BrokerEvent } from "./native.ts";
 import type {
   AcpErrorDetails,
   ConnectRequest,
   ConnectionStatus,
+  GoalAction,
+  PermissionFileChange,
   PermissionMode,
   PermissionRequest,
   QuestionAnswer,
@@ -19,6 +20,19 @@ import { readModelState, type AcpModelState } from "../utils/model-state.ts";
 type RpcId = acp.JsonRpcId;
 
 type PermissionResponse = acp.RequestPermissionResponse;
+
+// ponytail: claiming JetBrains' undocumented AIR client unlocks failures, terminal output, and
+// subagent transcripts. If they disappear, check this first because unsupported claims fail silently.
+const clientCapabilities: acp.ClientCapabilities = {
+  plan: {},
+  session: { configOptions: { boolean: {} }, compaction: {} },
+  elicitation: { form: {} },
+  _meta: {
+    terminal_output: true,
+    "subagent-transcript": true,
+    jetbrains: { air: { version: 1, capabilities: ["sessionFailure"] } },
+  },
+};
 
 interface PendingPermission {
   resolve: (response: PermissionResponse) => void;
@@ -62,9 +76,10 @@ export type PromptContent = acp.ContentBlock;
 export interface AcpCallbacks {
   connectionStatus?: (status: ConnectionStatus) => void;
   turnStatus?: (status: TurnStatus) => void;
-  initialized?: (agentInfo?: acp.Implementation | null) => void;
+  initialized?: (agentInfo?: acp.Implementation | null, authMethods?: acp.AuthMethod[]) => void;
   ready: (session: AcpSessionInfo) => void;
   update: (update: acp.SessionUpdate) => void;
+  metadata?: (metadata: unknown) => void;
   permission: (request: PermissionRequest) => void;
   permissionMode?: () => PermissionMode;
   stderr: (line: string) => void;
@@ -75,6 +90,8 @@ export interface AcpCallbacks {
 export interface AcpSessionInfo extends AcpModelState {
   harnessId: string;
   sessionId: string;
+  goalActions?: GoalAction[];
+  goalControlMethod?: string;
 }
 
 export class AcpConnection {
@@ -82,7 +99,6 @@ export class AcpConnection {
   #transport: AcpTransport;
   #harnessId?: string;
   #sessionId?: string;
-  #compatibility: AcpCompatibility = compatibilityFor(undefined);
   #modelState: AcpModelState = { models: [], reasoningOptions: [] };
   #context?: acp.ClientContext;
   #connection?: acp.ClientConnection;
@@ -93,6 +109,7 @@ export class AcpConnection {
   #permissions = new Map<RpcId, PendingPermission>();
   #questions = new Map<RpcId, PendingQuestions>();
   #activeToolIds = new Set<string>();
+  #supportsFollowups = false;
   #turnActive = false;
   #connecting = false;
   #stopping = false;
@@ -112,7 +129,6 @@ export class AcpConnection {
     }
     this.#connecting = true;
     this.#emitConnectionStatus("connecting");
-    this.#compatibility = compatibilityFor(request.profileId);
     this.#modelState = { models: [], reasoningOptions: [] };
     let method = "launch";
     try {
@@ -131,6 +147,7 @@ export class AcpConnection {
         {
           command: request.command,
           args: request.args,
+          env: request.env,
           cwd: request.cwd,
           profileId: request.profileId,
           threadId: request.threadId,
@@ -152,26 +169,21 @@ export class AcpConnection {
         .onRequest(acp.methods.client.elicitation.create, ({ params, requestId }) =>
           this.#requestElicitation(requestId, params),
         );
-      this.#compatibility.registerClientHandlers(client, {
-        requestQuestions: (requestId, pending) => this.#requestQuestions(requestId, pending),
-      });
 
       this.#connection = client.connect({ readable, writable });
       this.#context = this.#connection.agent;
       method = "initialize";
       const initialized = await this.#context.request(acp.methods.agent.initialize, {
         protocolVersion: acp.PROTOCOL_VERSION,
-        clientCapabilities: this.#compatibility.clientCapabilities,
+        clientCapabilities,
         clientInfo: {
           name: "loopcode",
           title: "LoopCode",
           version: "0.1.0",
         },
       });
-      this.#callbacks.initialized?.(initialized.agentInfo);
-
-      method = "authenticate";
-      await this.#compatibility.authenticate(this.#context, initialized, this.#callbacks.stderr);
+      this.#supportsFollowups = steeringSupportSchema.safeParse(initialized._meta).success;
+      this.#callbacks.initialized?.(initialized.agentInfo, initialized.authMethods);
 
       let sessionId: string;
       let sessionState:
@@ -214,9 +226,12 @@ export class AcpConnection {
         sessionState = session;
       }
       this.#modelState = readModelState(sessionState);
+      this.#callbacks.metadata?.(sessionState._meta);
       this.#callbacks.ready({
         harnessId,
         sessionId,
+        supportsFollowups: this.#supportsFollowups,
+        ...goalCapability(initialized._meta),
         ...this.#modelState,
       });
       this.#emitConnectionStatus("ready");
@@ -230,10 +245,6 @@ export class AcpConnection {
     }
   }
 
-  listProviderModels() {
-    return this.#compatibility.listModels(this.#requireContext());
-  }
-
   async prompt(prompt: PromptContent[]) {
     if (this.#turnActive) throw new Error("This ACP session already has an active turn");
     const context = this.#requireContext();
@@ -243,10 +254,11 @@ export class AcpConnection {
     this.#emitTurnStatus("running");
     let blockedReported = false;
     try {
-      await context.request(acp.methods.agent.session.prompt, {
+      const response = await context.request(acp.methods.agent.session.prompt, {
         sessionId,
         prompt,
       });
+      this.#callbacks.metadata?.(response._meta);
       if (this.#activeToolIds.size > 0) {
         const error = new Error(
           `ACP session/prompt completed with ${this.#activeToolIds.size} tool call(s) still active`,
@@ -280,16 +292,25 @@ export class AcpConnection {
     });
   }
 
-  async setModel(configId: string, modelId: string) {
-    const state = await this.#compatibility.setModel(
-      this.#requireContext(),
-      this.#requireSessionId(),
-      modelId,
-      this.#modelState,
-    );
-    if (!state) return this.setConfigOption(configId, modelId);
-    this.#modelState = state;
-    return state;
+  async followUp(prompt: PromptContent[]) {
+    if (!this.#supportsFollowups) throw new Error("This agent does not support in-turn follow-ups");
+    if (!this.#turnActive)
+      throw new Error("The active turn finished before the follow-up was sent");
+    const response = await this.#requireContext().request<
+      { outcome: "injected" | "promptRequired" | "startedNewTurn" },
+      {
+        sessionId: string;
+        prompt: PromptContent[];
+        _meta: { steering: { idleBehavior: "promptRequired" } };
+      }
+    >("_session/steering", {
+      sessionId: this.#requireSessionId(),
+      prompt,
+      _meta: { steering: { idleBehavior: "promptRequired" } },
+    });
+    if (response.outcome !== "injected") {
+      throw new Error("The active turn finished before the follow-up was sent");
+    }
   }
 
   async setConfigOption(configId: string, value: string | boolean) {
@@ -311,6 +332,14 @@ export class AcpConnection {
     valueType: "boolean" | "string" = "boolean",
   ) {
     return this.setConfigOption(configId, valueType === "string" ? String(value) : value);
+  }
+
+  goal(action: GoalAction, objective: string | undefined, method: string) {
+    return this.#requireContext().request(method, {
+      sessionId: this.#requireSessionId(),
+      action,
+      ...(action === "set" ? { objective } : {}),
+    });
   }
 
   async generateTitle(cwd: string, prompt: string, selectedModelId: string) {
@@ -379,11 +408,11 @@ export class AcpConnection {
     const harnessId = this.#harnessId;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
-    this.#compatibility = compatibilityFor(undefined);
     this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#loadingSession = false;
     this.#turnActive = false;
+    this.#supportsFollowups = false;
     this.#activeToolIds.clear();
     this.#connection?.close();
     this.#connection = undefined;
@@ -437,12 +466,12 @@ export class AcpConnection {
     this.#stopping = false;
     this.#harnessId = undefined;
     this.#sessionId = undefined;
-    this.#compatibility = compatibilityFor(undefined);
     this.#modelState = { models: [], reasoningOptions: [] };
     this.#context = undefined;
     this.#connection = undefined;
     this.#loadingSession = false;
     this.#turnActive = false;
+    this.#supportsFollowups = false;
     this.#activeToolIds.clear();
     this.#titleSessions.clear();
     this.#cancelInteractions();
@@ -468,8 +497,9 @@ export class AcpConnection {
       }
       return;
     }
-    if (notification.sessionId === this.#sessionId && !this.#loadingSession) {
-      this.#callbacks.update(notification.update);
+    if (notification.sessionId === this.#sessionId) {
+      if (!this.#loadingSession || notification.update.sessionUpdate === "session_info_update")
+        this.#callbacks.update(notification.update);
     }
   }
 
@@ -597,6 +627,23 @@ export class AcpConnection {
   }
 }
 
+const steeringSupportSchema = z.object({
+  steering: z.object({ supported: z.literal(true) }),
+});
+
+const goalCapabilitySchema = z.object({
+  goal: z.object({
+    version: z.literal(1),
+    controlMethod: z.string().min(1),
+    actions: z.array(z.enum(["set", "pause", "resume", "clear"])),
+  }),
+});
+
+function goalCapability(meta: unknown) {
+  const goal = goalCapabilitySchema.safeParse(meta).data?.goal;
+  return goal ? { goalActions: goal.actions, goalControlMethod: goal.controlMethod } : {};
+}
+
 function errorDetails(
   cause: unknown,
   scope: AcpErrorDetails["scope"],
@@ -642,13 +689,77 @@ function permissionFromAcp(
       required: true,
     };
   }
+  const fileChanges = fileChangesFromMeta(params._meta);
+  const planMarkdown = planFromInput(rawInput);
+  const presentation = permissionPresentationSchema.safeParse(params._meta).data?.permission;
   return {
     requestId,
     type: "permission",
-    title: params.toolCall.title ?? "Allow the harness to continue?",
-    detail,
+    title: presentation?.title ?? permissionTitle(params, fileChanges),
+    description: presentation?.description,
+    detail: planMarkdown ?? (fileChanges ? "" : detail),
     options,
+    fileChanges,
+    planMarkdown,
   };
+}
+
+const permissionPresentationSchema = z.object({
+  permission: z.object({
+    version: z.literal(1),
+    title: z.string().min(1),
+    description: z.string().optional(),
+  }),
+});
+
+function permissionTitle(
+  params: acp.RequestPermissionRequest,
+  fileChanges: PermissionFileChange[] | undefined,
+) {
+  if (params.toolCall.title) return params.toolCall.title;
+  if (!fileChanges?.length) return "Allow the harness to continue?";
+  const [first] = fileChanges;
+  const name = first.path.split(/[/\\]/).pop() || first.path;
+  return fileChanges.length === 1
+    ? `Apply changes to ${name}?`
+    : `Apply ${fileChanges.length} file changes?`;
+}
+
+/**
+ * Codex sends edit approvals with an empty tool call and the real change under `_meta`, so
+ * without this the prompt would ask to approve a write it never describes.
+ */
+const codexFileChangeSchema = z.object({
+  codex: z.object({
+    params: z.object({
+      changes: z
+        .array(
+          z.object({
+            path: z.string().min(1),
+            diff: z.string().optional(),
+            kind: z.object({ type: z.enum(["add", "update", "delete"]) }).optional(),
+          }),
+        )
+        .optional(),
+    }),
+  }),
+});
+
+function fileChangesFromMeta(meta: unknown): PermissionFileChange[] | undefined {
+  const changes = codexFileChangeSchema.safeParse(meta).data?.codex.params.changes;
+  if (!changes?.length) return undefined;
+  const fileChanges = changes.map((change) => ({
+    path: change.path,
+    kind: change.kind?.type ?? "update",
+    diff: change.diff ?? "",
+  }));
+  return fileChanges.some((change) => change.diff) ? fileChanges : undefined;
+}
+
+const planInputSchema = z.object({ plan: z.string().min(1) });
+
+function planFromInput(rawInput: JsonValue) {
+  return planInputSchema.safeParse(rawInput).data?.plan;
 }
 
 function questionsFromElicitation(params: acp.CreateElicitationRequest): QuestionSpec[] {
@@ -729,8 +840,9 @@ function multiSelectOptions(items: acp.MultiSelectItems): QuestionRequest["optio
 }
 
 function optionFromEnum(option: acp.EnumOption): QuestionRequest["options"][number] {
-  const optionMeta = option._meta?.["_claude/askUserQuestionOption"];
-  const preview = z.object({ preview: z.string() }).safeParse(optionMeta).data?.preview;
+  const preview = z
+    .object({ preview: z.string() })
+    .safeParse(option._meta?.["_claude/askUserQuestionOption"]).data?.preview;
   const result: QuestionRequest["options"][number] = {
     optionId: option.const,
     name: option.title,

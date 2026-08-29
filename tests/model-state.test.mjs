@@ -1,16 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { readCursorAvailableModels, readModelState } from "../src/utils/model-state.ts";
+import { readModelState } from "../src/utils/model-state.ts";
 
-void test("rejects malformed Cursor model catalogs", () => {
-  assert.throws(
-    () => readCursorAvailableModels({ models: [{ value: "", name: "Broken" }] }),
-    /invalid model catalog/,
-  );
-});
-
-void test("prefers the model selector when fx advertises provider and model categories", () => {
+void test("prefers the model selector when an agent advertises provider and model categories", () => {
   const state = readModelState({
     configOptions: [
       {
@@ -113,5 +106,55 @@ void test("reads model and reasoning selectors from typed ACP config options", (
     fastModeEnabled: true,
     fastModeValueType: "boolean",
     fastModeDescription: "Faster responses at a higher cost.",
+    selects: {},
   });
+});
+
+void test("reads provider session selectors without treating them as models", () => {
+  const state = readModelState({
+    configOptions: [
+      {
+        id: "mode",
+        name: "Mode",
+        category: "mode",
+        type: "select",
+        currentValue: "acceptEdits",
+        options: [
+          { value: "default", name: "Manual" },
+          { value: "acceptEdits", name: "Accept edits" },
+        ],
+      },
+      {
+        id: "collaboration_mode",
+        name: "Collaboration mode",
+        category: "collaboration_mode",
+        type: "select",
+        currentValue: "plan",
+        options: [
+          { value: "default", name: "Default" },
+          { value: "plan", name: "Plan" },
+        ],
+      },
+      {
+        id: "agent",
+        name: "Agent",
+        type: "select",
+        currentValue: "reviewer",
+        options: [
+          { value: "default", name: "Default" },
+          { value: "reviewer", name: "Reviewer", description: "Review-focused agent" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(state.selects.mode.selectedId, "acceptEdits");
+  assert.equal(state.selects.collaboration.selectedId, "plan");
+  assert.deepEqual(state.selects.agent.options.at(-1), {
+    id: "reviewer",
+    name: "Reviewer",
+    description: "Review-focused agent",
+  });
+  assert.equal(state.modelConfigId, undefined);
+  assert.deepEqual(state.models, []);
 });

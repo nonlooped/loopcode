@@ -1,8 +1,4 @@
-import {
-  providerDefinitions,
-  providerSupportsPlatform,
-  type ProviderDefinition,
-} from "../config/provider-definitions.ts";
+import { providerDefinitions, type ProviderDefinition } from "../config/provider-definitions.ts";
 import type {
   AcpErrorDetails,
   ConnectionStatus,
@@ -12,13 +8,19 @@ import type {
   PromptPart,
   QuestionAnswer,
   ProviderModelCatalog,
+  GoalAction,
   ProviderSessionState,
+  RateLimitState,
+  SessionSelectId,
+  SlashCommand,
   ThreadState,
+  TimelineMessage,
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { jsonValueSchema } from "../utils/json.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
-import { discoverModelOptions, modelOptionsFromStates } from "../utils/model-options.ts";
+import { discoverModelOptions } from "../utils/model-options.ts";
+import { sessionSelectLabels } from "../utils/model-state.ts";
 import {
   firstReadyProviderId,
   titleGenerationSelection,
@@ -34,12 +36,13 @@ import {
   type AcpModelState,
   type PromptContent,
 } from "./acp.ts";
-import { recordDiagnostic } from "./native.ts";
-import { SessionUpdateHandler } from "./session-updates.ts";
+import { getProviderExecutablePath, recordDiagnostic } from "./native.ts";
+import { SessionUpdateHandler, slashCommands } from "./session-updates.ts";
 
 interface RuntimeHooks {
   permission: (value: { threadId: string; profileId: string; request: PermissionRequest }) => void;
   clearPermission: (threadId: string, profileId?: string) => void;
+  usage: (profileId: string, limits: RateLimitState[]) => void;
 }
 
 export interface ProviderRuntimeConfiguration {
@@ -66,6 +69,8 @@ export class ProviderRuntime {
   #titleConnections = new Map<string, AcpConnection>();
   #titlePreference?: TitleGenerationPreference;
   #updates = new SessionUpdateHandler(applyProviderConfigState);
+  #reportedUsage = new Map<string, string>();
+  #executablePaths = new Map<string, Promise<string | null>>();
 
   constructor(
     catalogs: Record<string, ProviderModelCatalog>,
@@ -82,6 +87,32 @@ export class ProviderRuntime {
 
   connection(threadId: string, profileId: string) {
     return this.#connections.get(connectionKey(threadId, profileId));
+  }
+
+  /**
+   * ACP adapters bundle their own copy of the provider CLI, and the bundled build lags the one a
+   * user installs. `claude-agent-acp@0.70.0` bundles Claude Code 2.1.232, whose rate-limit events
+   * omit the utilization percentages 2.1.251 reports. Each adapter documents an override, so point
+   * it at the installed CLI whenever there is one and let it fall back to the bundle otherwise.
+   */
+  async #providerEnvironment(profile: ProviderDefinition) {
+    let lookup = this.#executablePaths.get(profile.id);
+    if (!lookup) {
+      lookup = getProviderExecutablePath(profile.versionCommand).catch(() => null);
+      this.#executablePaths.set(profile.id, lookup);
+    }
+    const executable = await lookup;
+    return executable ? { [profile.executableEnvVar]: executable } : undefined;
+  }
+
+  /** Publishes rate-limit windows once per change so the settings page can cache them. */
+  #reportUsage(profileId: string, provider: ProviderSessionState) {
+    const limits = provider.rateLimits;
+    if (!limits?.length) return;
+    const fingerprint = JSON.stringify(limits);
+    if (this.#reportedUsage.get(profileId) === fingerprint) return;
+    this.#reportedUsage.set(profileId, fingerprint);
+    this.#hooks.usage(profileId, limits);
   }
 
   setPermissionMode(mode: PermissionMode) {
@@ -142,7 +173,15 @@ export class ProviderRuntime {
     const provider = thread.providers[profileId];
     if (this.#disabledProfiles.has(profileId)) return;
     if (!text && images.length === 0) return;
-    if (images.length > 0 && !this.#profileById(profileId).supportsImages) return;
+    if (provider.turnStatus === "running") {
+      if (!provider.supportsFollowups || provider.connectionStatus !== "ready") return;
+      addMessage(thread, "user", text, images, content);
+      // `followUp` keeps timelineEntries from closing out the still-running turn segment.
+      const followUpMessage = thread.messages.at(-1)!;
+      followUpMessage.followUp = true;
+      this.#updates.startFollowUp(thread.id, profileId);
+      return this.#completeFollowUp(thread, profileId, followUpMessage, text, images, content);
+    }
     if (provider.turnStatus !== "idle") return;
     if (provider.connectionStatus !== "disconnected" && provider.connectionStatus !== "ready")
       return;
@@ -192,20 +231,14 @@ export class ProviderRuntime {
   async discover(profile: ProviderDefinition, cwd: string, threads: ThreadState[]) {
     this.#threads = [...threads];
     if (this.#disabledProfiles.has(profile.id)) return;
-    if (!providerSupportsPlatform(profile)) {
-      this.#catalogs[profile.id] = {
-        status: "unavailable",
-        models: [],
-        reasoningOptions: [],
-        unavailableReason: "unsupported-platform",
-        error: `${profile.label} is not available on this platform.`,
-      };
-      this.applyCatalog(profile.id, threads);
-      return;
-    }
-    this.#catalogs[profile.id] = { status: "loading", models: [], reasoningOptions: [] };
+    this.#catalogs[profile.id] = {
+      status: "loading",
+      models: [],
+      reasoningOptions: [],
+    };
     let discovered: AcpModelState = { models: [], reasoningOptions: [] };
     let agentVersion: string | undefined;
+    let commands: SlashCommand[] | undefined;
     const connection = new AcpConnection({
       connectionStatus: () => {},
       turnStatus: () => {},
@@ -215,7 +248,12 @@ export class ProviderRuntime {
       ready: (session) => {
         discovered = session;
       },
-      update: () => {},
+      update: (update) => {
+        // Commands are published once per session, so discovery is the earliest they exist.
+        if (update.sessionUpdate === "available_commands_update") {
+          commands = slashCommands(update.availableCommands);
+        }
+      },
       permission: () => {},
       stderr: () => {},
       error: () => {},
@@ -227,12 +265,9 @@ export class ProviderRuntime {
         cwd,
         command: profile.command,
         args: profile.args,
+        env: await this.#providerEnvironment(profile),
         profileId: profile.id,
       });
-      const compatibilityModels = await connection.listProviderModels();
-      if (compatibilityModels.length > 0) {
-        discovered.models = compatibilityModels.map(({ model }) => model);
-      }
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
       }
@@ -246,13 +281,10 @@ export class ProviderRuntime {
         advertisedModelId && models.some((model) => model.id === advertisedModelId)
           ? advertisedModelId
           : models[0].id;
-      const { reasoningOptionsByModel, fastModeOptionsByModel } =
-        await discoverProviderModelOptions(
-          profile,
-          connection,
-          { ...discovered, selectedModelId },
-          compatibilityModels,
-        );
+      const { reasoningOptionsByModel, fastModeOptionsByModel } = await discoverModelOptions(
+        connection,
+        { ...discovered, selectedModelId },
+      );
       const selectedReasoning = reasoningOptionsByModel[selectedModelId];
       const selectedFastMode = fastModeOptionsByModel[selectedModelId];
       this.#catalogs[profile.id] = {
@@ -269,6 +301,9 @@ export class ProviderRuntime {
         fastModeEnabled: selectedFastMode?.enabled,
         fastModeValueType: selectedFastMode?.valueType,
         fastModeDescription: selectedFastMode?.description,
+        selects: discovered.selects,
+        supportsFollowups: discovered.supportsFollowups,
+        commands,
       };
     } catch (error) {
       this.#baseModels.set(profile.id, []);
@@ -310,6 +345,9 @@ export class ProviderRuntime {
     const selectedModelId = provider.selectedModelId;
     const requestedReasoningId = provider.selectedReasoningId;
     const requestedFastModeEnabled = provider.fastModeEnabled;
+    const requestedSelects = Object.entries(provider.selects ?? {}).map(
+      ([select, value]) => [select as SessionSelectId, value.selectedId] as const,
+    );
     const existingSessionId = provider.sessionId;
     if (!selectedModelId || !provider.models.some((model) => model.id === selectedModelId)) {
       this.#setError(thread, profile.id, {
@@ -346,6 +384,8 @@ export class ProviderRuntime {
         if (!isCurrent()) return;
         provider.harnessId = session.harnessId;
         provider.sessionId = session.sessionId;
+        provider.goalActions = session.goalActions;
+        provider.goalControlMethod = session.goalControlMethod;
         applyProviderConfigState(provider, session);
         if (
           requestedReasoningId &&
@@ -365,6 +405,12 @@ export class ProviderRuntime {
         const modelState =
           update.sessionUpdate === "config_option_update" ? readModelState(update) : undefined;
         this.#updates.handle(thread, profile.id, update, modelState);
+        this.#reportUsage(profile.id, provider);
+      },
+      metadata: (metadata) => {
+        if (!isCurrent()) return;
+        this.#updates.handleMetadata(thread, profile.id, metadata);
+        this.#reportUsage(profile.id, provider);
       },
       permission: (request) => {
         if (isCurrent()) {
@@ -412,6 +458,7 @@ export class ProviderRuntime {
         cwd: thread.cwd,
         command: profile.command,
         args: profile.args,
+        env: await this.#providerEnvironment(profile),
         profileId: profile.id,
         threadId: thread.id,
         sessionId: existingSessionId,
@@ -423,7 +470,7 @@ export class ProviderRuntime {
       if (!provider.modelConfigId) {
         throw new Error(`${profile.label} did not expose a model configuration.`);
       }
-      const updated = await connection.setModel(provider.modelConfigId, selectedModelId);
+      const updated = await connection.setConfigOption(provider.modelConfigId, selectedModelId);
       const appliedModelId = updated.selectedModelId ?? sessionSelectedModelId;
       if (appliedModelId !== selectedModelId) {
         throw new Error(`${profile.label} did not apply model ${selectedModelId}.`);
@@ -438,6 +485,7 @@ export class ProviderRuntime {
         updated.selectedReasoningId,
       );
       await this.#restoreFastMode(connection, provider, requestedFastModeEnabled);
+      await this.#restoreSessionSelections(connection, provider, requestedSelects);
       startupComplete = true;
       provider.error = undefined;
       provider.errorDetails = undefined;
@@ -512,6 +560,22 @@ export class ProviderRuntime {
     applyProviderConfigState(provider, fastModeState);
   }
 
+  async #restoreSessionSelections(
+    connection: AcpConnection,
+    provider: ProviderSessionState,
+    requested: readonly (readonly [SessionSelectId, string | undefined])[],
+  ) {
+    for (const [select, value] of requested) {
+      const spec = provider.selects?.[select];
+      if (!value || !spec || spec.selectedId === value) continue;
+      if (!spec.options.some((option) => option.id === value)) continue;
+      applyProviderConfigState(provider, await connection.setConfigOption(spec.configId, value));
+      if (provider.selects?.[select]?.selectedId !== value) {
+        throw new Error(`The agent did not apply ${sessionSelectLabels[select]} ${value}.`);
+      }
+    }
+  }
+
   async #completeTurn(
     thread: ThreadState,
     profileId: string,
@@ -550,6 +614,31 @@ export class ProviderRuntime {
     await titleCompletion;
   }
 
+  async #completeFollowUp(
+    thread: ThreadState,
+    profileId: string,
+    message: TimelineMessage,
+    text: string,
+    images: MessageImage[],
+    content?: PromptPart[],
+  ) {
+    try {
+      const connection = this.connection(thread.id, profileId);
+      if (!connection) throw new Error(`${this.#profileById(profileId).label} is not connected`);
+      await connection.followUp(acpPrompt(content, text, images));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      message.failure = {
+        id: crypto.randomUUID(),
+        revision: 1,
+        category: "request",
+        severity: "error",
+        title: `Could not send follow-up: ${errorMessage}`,
+        actions: ["retry"],
+      };
+    }
+  }
+
   async #generateThreadTitle(thread: ThreadState, request: string) {
     const token = crypto.randomUUID();
     this.#titleTokens.set(thread.id, token);
@@ -575,6 +664,7 @@ export class ProviderRuntime {
           cwd: thread.cwd,
           command: selection.profile.command,
           args: selection.profile.args,
+          env: await this.#providerEnvironment(selection.profile),
           profileId: selection.profile.id,
         });
         title = normalizeThreadTitle(
@@ -627,7 +717,7 @@ export class ProviderRuntime {
     try {
       const connection = this.connection(thread.id, profileId);
       if (!connection) throw new Error(`${this.#profileById(profileId).label} is not connected`);
-      const updated = await connection.setModel(provider.modelConfigId, modelId);
+      const updated = await connection.setConfigOption(provider.modelConfigId, modelId);
       applyProviderConfigState(provider, updated);
       provider.selectedModelId = updated.selectedModelId ?? modelId;
     } catch (error) {
@@ -700,6 +790,29 @@ export class ProviderRuntime {
     }
   }
 
+  async selectSessionOption(thread: ThreadState, select: SessionSelectId, valueId: string) {
+    const provider = thread.providers[thread.profileId];
+    const spec = provider.selects?.[select];
+    if (!spec || spec.selectedId === valueId) return;
+    if (!spec.options.some((option) => option.id === valueId)) return;
+    const previous = spec.selectedId;
+    setSelected(provider, select, valueId);
+    provider.error = undefined;
+    if (provider.connectionStatus !== "ready" || provider.turnStatus !== "idle") return;
+    try {
+      const connection = this.connection(thread.id, thread.profileId);
+      if (!connection) {
+        throw new Error(`${this.#profileById(thread.profileId).label} is not connected`);
+      }
+      applyProviderConfigState(provider, await connection.setConfigOption(spec.configId, valueId));
+    } catch (error) {
+      setSelected(provider, select, previous);
+      const message = error instanceof Error ? error.message : String(error);
+      provider.error = message;
+      addMessage(thread, "error", `Could not change ${sessionSelectLabels[select]}: ${message}`);
+    }
+  }
+
   async removeThread(threadId: string) {
     this.#threads = this.#threads.filter((thread) => thread.id !== threadId);
     this.#turnTokens.delete(threadId);
@@ -723,6 +836,71 @@ export class ProviderRuntime {
 
   cancel(thread: ThreadState) {
     return this.connection(thread.id, thread.profileId)?.cancel();
+  }
+
+  async controlGoal(thread: ThreadState, action: GoalAction, objective?: string) {
+    const provider = thread.providers[thread.profileId];
+    // goalActions and goalControlMethod are set together by the agent's goal capability.
+    if (!provider.goalActions?.includes(action) || !provider.goalControlMethod) return;
+    const connection = this.connection(thread.id, thread.profileId);
+    if (!connection) throw new Error("Connect the provider before changing its goal");
+    await connection.goal(action, objective?.trim(), provider.goalControlMethod);
+  }
+
+  async retryLastTurn(thread: ThreadState) {
+    const profileId = thread.profileId;
+    const provider = thread.providers[profileId];
+    this.#clearFailures(thread);
+    // A failure notice can arrive on a turn that completed normally; then retry only dismisses it.
+    if (provider.turnStatus !== "failed") return;
+    const prompt = [...thread.messages].reverse().find((message) => message.role === "user");
+    if (!prompt) return;
+    if (provider.connectionStatus !== "ready") await this.connect(thread, profileId);
+    // Nothing else resets a turn-scoped "failed", so runTurn's idle guard would no-op.
+    if (provider.turnStatus === "failed") this.#setTurnStatus(thread, profileId, "idle");
+    return this.runTurn(thread, prompt.text, prompt.images, prompt.content);
+  }
+
+  async retryMessage(thread: ThreadState, messageId: string) {
+    const index = thread.messages.findIndex((message) => message.id === messageId);
+    if (index === -1) return;
+    const profileId = thread.profileId;
+    const provider = thread.providers[profileId];
+    // The turn may have ended since the failure; recover as retryLastTurn does so this resends.
+    if (provider.turnStatus !== "running") {
+      if (provider.connectionStatus !== "ready") await this.connect(thread, profileId);
+      if (provider.turnStatus === "failed") this.#setTurnStatus(thread, profileId, "idle");
+    }
+    const [message] = thread.messages.splice(index, 1);
+    const turn = this.runTurn(thread, message.text, message.images ?? [], message.content);
+    // Not accepting prompts: put the message back rather than swallowing the user's text.
+    if (!turn) thread.messages.splice(index, 0, message);
+    return turn;
+  }
+
+  #clearFailures(thread: ThreadState) {
+    // A failure notice is synthesized from the failure, so dismissing it drops the whole message.
+    for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
+      const message = thread.messages[index];
+      if (message.id.startsWith("failure-")) thread.messages.splice(index, 1);
+      else if (message.failure) message.failure = undefined;
+    }
+  }
+
+  async newSession(thread: ThreadState) {
+    const profileId = thread.profileId;
+    const key = connectionKey(thread.id, profileId);
+    const connection = this.#connections.get(key);
+    this.#tokens.delete(key);
+    this.#connections.delete(key);
+    await connection?.stop();
+    const provider = thread.providers[profileId];
+    provider.sessionId = undefined;
+    provider.harnessId = undefined;
+    provider.connectionStatus = "disconnected";
+    provider.turnStatus = "idle";
+    provider.goal = null;
+    return this.connect(thread, profileId);
   }
 
   answerPermission(
@@ -776,6 +954,8 @@ export class ProviderRuntime {
         applyReasoningForSelectedModel(provider);
         provider.fastModeOptionsByModel = catalog.fastModeOptionsByModel;
         applyFastModeForSelectedModel(provider);
+        applySessionSelects(provider, catalog);
+        provider.commands ??= catalog.commands;
       } else if (catalog.status === "unavailable") {
         provider.models = [];
         provider.selectedModelId = undefined;
@@ -909,18 +1089,6 @@ export class ProviderRuntime {
   }
 }
 
-export async function discoverProviderModelOptions(
-  profile: ProviderDefinition,
-  connection: Pick<AcpConnection, "setModel">,
-  state: AcpModelState,
-  compatibilityStates: Awaited<ReturnType<AcpConnection["listProviderModels"]>> = [],
-) {
-  if (compatibilityStates.length > 0) return modelOptionsFromStates(compatibilityStates);
-  if (profile.probeModelOptions) return discoverModelOptions(connection, state);
-  const model = state.models.find((item) => item.id === state.selectedModelId);
-  return modelOptionsFromStates(model ? [{ ...state, model }] : []);
-}
-
 export function mergeProviderModels(
   advertised: ProviderModelCatalog["models"],
   custom: ProviderModelCatalog["models"],
@@ -955,6 +1123,7 @@ function connectionKey(threadId: string, profileId: string) {
 }
 
 export function applyProviderConfigState(provider: ProviderSessionState, state: AcpModelState) {
+  if (state.supportsFollowups !== undefined) provider.supportsFollowups = state.supportsFollowups;
   if (state.modelConfigId) provider.modelConfigId = state.modelConfigId;
   if (state.models.length > 0) provider.models = state.models;
   if (state.selectedModelId) provider.selectedModelId = state.selectedModelId;
@@ -990,4 +1159,23 @@ export function applyProviderConfigState(provider: ProviderSessionState, state: 
   provider.fastModeEnabled = state.fastModeEnabled;
   provider.fastModeValueType = state.fastModeValueType;
   provider.fastModeDescription = state.fastModeDescription;
+  applySessionSelects(provider, state);
+}
+
+function applySessionSelects(provider: ProviderSessionState, state: AcpModelState) {
+  if (state.selects) provider.selects = { ...provider.selects, ...state.selects };
+}
+
+/** Replaces the select rather than mutating it, so catalog-shared objects never alias. */
+function setSelected(
+  provider: ProviderSessionState,
+  select: SessionSelectId,
+  valueId: string | undefined,
+) {
+  const current = provider.selects?.[select];
+  if (current)
+    provider.selects = {
+      ...provider.selects,
+      [select]: { ...current, selectedId: valueId },
+    };
 }

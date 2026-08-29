@@ -15,8 +15,8 @@
   import { profileById, profiles as officialProfiles } from './config/providers';
   import { preferredAllowOptionId } from './services/acp';
   import {
+    getCodexRateLimits,
     getInitialWorkingDirectory,
-    getProviderAuthStatus,
     getProviderVersion,
     loadWorkspace,
     openProjectPath,
@@ -67,11 +67,11 @@
   } from './utils/app-settings';
   import { addMessage } from './utils/messages';
   import {
-    initialProviderCatalog,
     previewProviderCatalog,
     providerCanToggle,
     readyProviderId,
   } from './utils/provider-availability';
+  import { codexUsageRecord, loadProviderUsage, recordProviderUsage } from './utils/provider-usage';
   import { activeProvider, compareSidebarThreads } from './utils/threads';
   import { shellLayoutDuration } from './utils/shell-layout-motion';
 
@@ -89,9 +89,9 @@
     ? colorPreference.matches ? 'dark' : 'light'
     : loadedPreferences.colorMode;
   loadedPreferences.defaultProviderId = profileById(loadedPreferences.defaultProviderId)?.id ?? officialProfiles[0].id;
-  loadedPreferences.providerModelDefaults = Object.fromEntries(
+  loadedPreferences.recentProviderModels = Object.fromEntries(
     officialProfiles.flatMap((profile) => {
-      const modelId = loadedPreferences.providerModelDefaults[profile.id];
+      const modelId = loadedPreferences.recentProviderModels[profile.id];
       return modelId ? [[profile.id, modelId]] : [];
     }),
   );
@@ -103,10 +103,12 @@
   );
   loadedPreferences.titleProviderId = profileById(loadedPreferences.titleProviderId)?.id ?? officialProfiles[0].id;
   const initialProfiles = configuredProviderProfiles(officialProfiles, loadedPreferences.providerSettings);
-  const initialCatalogs = Object.fromEntries(
+  const initialCatalogs: Record<string, ProviderModelCatalog> = Object.fromEntries(
     initialProfiles.map((profile) => [
       profile.id,
-      webPreview ? previewProviderCatalog(profile) : initialProviderCatalog(profile),
+      webPreview
+        ? previewProviderCatalog(profile)
+        : { status: 'loading', models: [], reasoningOptions: [] },
     ]),
   );
 
@@ -114,7 +116,7 @@
   let initialWorkingFolder = $state('');
   let providerCatalogs = $state<Record<string, ProviderModelCatalog>>(initialCatalogs);
   let providerVersions = $state<Record<string, string>>({});
-  let providerAuthStatuses = $state<Record<string, boolean>>({});
+  let providerUsage = $state(loadProviderUsage());
   const workspaceState = $state(createWorkspaceState('', providerCatalogs));
   const projects = $derived(workspaceState.projects);
   const selectedProjectId = $derived(workspaceState.selectedProjectId);
@@ -134,6 +136,7 @@
   let projectExplorerOpen = $state(false);
   let terminalOpen = $state(false);
   let terminalThreadIds = $state<string[]>([]);
+  let terminalCommands = $state<Record<string, { id: string; text: string }>>({});
   let terminalHeight = $state(loadTerminalHeight());
   const savedSidebarWidths = loadSidebarWidths();
   let leftSidebarWidth = $state<number | null>(savedSidebarWidths.left);
@@ -155,7 +158,6 @@
   let zoomNoticeTimer: number | undefined;
   let closing = false;
   const providerVersionGenerations = new Map<string, number>();
-  const providerAuthGenerations = new Map<string, number>();
   let stopSidebarResize: (() => void) | undefined;
   let stopTerminalResize: (() => void) | undefined;
   let sidebarResizing = $state(false);
@@ -173,7 +175,7 @@
     profiles.filter((profile) => preferences.providerSettings[profile.id]?.enabled !== false),
   );
   const selectableProfiles = $derived(
-    enabledProfiles.filter((profile) => providerCanToggle(profile.id, providerCatalogs[profile.id], providerAuthStatuses[profile.id])),
+    enabledProfiles.filter((profile) => providerCanToggle(providerCatalogs[profile.id])),
   );
   const layoutStyle = $derived([
     leftSidebarWidth === null ? '' : `--sidebar-expanded-width: ${leftSidebarWidth}px`,
@@ -189,6 +191,9 @@
   );
   const providers = new ProviderRuntime(providerCatalogs, {
     permission: (value) => { interactions[interactionKey(value.threadId, value.profileId)] = value; },
+    usage: (profileId, limits) => {
+      providerUsage = recordProviderUsage(providerUsage, profileId, { updatedAt: Date.now(), limits });
+    },
     clearPermission: (threadId, profileId) => {
       for (const [key, interaction] of Object.entries(interactions)) {
         if (interaction.threadId === threadId && (!profileId || interaction.profileId === profileId)) {
@@ -391,9 +396,16 @@
       ? preferences.defaultProviderId
       : thread.profileId);
     providers.activate(thread, defaultProviderId, false);
-    for (const [profileId, modelId] of Object.entries(preferences.providerModelDefaults)) {
+    for (const [profileId, modelId] of Object.entries(preferences.recentProviderModels)) {
       if (thread.providers[profileId]) void providers.selectModel(thread, profileId, modelId);
     }
+  }
+
+  function rememberProviderModel(profileId: string, modelId: string) {
+    setPreference('recentProviderModels', {
+      ...preferences.recentProviderModels,
+      [profileId]: modelId,
+    });
   }
 
   function addThread() {
@@ -534,6 +546,11 @@
     terminalOpen = true;
   }
 
+  function runTerminalCommand(thread: ThreadState, text: string) {
+    terminalCommands[thread.id] = { id: crypto.randomUUID(), text };
+    terminalOpen = true;
+  }
+
   function closeTerminal() {
     terminalOpen = false;
     void tick().then(() => {
@@ -647,6 +664,7 @@
   function setSettingsCategory(category: SettingsCategory) {
     settingsCategory = category;
     if (category === 'providers') void Promise.all(profiles.map(loadProviderMetadata));
+    if (category === 'usage') void refreshCodexUsage();
     if (!compactLayout) return;
     sidebarOpen = false;
     void tick().then(() => document.getElementById('settings-title')?.focus());
@@ -673,6 +691,7 @@
         applyNewThreadDefaults(selectedThread);
       }
       if (!webPreview) await providers.discoverAll(defaultWorkingFolder, threads);
+      void refreshCodexUsage();
       void Promise.all(initialProfiles.map(loadProviderMetadata));
     } catch (error) {
       const thread = selectedThread ?? threads[0];
@@ -783,21 +802,33 @@
     await loadProviderMetadata(profile);
   }
 
+  /**
+   * `codex-acp` drops the app-server's rate-limit notifications, so Codex's own rollout files are
+   * the only structured copy. They are already on disk; reading them queries nothing.
+   */
+  async function refreshCodexUsage() {
+    if (webPreview) return;
+    try {
+      const record = codexUsageRecord(await getCodexRateLimits());
+      if (record && record.updatedAt > (providerUsage.codex?.updatedAt ?? 0)) {
+        providerUsage = recordProviderUsage(providerUsage, 'codex', record);
+      }
+    } catch {
+      // Usage is informational; a missing or unreadable Codex home is not worth surfacing.
+    }
+  }
+
   async function loadProviderMetadata(profile: HarnessProfile) {
     const catalog = providerCatalogs[profile.id];
-    await Promise.all([
-      catalog?.status === 'unavailable' && catalog.unavailableReason === 'missing-executable'
-        ? Promise.resolve()
-        : loadProviderVersion(profile),
-      loadProviderAuthStatus(profile),
-    ]);
+    if (catalog?.status === 'unavailable' && catalog.unavailableReason === 'missing-executable') return;
+    await loadProviderVersion(profile);
   }
 
   async function loadProviderVersion(profile: HarnessProfile) {
     const generation = (providerVersionGenerations.get(profile.id) ?? 0) + 1;
     providerVersionGenerations.set(profile.id, generation);
     try {
-      const output = await getProviderVersion(profile.versionCommand, profile.versionArgs);
+      const output = await getProviderVersion(profile.versionCommand, ['--version']);
       if (providerVersionGenerations.get(profile.id) !== generation) return;
       const version = output ? providerVersionFromOutput(output) : undefined;
       if (version) providerVersions[profile.id] = version;
@@ -805,22 +836,6 @@
     } catch {
       if (providerVersionGenerations.get(profile.id) === generation) {
         delete providerVersions[profile.id];
-      }
-    }
-  }
-
-  async function loadProviderAuthStatus(profile: HarnessProfile) {
-    if (!profile.authCommand || !profile.authArgs) return;
-    const generation = (providerAuthGenerations.get(profile.id) ?? 0) + 1;
-    providerAuthGenerations.set(profile.id, generation);
-    try {
-      const authenticated = await getProviderAuthStatus(profile.authCommand, profile.authArgs);
-      if (providerAuthGenerations.get(profile.id) !== generation) return;
-      if (authenticated === null) delete providerAuthStatuses[profile.id];
-      else providerAuthStatuses[profile.id] = authenticated;
-    } catch {
-      if (providerAuthGenerations.get(profile.id) === generation) {
-        delete providerAuthStatuses[profile.id];
       }
     }
   }
@@ -1019,6 +1034,7 @@
     {terminalThreads}
     {terminalThreadIds}
     {terminalVisible}
+    {terminalCommands}
     {terminalHeight}
     {preferences}
     {reducedMotion}
@@ -1027,6 +1043,7 @@
     {setProjectExplorerOpen}
     bind:projectExplorerCollapsed
     {defaultWorkingFolder}
+    {rememberProviderModel}
     attachImages={(files) => { if (selectedThread) void attachImages(files, selectedThread.id); }}
     removeImage={(imageId) => { if (selectedThread) removeComposerImage(selectedThread.id, imageId); }}
     clearAttachments={() => {
@@ -1038,6 +1055,7 @@
     dismissQuestion={() => answerPermission()}
     {cancelPrompt}
     {closeTerminal}
+    {runTerminalCommand}
     {terminalExited}
     {startTerminalResize}
     resizeTerminalBy={resizeTerminalDrawerBy}
@@ -1052,7 +1070,7 @@
         baseProfiles={officialProfiles}
         catalogs={providerCatalogs}
         {providerVersions}
-        {providerAuthStatuses}
+        {providerUsage}
         {permissionMode}
         {reducedMotion}
         {setPreference}

@@ -38,6 +38,7 @@ pub struct ComposerCompletionEntry {
     name: String,
     path: String,
     relative_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
 }
 
@@ -503,6 +504,19 @@ mod tests {
 
         assert!(paths.contains(&"visible.txt".to_owned()));
         assert!(!paths.iter().any(|path| path.starts_with("ignored")));
+    }
+
+    #[test]
+    fn composer_entries_omit_missing_descriptions() {
+        let directory = tempfile::tempdir().expect("test directory should be created");
+        fs::write(directory.path().join("visible.txt"), "visible")
+            .expect("visible file should be written");
+
+        let entries =
+            composer_project_entries(directory.path()).expect("project entries should load");
+        let serialized = serde_json::to_value(entries).expect("entries should serialize");
+
+        assert!(serialized[0].get("description").is_none());
     }
 
     #[test]

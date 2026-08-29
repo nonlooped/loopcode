@@ -5,6 +5,7 @@
 
   import Composer from './Composer.svelte';
   import FileViewer from './FileViewer.svelte';
+  import GoalBar from './GoalBar.svelte';
   import ProjectExplorer from './ProjectExplorer.svelte';
   import QuestionComposer from './QuestionComposer.svelte';
   import TerminalDrawer from './TerminalDrawer.svelte';
@@ -21,6 +22,7 @@
     PermissionRequest,
     ProviderModelCatalog,
     QuestionAnswer,
+    SessionFailureAction,
     ThreadState,
   } from '../types';
   import type { AppPreferences } from '../utils/app-settings';
@@ -45,6 +47,7 @@
     terminalThreads: ThreadState[];
     terminalThreadIds: string[];
     terminalVisible: boolean;
+    terminalCommands: Record<string, { id: string; text: string }>;
     terminalHeight: number;
     preferences: AppPreferences;
     reducedMotion: boolean;
@@ -53,6 +56,7 @@
     setProjectExplorerOpen: (open: boolean) => void;
     projectExplorerCollapsed: boolean;
     defaultWorkingFolder: string;
+    rememberProviderModel: (profileId: string, modelId: string) => void;
     attachImages: (files: File[]) => void;
     removeImage: (imageId: string) => void;
     clearAttachments: () => void;
@@ -60,6 +64,7 @@
     dismissQuestion: () => void;
     cancelPrompt: () => Promise<void>;
     closeTerminal: () => void;
+    runTerminalCommand: (thread: ThreadState, text: string) => void;
     terminalExited: (threadId: string) => void;
     startTerminalResize: (event: PointerEvent) => void;
     resizeTerminalBy: (delta: number) => void;
@@ -84,6 +89,7 @@
     terminalThreads,
     terminalThreadIds,
     terminalVisible,
+    terminalCommands,
     terminalHeight,
     preferences,
     reducedMotion,
@@ -92,6 +98,7 @@
     setProjectExplorerOpen,
     projectExplorerCollapsed = $bindable(),
     defaultWorkingFolder,
+    rememberProviderModel,
     attachImages,
     removeImage,
     clearAttachments,
@@ -99,6 +106,7 @@
     dismissQuestion,
     cancelPrompt,
     closeTerminal,
+    runTerminalCommand,
     terminalExited,
     startTerminalResize,
     resizeTerminalBy,
@@ -317,14 +325,36 @@
   }
 
   async function selectModel(profileId: string, model: ModelOption) {
-    if (!selectedThread) return;
-    const currentModelId = selectedThread.providers[profileId].selectedModelId;
-    if (model.id !== currentModelId) await providers.selectModel(selectedThread, profileId, model.id);
+    const thread = selectedThread;
+    if (!thread) return;
+    const currentModelId = thread.providers[profileId].selectedModelId;
+    if (model.id === currentModelId) {
+      rememberProviderModel(profileId, model.id);
+      return;
+    }
+    await providers.selectModel(thread, profileId, model.id);
+    if (thread.providers[profileId].selectedModelId === model.id) {
+      rememberProviderModel(profileId, model.id);
+    }
   }
 
   function toggleProjectExplorer() {
     if (compactLayout) setProjectExplorerOpen(!projectExplorerOpen);
     else projectExplorerCollapsed = !projectExplorerCollapsed;
+  }
+
+  // `messageId` is set when the failure sits on a user message that never reached the agent:
+  // that exact message is resent, instead of replaying the thread's last turn.
+  function recoverFailure(action: SessionFailureAction, messageId?: string) {
+    const thread = selectedThread;
+    if (!thread) return;
+    if (action === 'retry')
+      void (messageId ? providers.retryMessage(thread, messageId) : providers.retryLastTurn(thread));
+    else if (action === 'new_session') void providers.newSession(thread);
+    else {
+      const command = profiles.find((profile) => profile.id === thread.profileId)?.loginCommand;
+      if (command) runTerminalCommand(thread, command);
+    }
   }
 
 </script>
@@ -376,9 +406,14 @@
                   sendShortcut={preferences.sendShortcut}
                   {openFile}
                   {resendPrompt}
+                  {recoverFailure}
                 />
               {/key}
             {/if}
+            <GoalBar
+              provider={selectedThread.providers[selectedThread.profileId]}
+              control={(action, objective) => { void providers.controlGoal(selectedThread, action, objective); }}
+            />
             {#if selectedInteraction?.request.type === 'question'}
               {#key selectedInteraction.request}
                 <QuestionComposer
@@ -420,6 +455,7 @@
                 selectModel={(profileId, model) => { void selectModel(profileId, model); }}
                 selectReasoning={(reasoningId) => { void providers.selectReasoning(selectedThread, reasoningId); }}
                 selectFastMode={(enabled) => { void providers.selectFastMode(selectedThread, enabled); }}
+                selectSessionOption={(option, valueId) => { void providers.selectSessionOption(selectedThread, option, valueId); }}
                 {activateProvider}
                 retryDiscovery={(profileId) => {
                   const profile = profiles.find((candidate) => candidate.id === profileId);
@@ -441,6 +477,7 @@
         height={terminalHeight}
         fontSize={preferences.terminalFontSize}
         scrollback={preferences.terminalScrollback}
+        commands={terminalCommands}
         {reducedMotion}
         close={closeTerminal}
         {terminalExited}

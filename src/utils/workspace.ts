@@ -6,9 +6,9 @@ import type {
   ProjectState,
   ProviderModelCatalog,
   ThreadState,
+  ToolActivity,
 } from "../types/index.ts";
 import type { JsonValue } from "./json.ts";
-import { copyPromptPart } from "./messages.ts";
 import { createThread } from "./threads.ts";
 
 export interface RestoredWorkspace {
@@ -32,6 +32,15 @@ const promptPartSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }),
   z.object({ type: z.literal("reference"), reference: referenceSchema }),
 ]);
+const failureSchema = z.object({
+  id: nonEmptyString,
+  revision: z.number().int().positive(),
+  category: z.enum(["connection", "access", "limit", "request", "service", "unknown"]),
+  severity: z.enum(["warning", "error"]),
+  title: z.string(),
+  details: z.string().optional(),
+  actions: z.array(z.enum(["retry", "login", "new_session"])),
+});
 const messageSchema = z.object({
   id: nonEmptyString,
   role: z.enum(["user", "agent", "thought", "notice", "error"]),
@@ -50,13 +59,75 @@ const messageSchema = z.object({
     )
     .optional(),
   createdAt: z.number().finite(),
+  failure: failureSchema.optional(),
+  followUp: z.boolean().optional(),
 });
+const childToolSchema = z
+  .object({
+    id: nonEmptyString,
+    title: nonEmptyString,
+    kind: nonEmptyString,
+    status: nonEmptyString,
+    detail: z.string().optional(),
+    locations: z.array(z.string()),
+    createdAt: z.number().finite(),
+  })
+  .passthrough();
 const toolSchema = z.object({
   id: nonEmptyString,
   title: nonEmptyString,
   kind: nonEmptyString,
   status: nonEmptyString,
   detail: z.string().optional(),
+  diffs: z
+    .array(
+      z.object({
+        path: z.string(),
+        oldText: z.string().nullable(),
+        newText: z.string().nullable(),
+        kind: z.enum(["add", "update", "delete"]).optional(),
+      }),
+    )
+    .optional()
+    .catch(undefined),
+  terminal: z
+    .object({
+      output: z.string(),
+      exitCode: z.number().nullable().optional(),
+    })
+    .optional()
+    .catch(undefined),
+  plan: z
+    .array(
+      z.object({
+        content: nonEmptyString,
+        status: z.enum(["pending", "in_progress", "completed"]).catch("pending"),
+      }),
+    )
+    .optional()
+    .catch(undefined),
+  media: z
+    .array(z.object({ data: nonEmptyString, mimeType: nonEmptyString, name: nonEmptyString }))
+    .optional()
+    .catch(undefined),
+  presentation: z
+    .enum(["image", "review", "compaction", "subagent", "background"])
+    .optional()
+    .catch(undefined),
+  subagent: z
+    .object({
+      threadId: z.string().optional(),
+      path: z.string().optional(),
+      activity: z.string().optional(),
+      senderThreadId: z.string().optional(),
+      receiverThreadIds: z.array(z.string()).optional(),
+    })
+    .optional()
+    .catch(undefined),
+  children: z
+    .array(z.union([messageSchema, childToolSchema]))
+    .optional()
+    .transform((children) => children as ToolActivity["children"]),
   locations: z.array(z.string()).catch([]),
   createdAt: z.number().finite(),
 });
@@ -104,14 +175,10 @@ export function workspaceSnapshot(
       title: thread.title,
       profileId: thread.profileId,
       cwd: thread.cwd,
-      messages: thread.messages.map((message) => ({
-        ...message,
-        content: message.content?.map(copyPromptPart),
-        images: message.images?.map((image) => ({ ...image })),
-      })),
-      tools: thread.tools.map((tool) => ({ ...tool, locations: [...tool.locations] })),
+      messages: persistedCopy(thread.messages),
+      tools: persistedCopy(thread.tools),
       draft: thread.draft,
-      draftReferences: thread.draftReferences.map((reference) => ({ ...reference })),
+      draftReferences: persistedCopy(thread.draftReferences),
       updatedAt: thread.updatedAt,
       settled: thread.settled,
       projectId: thread.projectId ?? null,
@@ -120,6 +187,10 @@ export function workspaceSnapshot(
     })),
     projects: projects.map((project) => ({ ...project })),
   };
+}
+
+function persistedCopy<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 export function restoreWorkspace(

@@ -13,6 +13,7 @@
     IconContrast,
     IconFolder,
     IconFolderPlus,
+    IconGauge,
     IconInbox,
     IconInfoCircle,
     IconMessageCircle,
@@ -111,6 +112,7 @@
     { category: 'composer', label: 'Composer', icon: IconWriting },
     { category: 'agents', label: 'Agents and permissions', icon: IconRobot },
     { category: 'providers', label: 'Providers', icon: IconPlugConnected },
+    { category: 'usage', label: 'Subscription usage', icon: IconGauge },
     { category: 'terminal', label: 'Terminal', icon: IconTerminal2 },
     { category: 'about', label: 'About', icon: IconInfoCircle },
   ] satisfies { category: SettingsCategory; label: string; icon: typeof IconSettings }[];

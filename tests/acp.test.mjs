@@ -7,12 +7,14 @@ function fakeTransport({
   loadSession = false,
   resumeSession = false,
   promptMode = "normal",
-  legacyModels = false,
+  steering = false,
+  goal = false,
   authMethods = [],
   agentInfo,
 } = {}) {
   let onEvent;
   let session = 0;
+  let pendingPromptId;
   const sent = [];
   const configOptions = [
     {
@@ -39,6 +41,21 @@ function fakeTransport({
             loadSession,
             sessionCapabilities: resumeSession ? { resume: {} } : {},
           },
+          _meta:
+            steering || goal
+              ? {
+                  ...(steering ? { steering: { supported: true } } : {}),
+                  ...(goal
+                    ? {
+                        goal: {
+                          version: 1,
+                          controlMethod: "_session/goal",
+                          actions: ["set", "clear"],
+                        },
+                      }
+                    : {}),
+                }
+              : undefined,
           authMethods,
           agentInfo,
         });
@@ -46,22 +63,7 @@ function fakeTransport({
         reply(message.id, {});
       } else if (message.method === "session/new") {
         session += 1;
-        reply(message.id, {
-          sessionId: `session-${session}`,
-          ...(legacyModels
-            ? {
-                models: {
-                  currentModelId: "grok-code-fast-1",
-                  availableModels: [
-                    { modelId: "grok-code-fast-1", name: "Grok Code Fast 1" },
-                    { modelId: "grok-4.5", name: "Grok 4.5" },
-                  ],
-                },
-              }
-            : { configOptions }),
-        });
-      } else if (message.method === "cursor/list_available_models") {
-        reply(message.id, { models: [{ value: "claude-opus-5", name: "Claude Opus 5" }] });
+        reply(message.id, { sessionId: `session-${session}`, configOptions });
       } else if (message.method === "session/load") {
         onEvent({
           event: "rpc",
@@ -84,9 +86,11 @@ function fakeTransport({
         reply(message.id, { configOptions });
       } else if (message.method === "session/set_config_option") {
         reply(message.id, { configOptions });
-      } else if (message.method === "session/set_model") {
-        reply(message.id, {});
       } else if (message.method === "session/prompt") {
+        if (promptMode === "steerable") {
+          pendingPromptId = message.id;
+          return;
+        }
         if (promptMode === "pending") return;
         if (promptMode === "error") {
           replyError(message.id, -32603, "Internal error", { detail: "turn already active" });
@@ -118,6 +122,14 @@ function fakeTransport({
           },
         });
         reply(message.id, { stopReason: "end_turn" });
+      } else if (message.method === "_session/steering") {
+        reply(message.id, { outcome: "injected" });
+        if (pendingPromptId !== undefined) {
+          reply(pendingPromptId, { stopReason: "end_turn" });
+          pendingPromptId = undefined;
+        }
+      } else if (message.method === "_session/goal") {
+        reply(message.id, {});
       }
     },
     async stop() {},
@@ -144,7 +156,7 @@ function fakeTransport({
     emit(event) {
       onEvent(event);
     },
-    requestPermission() {
+    requestPermission(meta) {
       onEvent({
         event: "rpc",
         data: {
@@ -160,6 +172,7 @@ function fakeTransport({
                 rawInput: { command: "npm test" },
               },
               options: [{ optionId: "allow", name: "Allow", kind: "allow_once" }],
+              _meta: meta,
             },
           },
         },
@@ -229,7 +242,7 @@ function fakeTransport({
         },
       });
     },
-    requestClaudeQuestions() {
+    requestFormQuestions() {
       onEvent({
         event: "rpc",
         data: {
@@ -254,7 +267,7 @@ function fakeTransport({
                         title: "Balanced",
                         description: "Keep the change focused.",
                         _meta: {
-                          "_claude/askUserQuestionOption": { preview: "small diff" },
+                          "_claude/askUserQuestionOption": { preview: "One focused change." },
                         },
                       },
                       { const: "Thorough", title: "Thorough" },
@@ -285,10 +298,7 @@ function fakeTransport({
                     type: "string",
                     title: "Other",
                     _meta: {
-                      _askUserQuestionCustomAnswer: {
-                        questionId: "question_1",
-                        isCustomAnswer: true,
-                      },
+                      codex: { questionId: "question_1", isOtherAnswer: true },
                     },
                   },
                 },
@@ -329,53 +339,6 @@ function fakeTransport({
                 { optionId: "postgres", name: "Postgres", kind: "allow_once" },
               ],
             },
-          },
-        },
-      });
-    },
-    requestCursorQuestion() {
-      onEvent({
-        event: "rpc",
-        data: {
-          message: {
-            jsonrpc: "2.0",
-            id: 102,
-            method: "cursor/ask_question",
-            params: {
-              toolCallId: "tool-3",
-              title: "Storage",
-              questions: [
-                {
-                  id: "database",
-                  prompt: "Which database should we use?",
-                  options: [
-                    { id: "sqlite", label: "SQLite" },
-                    { id: "postgres", label: "Postgres" },
-                  ],
-                },
-                {
-                  id: "region",
-                  prompt: "Which region should we use?",
-                  options: [
-                    { id: "us", label: "US" },
-                    { id: "eu", label: "EU" },
-                  ],
-                },
-              ],
-            },
-          },
-        },
-      });
-    },
-    requestCursorPlan() {
-      onEvent({
-        event: "rpc",
-        data: {
-          message: {
-            jsonrpc: "2.0",
-            id: 103,
-            method: "cursor/create_plan",
-            params: { toolCallId: "tool-4", plan: "Do the work", todos: [] },
           },
         },
       });
@@ -480,12 +443,25 @@ void test("uses the official SDK to initialize, create a session, and route upda
 
   assert.deepEqual(
     fake.sent.find((message) => message.method === "initialize")?.params.clientCapabilities,
-    { session: { configOptions: { boolean: {} } }, elicitation: { form: {} } },
+    {
+      plan: {},
+      session: { configOptions: { boolean: {} }, compaction: {} },
+      elicitation: { form: {} },
+      _meta: {
+        terminal_output: true,
+        "subagent-transcript": true,
+        jetbrains: { air: { version: 1, capabilities: ["sessionFailure"] } },
+      },
+    },
   );
   assert.equal(ready.harnessId, "harness-1");
   assert.equal(ready.sessionId, "session-1");
   assert.equal(ready.selectedModelId, "model-1");
   assert.equal(initialized.version, "1.2.3");
+  assert.deepEqual(fake.sent.find((message) => message.method === "session/new")?.params, {
+    cwd: "C:\\workspace",
+    mcpServers: [],
+  });
   assert.deepEqual(
     fake.sent.find((message) => message.method === "session/set_config_option")?.params,
     { sessionId: "session-1", configId: "fast_mode", value: true, type: "boolean" },
@@ -496,50 +472,8 @@ void test("uses the official SDK to initialize, create a session, and route upda
   );
 });
 
-void test("enables Cursor's parameterized model picker", async () => {
-  const fake = fakeTransport();
-  const connection = new AcpConnection(
-    {
-      ready: () => {},
-      update: () => {},
-      permission: () => {},
-      stderr: () => {},
-      error: () => {},
-      exited: () => {},
-    },
-    fake.transport,
-  );
-
-  await connection.connect({
-    cwd: "C:\\workspace",
-    command: "agent.cmd",
-    args: ["acp"],
-    profileId: "cursor",
-  });
-
-  assert.deepEqual(
-    fake.sent.find((message) => message.method === "initialize")?.params.clientCapabilities._meta,
-    { parameterizedModelPicker: true },
-  );
-  assert.deepEqual(
-    (await connection.listProviderModels()).map(({ model }) => model),
-    [{ id: "claude-opus-5", name: "Claude Opus 5" }],
-  );
-  await connection.setFastModeConfigOption("fast", true, "string");
-  assert.deepEqual(
-    fake.sent.find(
-      (message) =>
-        message.method === "session/set_config_option" && message.params.configId === "fast",
-    )?.params,
-    { sessionId: "session-1", configId: "fast", value: "true" },
-  );
-});
-
-void test("uses Grok legacy discovery and session/set_model", async () => {
-  const fake = fakeTransport({
-    legacyModels: true,
-    authMethods: [{ id: "cached_token", name: "Cached login" }],
-  });
+void test("sends follow-ups through an advertised steering method", async () => {
+  const fake = fakeTransport({ promptMode: "steerable", steering: true });
   let ready;
   const connection = new AcpConnection(
     {
@@ -555,27 +489,75 @@ void test("uses Grok legacy discovery and session/set_model", async () => {
     fake.transport,
   );
 
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  const prompt = connection.prompt([{ type: "text", text: "Start" }]);
+  await connection.followUp([{ type: "text", text: "Also check the tests" }]);
+  await prompt;
+
+  assert.equal(ready.supportsFollowups, true);
+  assert.deepEqual(fake.sent.find((message) => message.method === "_session/steering")?.params, {
+    sessionId: "session-1",
+    prompt: [{ type: "text", text: "Also check the tests" }],
+    _meta: { steering: { idleBehavior: "promptRequired" } },
+  });
+});
+
+void test("uses the advertised shared goal control method", async () => {
+  const fake = fakeTransport({ goal: true });
+  let ready;
+  const connection = new AcpConnection(
+    {
+      ready: (session) => {
+        ready = session;
+      },
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  await connection.goal("set", "Ship the change", ready.goalControlMethod);
+
+  assert.deepEqual(ready.goalActions, ["set", "clear"]);
+  assert.deepEqual(fake.sent.find((message) => message.method === "_session/goal")?.params, {
+    sessionId: "session-1",
+    action: "set",
+    objective: "Ship the change",
+  });
+});
+
+void test("sends select-typed fast mode as a string config value", async () => {
+  const fake = fakeTransport();
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: () => {},
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
   await connection.connect({
     cwd: "C:\\workspace",
-    command: "grok",
-    args: ["agent", "stdio"],
-    profileId: "grok",
+    command: "npx",
+    args: ["--yes", "@agentclientprotocol/codex-acp"],
+    profileId: "codex",
   });
-  const updated = await connection.setModel("model", "grok-4.5");
+  await connection.setFastModeConfigOption("fast", true, "string");
 
-  assert.equal(ready.selectedModelId, "grok-code-fast-1");
   assert.deepEqual(
-    ready.models.map(({ id }) => id),
-    ["grok-code-fast-1", "grok-4.5"],
-  );
-  assert.equal(updated.selectedModelId, "grok-4.5");
-  assert.deepEqual(fake.sent.find((message) => message.method === "session/set_model")?.params, {
-    sessionId: "session-1",
-    modelId: "grok-4.5",
-  });
-  assert.equal(
-    fake.sent.some((message) => message.method === "authenticate"),
-    true,
+    fake.sent.find(
+      (message) =>
+        message.method === "session/set_config_option" && message.params.configId === "fast",
+    )?.params,
+    { sessionId: "session-1", configId: "fast", value: "true" },
   );
 });
 
@@ -827,7 +809,7 @@ void test("cancels elicitations with unsupported constraints", async () => {
   assert.deepEqual(response.result, { action: "cancel" });
 });
 
-void test("supports Claude single-select, multi-select, custom answers, and previews", async () => {
+void test("supports single-select, multi-select, and custom form answers", async () => {
   const fake = fakeTransport();
   const requests = [];
   const connection = new AcpConnection(
@@ -857,7 +839,7 @@ void test("supports Claude single-select, multi-select, custom answers, and prev
   );
 
   await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
-  fake.requestClaudeQuestions();
+  fake.requestFormQuestions();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.deepEqual(
@@ -878,7 +860,7 @@ void test("supports Claude single-select, multi-select, custom answers, and prev
             optionId: "Balanced",
             name: "Balanced",
             description: "Keep the change focused.",
-            preview: "small diff",
+            preview: "One focused change.",
           },
           { optionId: "Thorough", name: "Thorough", description: undefined },
         ],
@@ -961,67 +943,6 @@ void test("presents question tool input as an agent question", async () => {
   assert.deepEqual(response.result, { outcome: { outcome: "selected", optionId: "sqlite" } });
 });
 
-void test("presents every Cursor question and declines Cursor plans", async () => {
-  const fake = fakeTransport();
-  const requests = [];
-  const connection = new AcpConnection(
-    {
-      ready: () => {},
-      update: () => {},
-      permission: (value) => {
-        requests.push(value);
-        connection.answerPermission(value.requestId, requests.length === 1 ? "sqlite" : "eu");
-      },
-      stderr: () => {},
-      error: () => {},
-      exited: () => {},
-    },
-    fake.transport,
-  );
-
-  await connection.connect({
-    cwd: "C:\\workspace",
-    command: "agent",
-    args: [],
-    profileId: "cursor",
-  });
-  fake.requestCursorQuestion();
-  fake.requestCursorPlan();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-
-  assert.deepEqual(
-    requests.map(({ detail, options }) => ({ detail, options })),
-    [
-      {
-        detail: "Which database should we use?",
-        options: [
-          { optionId: "sqlite", name: "SQLite" },
-          { optionId: "postgres", name: "Postgres" },
-        ],
-      },
-      {
-        detail: "Which region should we use?",
-        options: [
-          { optionId: "us", name: "US" },
-          { optionId: "eu", name: "EU" },
-        ],
-      },
-    ],
-  );
-  assert.deepEqual(fake.sent.find((message) => message.id === 102 && "result" in message).result, {
-    outcome: {
-      outcome: "answered",
-      answers: [
-        { questionId: "database", selectedOptionIds: ["sqlite"] },
-        { questionId: "region", selectedOptionIds: ["eu"] },
-      ],
-    },
-  });
-  assert.deepEqual(fake.sent.find((message) => message.id === 103 && "result" in message).result, {
-    outcome: { outcome: "rejected", reason: "LoopCode does not support plan approval." },
-  });
-});
-
 void test("automatically approves permissions in full access mode without answering questions", async () => {
   const fake = fakeTransport();
   const requests = [];
@@ -1053,6 +974,38 @@ void test("automatically approves permissions in full access mode without answer
   assert.equal(requests.length, 1);
   assert.equal(requests[0].type, "question");
   connection.cancelPermission(requests[0].requestId);
+});
+
+void test("uses Claude permission presentation metadata", async () => {
+  const fake = fakeTransport();
+  let request;
+  const connection = new AcpConnection(
+    {
+      ready: () => {},
+      update: () => {},
+      permission: (value) => {
+        request = value;
+        connection.cancelPermission(value.requestId);
+      },
+      stderr: () => {},
+      error: () => {},
+      exited: () => {},
+    },
+    fake.transport,
+  );
+
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
+  fake.requestPermission({
+    permission: {
+      version: 1,
+      title: "Run the test suite",
+      description: "Reason: Verify the provider change.",
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(request.title, "Run the test suite");
+  assert.equal(request.description, "Reason: Verify the provider change.");
 });
 
 void test("returns permission decisions through the SDK request handler", async () => {

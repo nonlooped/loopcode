@@ -38,7 +38,7 @@
   const visibleModels = $derived(matchingModels(pickerCatalog.models));
 
   const trigger =
-    'flex h-7 max-w-[210px] items-center gap-1.5 rounded-[7px] border border-transparent bg-transparent px-[7px] text-[11px] font-medium text-muted hover:border-line hover:bg-panel hover:text-text-soft aria-expanded:border-line aria-expanded:bg-panel aria-expanded:text-text-soft disabled:opacity-[0.62] [&_img]:size-3.5 [&_img]:shrink-0 [&_img]:opacity-[0.62] [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0';
+    'flex h-7 max-w-[210px] items-center gap-1.5 rounded-[7px] border border-transparent bg-transparent px-[7px] text-[11px] font-medium text-muted hover:border-line hover:bg-panel hover:text-text-soft aria-expanded:border-line aria-expanded:bg-panel aria-expanded:text-text-soft disabled:opacity-[0.62] [&_img]:size-3.5 [&_img]:shrink-0 [&_img]:opacity-[0.62] [&_img]:[filter:var(--provider-filter)] [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0';
   const pickerShell =
     'grid h-[min(300px,calc(100vh-150px))] min-h-[210px] w-[min(380px,calc(100vw-42px))] grid-cols-[58px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden rounded-overlay border border-line bg-floating text-left whitespace-normal text-text shadow-overlay';
   const providerTab =
@@ -74,7 +74,6 @@
 
   function setupCommands() {
     if (pickerCatalog.status !== 'unavailable') return [];
-    if (pickerCatalog.unavailableReason === 'unsupported-platform') return [];
     if (pickerCatalog.unavailableReason === 'authentication') return [pickerProfile.loginCommand];
     return [pickerProfile.installCommand, pickerProfile.loginCommand];
   }
@@ -179,8 +178,7 @@
                   {/each}
                   <button
                     class="h-7 rounded-[7px] border border-line-strong bg-panel-hover px-2.5 text-[11px] text-text-soft hover:bg-panel-active disabled:opacity-[0.55]"
-                    disabled={pickerCatalog.unavailableReason === 'unsupported-platform'}
-                    title={pickerCatalog.unavailableReason === 'unsupported-platform' ? 'This provider does not support the current platform' : 'Retry provider discovery'}
+                    title="Retry provider discovery"
                     onclick={() => props.retryDiscovery(pickerProfile.id)}
                   >Retry</button>
                 </div>

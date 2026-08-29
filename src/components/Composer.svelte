@@ -5,6 +5,7 @@
     IconPaperclip,
     IconPlayerStop,
     IconPlugConnected,
+    IconSlash,
     IconSparkles,
     IconX,
   } from '@tabler/icons-svelte';
@@ -15,7 +16,7 @@
   import ModelPicker from './ModelPicker.svelte';
   import MotionFly from './motion/MotionFly.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
-  import ReasoningPicker from './ReasoningPicker.svelte';
+  import SessionPicker from './SessionPicker.svelte';
   import {
     listComposerCompletions,
     type ComposerCompletionEntry,
@@ -26,6 +27,8 @@
     HarnessProfile,
     ModelOption,
     ProviderModelCatalog,
+    SessionSelectId,
+    SlashCommand,
     ThreadState,
   } from '../types';
   import type { SendShortcut } from '../utils/app-settings';
@@ -40,6 +43,7 @@
     REFERENCE_PLACEHOLDER,
   } from '../utils/prompt-content';
   import { activeProvider, threadHarness, threadStatus } from '../utils/threads';
+  import { compactNumber } from '../utils/timeline';
 
   interface EditorDraft {
     draft: string;
@@ -71,6 +75,7 @@
     selectModel: (profileId: string, model: ModelOption) => void;
     selectReasoning: (reasoningId: string) => void;
     selectFastMode: (enabled: boolean) => void;
+    selectSessionOption: (option: SessionSelectId, valueId: string) => void;
     activateProvider: (profileId: string) => void;
     retryDiscovery: (profileId: string) => void;
     switchGitBranch: (branch: string) => Promise<void>;
@@ -79,7 +84,7 @@
 
   const props: Props = $props();
   let modelPickerOpen = $state(false);
-  let reasoningPickerOpen = $state(false);
+  let sessionPickerOpen = $state(false);
   let expanded = $state(false);
   let composerElement = $state<HTMLElement>();
   let attachButton = $state<HTMLButtonElement>();
@@ -89,7 +94,7 @@
   let imagePreview = $state<{ src: string; name: string }>();
   let completionEntries = $state<ComposerCompletionEntry[]>([]);
   let completionStatus = $state<'loading' | 'ready' | 'error'>('loading');
-  let completionPrefix = $state<'$' | '@'>();
+  let completionPrefix = $state<'$' | '@' | '/'>();
   let completionQuery = $state('');
   let completionIndex = $state(0);
   let completionRange: Range | undefined;
@@ -103,13 +108,44 @@
       ?? officialProfiles[0],
   );
   const status = $derived(threadStatus(props.thread));
-  const imageSupportError = $derived(
-    props.images.length > 0 && !profile.supportsImages
-      ? `${profile.label} does not support image prompts.`
-      : '',
+  const contextUsed = $derived(provider.contextUsed ?? 0);
+  const contextSize = $derived(provider.contextSize ?? 0);
+  const contextRemaining = $derived(
+    contextSize > 0 ? Math.max(0, Math.round(((contextSize - contextUsed) / contextSize) * 100)) : 100,
   );
+  const contextLow = $derived(contextRemaining <= 20);
+  const contextCaution = $derived(!contextLow && contextRemaining <= 40);
+  const sessionOptionsAvailable = $derived(
+    provider.reasoningOptions.length > 1
+    || fastModeAvailable(provider)
+    || Object.values(provider.selects ?? {}).some((select) => select.options.length > 1),
+  );
+  const commandResults = $derived.by(() => {
+    if (completionPrefix !== '/') return [];
+    const query = completionQuery;
+    const skills = new Set(
+      completionEntries
+        .filter((entry) => entry.kind === 'skill')
+        .map((entry) => entry.name.toLowerCase()),
+    );
+    return (provider.commands ?? [])
+      .filter((command) =>
+        // Providers publish internal commands under a `$` prefix; they are not meant to be
+        // invoked from a composer, so they never reach the completion list.
+        !command.name.startsWith('$')
+        && !(profile.id === 'claude' && skills.has(command.name.toLowerCase())),
+      )
+      .flatMap((command) => {
+        const score = query ? fuzzyScore(`${command.name} ${command.description}`, query) : 0;
+        return score === undefined ? [] : [{ command, score }];
+      })
+      .sort((left, right) => right.score - left.score || left.command.name.localeCompare(right.command.name))
+      .slice(0, 40)
+      .map(({ command }) => command);
+  });
   const completionResults = $derived.by(() => {
     const prefix = completionPrefix;
+    if (prefix === '/') return commandResults;
     if (!prefix || completionStatus !== 'ready') return [];
     const query = completionQuery;
     return completionEntries
@@ -176,15 +212,14 @@
   }
 
   function canEdit() {
-    return status === 'disconnected' || status === 'ready';
+    return status === 'disconnected' || status === 'ready' || (status === 'running' && provider.supportsFollowups === true);
   }
 
   function canSend() {
     return canEdit()
       && props.catalogs[props.thread.profileId]?.status === 'ready'
       && props.selectableProfiles.some((candidate) => candidate.id === props.thread.profileId)
-      && Boolean(provider.selectedModelId)
-      && !imageSupportError;
+      && Boolean(provider.selectedModelId);
   }
 
   function resizePromptEditor() {
@@ -282,21 +317,55 @@
       return;
     }
     const text = node.textContent?.slice(0, selection?.anchorOffset ?? 0) ?? '';
-    const match = /(?:^|\s)([$@])([^\s$@]*)$/.exec(text);
+    const command = commandCompletion(node, text);
+    const match = command ?? /(?:^|\s)([$@])([^\s$@]*)$/.exec(text);
     if (!match) {
       closeCompletion();
       return;
     }
-    if (!completionPrefix && completionStatus !== 'ready') {
+    if (!command && !completionPrefix && completionStatus !== 'ready') {
       void loadCompletionEntries(props.thread.cwd);
     }
-    completionPrefix = match[1] === '$' ? '$' : '@';
+    completionPrefix = match[1] === '$' ? '$' : match[1] === '/' ? '/' : '@';
     completionQuery = match[2];
     completionIndex = 0;
     const end = selection?.anchorOffset ?? 0;
     completionRange = document.createRange();
     completionRange.setStart(node, end - completionQuery.length - 1);
     completionRange.setEnd(node, end);
+  }
+
+  /** Codex only reads a leading `/name`, so the command menu never opens mid-prompt. */
+  function commandCompletion(node: Node, text: string) {
+    if ((provider.commands ?? []).length === 0) return undefined;
+    if (promptEditor?.firstChild !== node) return undefined;
+    return /^(\/)([^\s/]*)$/.exec(text);
+  }
+
+  function chooseCommand(command: SlashCommand) {
+    const range = completionRange?.cloneRange();
+    if (!promptEditor || !range || !promptEditor.contains(range.commonAncestorContainer)) return;
+    range.deleteContents();
+    const text = document.createTextNode(`/${command.name} `);
+    range.insertNode(text);
+    range.setStart(text, text.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    closeCompletion();
+    syncDraftFromEditor();
+    resizePromptEditor();
+    promptEditor.focus();
+  }
+
+  function isCommand(entry: ComposerCompletionEntry | SlashCommand): entry is SlashCommand {
+    return !('kind' in entry);
+  }
+
+  function applyCompletion(entry: ComposerCompletionEntry | SlashCommand) {
+    if (isCommand(entry)) chooseCommand(entry);
+    else chooseCompletion(entry);
   }
 
   function referenceAvailable(reference: ComposerReference) {
@@ -478,14 +547,14 @@
         return;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
-        if (event.key === 'Enter' && completionStatus === 'loading') {
+        if (event.key === 'Enter' && completionPrefix !== '/' && completionStatus === 'loading') {
           event.preventDefault();
           return;
         }
         const entry = completionResults[completionIndex];
         if (entry) {
           event.preventDefault();
-          chooseCompletion(entry);
+          applyCompletion(entry);
           return;
         }
         closeCompletion();
@@ -531,7 +600,7 @@
       });
     const text = event.clipboardData?.getData('text/plain') ?? '';
     if (text) insertText(text);
-    if (files.length > 0 && profile.supportsImages) props.attachImages(files);
+    if (files.length > 0) props.attachImages(files);
   }
 
   function chooseModel(profileId: string, model: ModelOption) {
@@ -544,14 +613,14 @@
 <MotionFly y={props.reducedMotion ? 0 : 4} duration={props.reducedMotion ? 0 : 180}>
   <section
     class="composer-wrap relative z-[3] shrink-0 bg-transparent px-4 pb-3 pt-2 [.thread-view:not(.empty)_&]:pt-[22px] [.thread-view:not(.empty)_&]:before:pointer-events-none [.thread-view:not(.empty)_&]:before:absolute [.thread-view:not(.empty)_&]:before:inset-x-0 [.thread-view:not(.empty)_&]:before:top-0 [.thread-view:not(.empty)_&]:before:h-[22px] [.thread-view:not(.empty)_&]:before:bg-gradient-to-b [.thread-view:not(.empty)_&]:before:from-transparent [.thread-view:not(.empty)_&]:before:to-shell [.thread-view:not(.empty)_&]:before:content-['']"
-    class:z-[15]={modelPickerOpen || reasoningPickerOpen}
+    class:z-[15]={modelPickerOpen || sessionPickerOpen}
   >
   <div
     bind:this={composerElement}
     class="relative mx-auto grid min-h-[49px] w-[min(var(--content-width,720px),100%)] grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-[7px] rounded-[18px] border border-line-strong bg-raised p-[7px] shadow-overlay backdrop-blur-overlay focus-within:border-focus-ring"
     class:expanded={expanded}
   >
-    {#if props.images.length > 0 || props.attachmentError || imageSupportError}
+    {#if props.images.length > 0 || props.attachmentError}
       <div class="col-span-full flex min-w-0 items-center gap-[7px] overflow-x-auto px-px pb-[3px] pt-px" aria-label="Attached images">
         {#each props.images as image (image.id)}
           <ContextMenu items={imageMenuItems(image)}>
@@ -570,20 +639,19 @@
             {/snippet}
           </ContextMenu>
         {/each}
-        {#if imageSupportError}<span class="text-[11px] text-danger">{imageSupportError}</span>{/if}
         {#if props.attachmentError}<span class="text-[11px] text-danger">{props.attachmentError}</span>{/if}
       </div>
     {/if}
-    <input bind:this={imageInput} class="hidden" type="file" accept="image/*" multiple disabled={!canEdit() || !profile.supportsImages} onchange={handleImageSelection} />
+    <input bind:this={imageInput} class="hidden" type="file" accept="image/*" multiple disabled={!canEdit()} onchange={handleImageSelection} />
     <button
       bind:this={attachButton}
       class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-transparent p-0 text-muted hover:bg-panel-hover hover:text-text-soft disabled:opacity-40"
       class:order-2={expanded}
       class:col-start-1={expanded}
       type="button"
-      aria-label={profile.supportsImages ? 'Attach images' : `${profile.label} does not support images`}
-      title={profile.supportsImages ? 'Attach images (you can also paste them)' : `${profile.label} does not support image prompts`}
-      disabled={!canEdit() || !profile.supportsImages}
+      aria-label="Attach images"
+      title="Attach images (you can also paste them)"
+      disabled={!canEdit()}
       onclick={() => imageInput?.click()}
     >
       <IconPaperclip size={16} stroke={1.55} />
@@ -605,7 +673,9 @@
       contenteditable={canEdit()}
       spellcheck={props.spellcheck}
       data-placeholder={status === 'running'
-        ? 'Agent is working…'
+        ? provider.supportsFollowups
+          ? 'Send a follow-up…'
+          : 'Agent is working…'
         : status === 'connecting'
           ? `Starting ${threadHarness(props.thread, props.profiles)}…`
           : status === 'error'
@@ -621,15 +691,15 @@
       onblur={() => { window.setTimeout(closeCompletion, 100); }}
     ></div>
     {#if completionPrefix}
-      <div id="composer-autocomplete" class="absolute bottom-[calc(100%+6px)] left-[38px] z-20 max-h-[min(280px,42vh)] w-[min(380px,calc(100%-52px))] overflow-y-auto rounded-overlay border border-line-strong bg-floating p-1 shadow-overlay backdrop-blur-overlay" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : 'Workspace files'}>
-        {#if completionStatus === 'loading'}
+      <div id="composer-autocomplete" class="absolute bottom-[calc(100%+6px)] left-[38px] z-20 max-h-[min(280px,42vh)] w-[min(380px,calc(100%-52px))] overflow-y-auto rounded-overlay border border-line-strong bg-floating p-1 shadow-overlay backdrop-blur-overlay" role="listbox" aria-label={completionPrefix === '$' ? 'Skills' : completionPrefix === '/' ? 'Commands' : 'Workspace files'}>
+        {#if completionPrefix !== '/' && completionStatus === 'loading'}
           <p class="m-0 p-[9px] text-[11px] text-muted">Loading…</p>
-        {:else if completionStatus === 'error'}
+        {:else if completionPrefix !== '/' && completionStatus === 'error'}
           <p class="m-0 p-[9px] text-[11px] text-muted">Autocomplete unavailable.</p>
         {:else if completionResults.length === 0}
           <p class="m-0 p-[9px] text-[11px] text-muted">No matches.</p>
         {:else}
-          {#each completionResults as entry, index (`${entry.kind}-${entry.path}`)}
+          {#each completionResults as entry, index (isCommand(entry) ? `/${entry.name}` : `${entry.kind}-${entry.path}`)}
             <button
               id={`composer-completion-${index}`}
               type="button"
@@ -640,19 +710,27 @@
               onpointerenter={() => { completionIndex = index; }}
               onpointerdown={(event) => {
                 event.preventDefault();
-                chooseCompletion(entry);
+                applyCompletion(entry);
               }}
             >
-              {#if entry.kind === 'skill'}
-                <span class="grid size-4 shrink-0 place-items-center text-muted"><IconSparkles size={14} stroke={1.55} /></span>
+              {#if isCommand(entry)}
+                <span class="grid size-4 shrink-0 place-items-center text-muted"><IconSlash size={14} stroke={1.55} /></span>
+                <span class="flex min-w-0 items-baseline gap-2">
+                  <strong class="min-w-0 max-w-[55%] shrink grow basis-auto overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold">/{entry.name}{#if entry.hint}<span class="ml-1 font-normal text-faint">{entry.hint}</span>{/if}</strong>
+                  <small class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-snug text-muted">{entry.description}</small>
+                </span>
               {:else}
-                {@const icon = entry.kind === 'folder' ? materialFolderIcon(entry.name, false) : materialFileIcon(entry.name)}
-                {#if icon}<img class="size-4 shrink-0 opacity-[0.64] [filter:var(--provider-filter)]" src={icon} alt="" />{/if}
+                {#if entry.kind === 'skill'}
+                  <span class="grid size-4 shrink-0 place-items-center text-muted"><IconSparkles size={14} stroke={1.55} /></span>
+                {:else}
+                  {@const icon = entry.kind === 'folder' ? materialFolderIcon(entry.name, false) : materialFileIcon(entry.name)}
+                  {#if icon}<img class="size-4 shrink-0 opacity-[0.64] [filter:var(--provider-filter)]" src={icon} alt="" />{/if}
+                {/if}
+                <span class="flex min-w-0 items-baseline gap-2">
+                  <strong class="min-w-0 max-w-[55%] shrink grow basis-auto overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold">{entry.name}</strong>
+                  <small class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-snug text-muted">{entry.description ?? entry.relativePath}</small>
+                </span>
               {/if}
-              <span class="flex min-w-0 items-baseline gap-2">
-                <strong class="min-w-0 max-w-[55%] shrink grow basis-auto overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold">{entry.name}</strong>
-                <small class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-snug text-muted">{entry.description ?? entry.relativePath}</small>
-              </span>
             </button>
           {/each}
         {/if}
@@ -676,7 +754,7 @@
                 profiles={props.selectableProfiles}
                 label={activeModelName()}
                 open={modelPickerOpen}
-                setOpen={(open) => { reasoningPickerOpen = false; modelPickerOpen = open; }}
+                setOpen={(open) => { sessionPickerOpen = false; modelPickerOpen = open; }}
                 choose={chooseModel}
                 retryDiscovery={props.retryDiscovery}
               />
@@ -687,18 +765,26 @@
               </button>
             {/if}
           </div>
-        {#if provider.reasoningOptions.length > 1 || fastModeAvailable(provider)}
-          <ReasoningPicker
+        {#if sessionOptionsAvailable}
+          <SessionPicker
             {provider}
-            open={reasoningPickerOpen}
-            setOpen={(open) => { modelPickerOpen = false; reasoningPickerOpen = open; }}
-            select={props.selectReasoning}
+            open={sessionPickerOpen}
+            setOpen={(open) => { modelPickerOpen = false; sessionPickerOpen = open; }}
+            selectReasoning={props.selectReasoning}
             selectFastMode={props.selectFastMode}
+            selectSessionOption={props.selectSessionOption}
           />
         {/if}
       </div>
       {#if status === 'running'}
-        <button class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-accent p-0 text-accent-contrast hover:bg-accent-hover active:translate-y-px" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.55} /></button>
+        {#if provider.supportsFollowups}
+          <button class="grid size-[30px] shrink-0 place-items-center rounded-full border border-line bg-transparent p-0 text-muted hover:border-line-strong hover:bg-panel-hover hover:text-text-soft" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={12} fill="currentColor" stroke={1.55} /></button>
+          <button class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-accent p-0 text-accent-contrast hover:bg-accent-hover active:translate-y-px disabled:bg-panel-active disabled:text-faint" aria-label="Send follow-up" title="Send follow-up" disabled={props.gitBusy || (!hasPromptContent(props.thread.draft, props.thread.draftReferences) && props.images.length === 0) || !canSend() || hasMissingReferences()} onclick={props.send}>
+            <IconArrowUp size={17} stroke={1.55} />
+          </button>
+        {:else}
+          <button class="grid size-[30px] shrink-0 place-items-center rounded-full border-0 bg-accent p-0 text-accent-contrast hover:bg-accent-hover active:translate-y-px" aria-label="Cancel turn" title="Cancel turn" onclick={props.cancel}><IconPlayerStop size={13} fill="currentColor" stroke={1.55} /></button>
+        {/if}
       {:else if status === 'error' || status === 'stopped'}
         <button class="grid size-[30px] shrink-0 place-items-center rounded-full border border-line-strong bg-panel-hover p-0 text-text-soft hover:bg-panel-active hover:text-text active:translate-y-px" aria-label="Reconnect provider" title="Reconnect provider" onclick={props.reconnect}><IconPlugConnected size={15} stroke={1.55} /></button>
       {:else}
@@ -722,6 +808,32 @@
           switchBranch={props.switchGitBranch}
           createWorktree={props.createGitWorktree}
         />
+      {/if}
+    </div>
+    <div class="flex min-w-0 items-center gap-2">
+      {#if provider.quota?.totalTokens !== undefined}
+        <span class="min-w-0 shrink truncate" title="Tokens used by the last turn">{compactNumber(provider.quota.totalTokens)} tokens</span>
+      {/if}
+      {#each provider.rateLimits ?? [] as limit (limit.id)}
+        {#if limit.primary}
+          <span class="min-w-0 shrink truncate" title={limit.primary.resetsAt ? `${limit.name} resets ${new Date(limit.primary.resetsAt * 1000).toLocaleString()}` : limit.name}>{Math.max(0, Math.round(100 - limit.primary.usedPercent))}% {limit.name} left</span>
+        {/if}
+      {/each}
+      {#if contextSize > 0 || props.thread.messages.length === 0}
+        <span
+          class="flex shrink-0 items-center gap-1.5 tabular-nums"
+          class:text-danger={contextLow}
+          class:text-warning={contextCaution}
+          title={contextSize > 0 ? `${compactNumber(contextUsed)} of ${compactNumber(contextSize)} context tokens used` : 'No context used yet'}
+        >
+          <span class="h-1 w-8 overflow-hidden rounded-full bg-panel-active" role="progressbar" aria-valuenow={contextRemaining} aria-valuemin={0} aria-valuemax={100} aria-label="Context remaining">
+            <span
+              class="block h-full rounded-full transition-[width] duration-300 {contextLow ? 'bg-danger' : contextCaution ? 'bg-warning' : 'bg-muted'}"
+              style:width={`${contextRemaining}%`}
+            ></span>
+          </span>
+          <span>{contextRemaining}%</span>
+        </span>
       {/if}
     </div>
   </div>

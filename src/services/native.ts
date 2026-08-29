@@ -4,11 +4,13 @@ import { z } from "zod";
 
 import type { PersistedWorkspace } from "../types/index.ts";
 import { jsonValueSchema, type JsonValue } from "../utils/json.ts";
+import { codexRateLimitsSchema } from "../utils/provider-usage.ts";
 
 export interface LaunchRequest {
   command: string;
   args: string[];
   cwd: string;
+  env?: Record<string, string>;
   profileId?: string;
   threadId?: string;
 }
@@ -248,14 +250,16 @@ export async function getProviderVersion(command: string, args: string[]): Promi
     .parse(await invoke("provider_version", { command, args }));
 }
 
-export async function getProviderAuthStatus(
-  command: string,
-  args: string[],
-): Promise<boolean | null> {
+export async function getProviderExecutablePath(command: string): Promise<string | null> {
   return z
-    .boolean()
+    .string()
+    .max(4096)
     .nullable()
-    .parse(await invoke("provider_auth_status", { command, args }));
+    .parse(await invoke("provider_executable_path", { command }));
+}
+
+export async function getCodexRateLimits() {
+  return codexRateLimitsSchema.parse(await invoke("codex_rate_limits"));
 }
 
 export async function listComposerCompletions(

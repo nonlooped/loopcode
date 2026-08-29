@@ -12,8 +12,7 @@ const catalogs = {
     selectedModelId: "model",
     reasoningOptions: [],
   },
-  claude: { status: "error", models: [], reasoningOptions: [] },
-  opencode: { status: "error", models: [], reasoningOptions: [] },
+  retired: { status: "error", models: [], reasoningOptions: [] },
 };
 
 function setup(cwd = "C:\\default") {

@@ -95,6 +95,10 @@ pub struct LaunchRequest {
     profile_id: Option<String>,
     thread_id: Option<String>,
     frontend_generation: u64,
+    /// Points an ACP adapter at the provider CLI installed on this machine instead of the one it
+    /// bundles, using the override each adapter documents (`CLAUDE_CODE_EXECUTABLE`, `CODEX_PATH`).
+    #[serde(default)]
+    env: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -145,8 +149,11 @@ pub async fn launch_harness(
     )
     .await?;
 
+    validate_environment(&request.env)?;
+
     let mut command = Command::new(command_name);
     command
+        .envs(&request.env)
         .args(&request.args)
         .current_dir(cwd)
         .stdin(Stdio::piped())
@@ -597,6 +604,23 @@ impl Broker {
     }
 }
 
+/// Adapters only need a handful of short overrides, so anything larger is a mistake or an attempt
+/// to reshape the child's whole environment.
+fn validate_environment(env: &std::collections::BTreeMap<String, String>) -> Result<(), String> {
+    if env.len() > 8 {
+        return Err("Too many harness environment overrides".into());
+    }
+    for (key, value) in env {
+        if key.is_empty() || key.len() > 128 || key.contains('=') || key.contains('\0') {
+            return Err(format!("Invalid harness environment variable name: {key}"));
+        }
+        if value.len() > 4096 || value.contains('\0') {
+            return Err(format!("Invalid harness environment value for {key}"));
+        }
+    }
+    Ok(())
+}
+
 async fn stop_matching_harnesses(
     broker: &Broker,
     diagnostics: &Diagnostics,
@@ -678,7 +702,7 @@ mod tests {
     use super::wrap_harness_command;
     use super::{
         MAX_ACP_LINE_BYTES, MAX_PENDING_REQUESTS, insert_pending_request, read_bounded_line,
-        wait_for_harness_stop,
+        validate_environment, wait_for_harness_stop,
     };
     #[cfg(unix)]
     use std::process::Stdio;
@@ -689,6 +713,28 @@ mod tests {
         sync::{mpsc, watch},
         time::{Duration, timeout},
     };
+
+    #[test]
+    fn harness_environment_overrides_stay_small_and_well_formed() {
+        let overrides = std::collections::BTreeMap::from([(
+            "CLAUDE_CODE_EXECUTABLE".to_owned(),
+            "/usr/local/bin/claude".to_owned(),
+        )]);
+        assert!(validate_environment(&overrides).is_ok());
+        assert!(validate_environment(&std::collections::BTreeMap::new()).is_ok());
+
+        let malformed =
+            std::collections::BTreeMap::from([("BAD=NAME".to_owned(), "value".to_owned())]);
+        assert!(validate_environment(&malformed).is_err());
+
+        let oversized = (0..9)
+            .map(|index| (format!("VAR_{index}"), "value".to_owned()))
+            .collect();
+        assert!(validate_environment(&oversized).is_err());
+
+        let long_value = std::collections::BTreeMap::from([("VAR".to_owned(), "x".repeat(4097))]);
+        assert!(validate_environment(&long_value).is_err());
+    }
 
     #[cfg(unix)]
     fn process_exists(pid: &str) -> bool {

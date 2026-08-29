@@ -24,6 +24,9 @@ export function createProviderState(
     selectedReasoningId: catalog?.selectedReasoningId,
     reasoningOptionsByModel: catalog?.reasoningOptionsByModel,
     fastModeOptionsByModel: catalog?.fastModeOptionsByModel,
+    selects: catalog?.selects,
+    supportsFollowups: catalog?.supportsFollowups,
+    commands: catalog?.commands,
   };
   applyReasoningForSelectedModel(provider);
   applyFastModeForSelectedModel(provider);

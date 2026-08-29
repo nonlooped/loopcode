@@ -20,6 +20,7 @@
     ready: boolean;
     fontSize: number;
     scrollback: number;
+    command?: { id: string; text: string };
     reducedMotion: boolean;
     close: () => void;
     exited: () => void;
@@ -30,11 +31,12 @@
     | { kind: 'running' }
     | { kind: 'error'; message: string };
 
-  const { thread, active, ready, fontSize, scrollback, reducedMotion, close, exited }: Props = $props();
+  const { thread, active, ready, fontSize, scrollback, command, reducedMotion, close, exited }: Props = $props();
   let host = $state<HTMLDivElement>();
   let terminal: Terminal | undefined;
   let fitAddon: FitAddon | undefined;
-  let terminalId: string | undefined;
+  let terminalId = $state<string>();
+  let sentCommandId: string | undefined;
   let status = $state<TerminalStatus>({ kind: 'starting' });
   let disposed = false;
   let launchGeneration = 0;
@@ -109,6 +111,17 @@
     if (terminal) Object.assign(terminal.options, { fontSize, scrollback, cursorBlink: !reducedMotion });
     if (!ready) return;
     void tick().then(() => fitTerminal(true));
+  });
+
+  $effect(() => {
+    const id = terminalId;
+    if (!id || !command || command.id === sentCommandId) return;
+    sentCommandId = command.id;
+    writeQueue = writeQueue
+      .then(() => writeTerminal(id, `${command.text}\r`))
+      .catch((error) => {
+        if (!disposed && id === terminalId) status = { kind: 'error', message: errorMessage(error) };
+      });
   });
 
   async function launch() {

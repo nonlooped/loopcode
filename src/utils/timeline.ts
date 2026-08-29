@@ -17,7 +17,8 @@ export function timelineEntries(thread: ThreadState): TimelineDisplayEntry[] {
 
   for (let index = 0; index <= entries.length; index += 1) {
     const entry = entries[index];
-    const startsNextTurn = entry?.type === "message" && entry.message.role === "user";
+    const startsNextTurn =
+      entry?.type === "message" && entry.message.role === "user" && !entry.message.followUp;
     if (index > segmentStart && (startsNextTurn || index === entries.length)) {
       displayEntries.push(
         ...collapseTurnActivity(
@@ -100,6 +101,20 @@ export function collapseTurnActivity(
   }
 
   return collapsed;
+}
+
+export function streamingMessageId(entry: Extract<TimelineDisplayEntry, { type: "work" }>) {
+  if (!entry.active) return;
+  return entry.entries.filter((item) => item.type === "message").at(-1)?.message.id;
+}
+
+const compactFormat = new Intl.NumberFormat(undefined, {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+export function compactNumber(value: number) {
+  return compactFormat.format(value);
 }
 
 export function formatElapsedDuration(durationMs: number) {

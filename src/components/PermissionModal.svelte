@@ -2,10 +2,12 @@
   import { AlertDialog } from 'bits-ui';
   import { z } from 'zod';
 
-  import type { PermissionOption, PermissionRequest } from '../types';
+  import MarkdownMessage from './markdown/MarkdownMessage.svelte';
+  import type { PermissionDecisionRequest, PermissionOption } from '../types';
+  import { diffLineClass, fileChangeDiffLines } from '../utils/text-diff';
 
   interface Props {
-    request: PermissionRequest;
+    request: PermissionDecisionRequest;
     answer: (optionId: string) => void;
     decline: () => void;
   }
@@ -17,12 +19,20 @@
       request.options.find((option) => option.kind?.startsWith('allow'))?.optionId,
   );
   const detail = $derived(parsePermissionDetail(request.detail));
-  const title = $derived(detail.command ? 'Run this command?' : request.title);
+  const fileChanges = $derived(request.fileChanges ?? []);
+  const planMarkdown = $derived(request.planMarkdown);
   const description = $derived(
-    detail.command
-      ? 'A coding agent is asking to run the command below.'
-      : 'Review this request before continuing.',
+    request.description ?? describe(detail.command, fileChanges.length, planMarkdown),
   );
+
+  function describe(command: string | undefined, changeCount: number, plan: string | undefined) {
+    if (command) return 'A coding agent is asking to run the command below.';
+    if (plan) return 'Review the proposed plan before continuing.';
+    if (changeCount > 0) return 'A coding agent is asking to write the changes below.';
+    return 'Review this request before continuing.';
+  }
+
+  const changeVerb = { add: 'Create', update: 'Edit', delete: 'Delete' };
   const options = $derived([...request.options].sort(byPromptOrder));
 
   const permissionDetailSchema = z.object({
@@ -94,7 +104,7 @@
       class="{modalShell} {modalHeading} {modalDescription}"
       onOpenAutoFocus={focusPreferredOption}
     >
-      <AlertDialog.Title>{title}</AlertDialog.Title>
+      <AlertDialog.Title>{request.title}</AlertDialog.Title>
       <AlertDialog.Description>{description}</AlertDialog.Description>
 
       <div class="mt-[14px] max-h-[min(300px,42vh)] overflow-auto">
@@ -114,6 +124,27 @@
               <pre>{detail.extra}</pre>
             </details>
           {/if}
+        {:else if planMarkdown}
+          <div class="rounded-[7px] border border-line bg-recessed p-2.5 text-[13px] leading-[1.55] text-text-soft [&>:last-child]:mb-0">
+            <MarkdownMessage id={`plan-${String(request.requestId)}`} source={planMarkdown} />
+          </div>
+        {:else if fileChanges.length > 0}
+          <div class="grid gap-2">
+            {#each fileChanges as change, index (`${change.path}#${index}`)}
+              {@const lines = fileChangeDiffLines(change.diff, change.kind)}
+              <section class="overflow-hidden rounded-[7px] border border-line bg-recessed">
+                <header
+                  class="overflow-hidden text-ellipsis whitespace-nowrap border-b border-line px-2.5 py-1.5 font-mono text-[10px] leading-snug text-faint"
+                  title={change.path}
+                >{changeVerb[change.kind]} {change.path}</header>
+                <div class="max-h-[220px] overflow-auto py-1 font-mono text-[11.5px] leading-relaxed tabular-nums">
+                  {#each lines as line, lineIndex (`${lineIndex}:${line.kind}`)}
+                    <span class={diffLineClass(line.kind, 'px-2.5')}>{line.text || ' '}</span>
+                  {/each}
+                </div>
+              </section>
+            {/each}
+          </div>
         {:else}
           <pre class="m-0 overflow-auto whitespace-pre-wrap break-anywhere rounded-[7px] border border-line bg-recessed p-2.5 font-mono text-[11.5px] leading-relaxed text-muted">{detail.raw}</pre>
         {/if}
