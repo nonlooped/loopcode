@@ -117,6 +117,15 @@ export function streamingMessageId(entry: Extract<TimelineDisplayEntry, { type: 
     .at(-1)?.message.id;
 }
 
+const compactFormat = new Intl.NumberFormat(undefined, {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+export function compactNumber(value: number) {
+  return compactFormat.format(value);
+}
+
 export function formatElapsedDuration(durationMs: number) {
   const totalSeconds = Math.max(0, Math.round(durationMs / 1_000));
   if (totalSeconds < 60) return `${totalSeconds}s`;

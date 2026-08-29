@@ -1,6 +1,7 @@
 <script lang="ts">
   import { IconFlag, IconPlayerPause, IconPlayerPlay, IconTrash } from '@tabler/icons-svelte';
   import type { GoalAction, ProviderSessionState } from '../types';
+  import { compactNumber } from '../utils/timeline';
 
   interface Props {
     provider: ProviderSessionState;
@@ -20,10 +21,6 @@
     objective = '';
     editing = false;
   }
-
-  function number(value: number) {
-    return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
-  }
 </script>
 
 {#if actions.length > 0}
@@ -41,7 +38,7 @@
         <span class="flex flex-wrap gap-x-2 text-faint">
           <span class="capitalize">{goal.status}</span>
           {#if goal.iterations !== undefined}<span>{goal.iterations} iterations</span>{/if}
-          {#if goal.tokenBudget != null}<span>{number(goal.tokensUsed ?? 0)} / {number(goal.tokenBudget)} tokens</span>{:else if goal.tokensUsed !== undefined}<span>{number(goal.tokensUsed)} tokens</span>{/if}
+          {#if goal.tokenBudget != null}<span>{compactNumber(goal.tokensUsed ?? 0)} / {compactNumber(goal.tokenBudget)} tokens</span>{:else if goal.tokensUsed !== undefined}<span>{compactNumber(goal.tokensUsed)} tokens</span>{/if}
           {#if goal.timeBudgetSeconds != null}<span>{goal.timeUsedSeconds ?? 0}s / {goal.timeBudgetSeconds}s</span>{:else if goal.timeUsedSeconds !== undefined}<span>{goal.timeUsedSeconds}s</span>{/if}
           {#if goal.createdAt}<span>created {new Date(goal.createdAt).toLocaleString()}</span>{/if}
           {#if goal.lastReason}<span title={goal.lastReason}>{goal.lastReason}</span>{/if}

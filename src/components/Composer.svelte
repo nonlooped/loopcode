@@ -13,7 +13,6 @@
   import ContextMenu from './ContextMenu.svelte';
   import GitControls from './GitControls.svelte';
   import ImagePreview from './ImagePreview.svelte';
-  import ContextMeter from './ContextMeter.svelte';
   import ModelPicker from './ModelPicker.svelte';
   import MotionFly from './motion/MotionFly.svelte';
   import { profileById as officialProfileById, profiles as officialProfiles } from '../config/providers';
@@ -44,6 +43,7 @@
     REFERENCE_PLACEHOLDER,
   } from '../utils/prompt-content';
   import { activeProvider, threadHarness, threadStatus } from '../utils/threads';
+  import { compactNumber } from '../utils/timeline';
 
   interface EditorDraft {
     draft: string;
@@ -108,6 +108,13 @@
       ?? officialProfiles[0],
   );
   const status = $derived(threadStatus(props.thread));
+  const contextUsed = $derived(provider.contextUsed ?? 0);
+  const contextSize = $derived(provider.contextSize ?? 0);
+  const contextRemaining = $derived(
+    contextSize > 0 ? Math.max(0, Math.round(((contextSize - contextUsed) / contextSize) * 100)) : 100,
+  );
+  const contextLow = $derived(contextRemaining <= 20);
+  const contextCaution = $derived(!contextLow && contextRemaining <= 40);
   const sessionOptionsAvailable = $derived(
     provider.reasoningOptions.length > 1
     || fastModeAvailable(provider)
@@ -803,16 +810,31 @@
         />
       {/if}
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex min-w-0 items-center gap-2">
       {#if provider.quota?.totalTokens !== undefined}
-        <span title="Tokens used by the last turn">{new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(provider.quota.totalTokens)} tokens</span>
+        <span class="min-w-0 shrink truncate" title="Tokens used by the last turn">{compactNumber(provider.quota.totalTokens)} tokens</span>
       {/if}
       {#each provider.rateLimits ?? [] as limit (limit.id)}
         {#if limit.primary}
-          <span title={limit.primary.resetsAt ? `${limit.name} resets ${new Date(limit.primary.resetsAt * 1000).toLocaleString()}` : limit.name}>{Math.max(0, Math.round(100 - limit.primary.usedPercent))}% {limit.name} left</span>
+          <span class="min-w-0 shrink truncate" title={limit.primary.resetsAt ? `${limit.name} resets ${new Date(limit.primary.resetsAt * 1000).toLocaleString()}` : limit.name}>{Math.max(0, Math.round(100 - limit.primary.usedPercent))}% {limit.name} left</span>
         {/if}
       {/each}
-      <ContextMeter {provider} fresh={props.thread.messages.length === 0} />
+      {#if contextSize > 0 || props.thread.messages.length === 0}
+        <span
+          class="flex shrink-0 items-center gap-1.5 tabular-nums"
+          class:text-danger={contextLow}
+          class:text-warning={contextCaution}
+          title={contextSize > 0 ? `${compactNumber(contextUsed)} of ${compactNumber(contextSize)} context tokens used` : 'No context used yet'}
+        >
+          <span class="h-1 w-8 overflow-hidden rounded-full bg-panel-active" role="progressbar" aria-valuenow={contextRemaining} aria-valuemin={0} aria-valuemax={100} aria-label="Context remaining">
+            <span
+              class="block h-full rounded-full transition-[width] duration-300 {contextLow ? 'bg-danger' : contextCaution ? 'bg-warning' : 'bg-muted'}"
+              style:width={`${contextRemaining}%`}
+            ></span>
+          </span>
+          <span>{contextRemaining}%</span>
+        </span>
+      {/if}
     </div>
   </div>
   </section>
