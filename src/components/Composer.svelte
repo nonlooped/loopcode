@@ -116,7 +116,18 @@
   const commandResults = $derived.by(() => {
     if (completionPrefix !== '/') return [];
     const query = completionQuery;
+    const skills = new Set(
+      completionEntries
+        .filter((entry) => entry.kind === 'skill')
+        .map((entry) => entry.name.toLowerCase()),
+    );
     return (provider.commands ?? [])
+      .filter((command) =>
+        // Providers publish internal commands under a `$` prefix; they are not meant to be
+        // invoked from a composer, so they never reach the completion list.
+        !command.name.startsWith('$')
+        && !(profile.id === 'claude' && skills.has(command.name.toLowerCase())),
+      )
       .flatMap((command) => {
         const score = query ? fuzzyScore(`${command.name} ${command.description}`, query) : 0;
         return score === undefined ? [] : [{ command, score }];
@@ -321,7 +332,7 @@
   function commandCompletion(node: Node, text: string) {
     if ((provider.commands ?? []).length === 0) return undefined;
     if (promptEditor?.firstChild !== node) return undefined;
-    return /^\/([^\s/]*)$/.exec(text);
+    return /^(\/)([^\s/]*)$/.exec(text);
   }
 
   function chooseCommand(command: SlashCommand) {

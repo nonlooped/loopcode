@@ -197,6 +197,7 @@ void test("context usage and available commands land on the provider", () => {
         input: { hint: "instructions" },
       },
       { name: "compact", description: "Summarize the conversation.", input: null },
+      { name: "$bro", description: "Restate the last message.", input: null },
     ],
   });
 
@@ -205,6 +206,7 @@ void test("context usage and available commands land on the provider", () => {
   assert.deepEqual(thread.providers.codex.commands, [
     { name: "review", description: "Review uncommitted changes.", hint: "instructions" },
     { name: "compact", description: "Summarize the conversation.", hint: undefined },
+    { name: "$bro", description: "Restate the last message.", hint: undefined },
   ]);
 });
 
