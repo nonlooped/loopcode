@@ -9,7 +9,7 @@
   } from '@tabler/icons-svelte';
 
   import ContextMenu from './ContextMenu.svelte';
-  import type { PlanEntry, ToolActivity, ToolDiff } from '../types';
+  import type { ToolActivity } from '../types';
   import { copyText } from '../utils/clipboard';
   import { materialFileIcon } from '../utils/material-file-icons';
   import { diffLineClass, diffLineStats, unifiedDiffLines } from '../utils/text-diff';
@@ -45,32 +45,12 @@
   const panel = 'min-w-0 overflow-hidden rounded-[5px] border border-line bg-recessed';
   const monospace = 'font-mono text-[11px] leading-snug';
 
-  function fileName(path: string) {
-    return path.split(/[/\\]/).pop() || path;
-  }
-
-  function diffMenuItems(entry: { diff: ToolDiff; lines: { text: string }[] }) {
-    return [
-      { label: 'Open file', action: () => openFile(entry.diff.path) },
-      { label: 'Copy path', action: () => copyText(entry.diff.path) },
-      {
-        label: 'Copy diff',
-        action: () => copyText(entry.lines.map((line) => line.text).join('\n')),
-      },
-    ];
-  }
-
-  function planIcon(status: PlanEntry['status']) {
-    if (status === 'completed') return IconCheck;
-    return status === 'in_progress' ? IconCircleDot : IconCircle;
-  }
-
 </script>
 
 {#if tool.plan}
   <div class="{indent} grid gap-0.5">
     {#each tool.plan as entry, index (`${index}:${entry.content}`)}
-      {@const Icon = planIcon(entry.status)}
+      {@const Icon = entry.status === 'completed' ? IconCheck : entry.status === 'in_progress' ? IconCircleDot : IconCircle}
       <div
         class="flex min-w-0 items-baseline gap-2 text-[13px] leading-[1.55]"
         class:text-muted={entry.status === 'pending'}
@@ -136,7 +116,11 @@
 
 {#each renderedDiffs as entry, index (`${entry.diff.path}#${index}`)}
   {@const KindIcon = diffKindIcon[entry.diff.kind ?? 'update']}
-  <ContextMenu items={diffMenuItems(entry)}>
+  <ContextMenu items={[
+    { label: 'Open file', action: () => openFile(entry.diff.path) },
+    { label: 'Copy path', action: () => copyText(entry.diff.path) },
+    { label: 'Copy diff', action: () => copyText(entry.lines.map((line) => line.text).join('\n')) },
+  ]}>
     {#snippet children({ props })}
       <div {...props} role="presentation" class="{indent} {panel}">
         <button
@@ -152,7 +136,7 @@
           />
           <span
             class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11.5px] text-text-soft"
-            >{fileName(entry.diff.path)}</span
+            >{entry.diff.path.split(/[/\\]/).pop() || entry.diff.path}</span
           >
           {#if entry.stats.additions > 0}
             <span class="shrink-0 {monospace} text-success">+{entry.stats.additions}</span>
