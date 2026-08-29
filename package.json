@@ -23,7 +23,6 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
     "@humanspeak/svelte-markdown": "^1.8.7",
-    "@lobehub/icons-static-svg": "^1.94.0",
     "@tabler/icons-svelte": "^3.46.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/api": "^2.11.1",
