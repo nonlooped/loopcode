@@ -345,7 +345,7 @@
 {/snippet}
 
 <div class="relative min-h-0 flex-1 [container-type:size]">
-  <MotionEnter duration={reducedMotion ? 0 : 150}>
+  <MotionEnter class="h-full min-h-0" duration={reducedMotion ? 0 : 150}>
   <section
     bind:this={transcriptElement}
     class="h-full min-h-0 overflow-y-auto bg-transparent select-text [scrollbar-gutter:stable]"
