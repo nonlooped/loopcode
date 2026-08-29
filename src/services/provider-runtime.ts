@@ -15,7 +15,6 @@ import type {
 } from "../types/index.ts";
 import { applyFastModeForSelectedModel } from "../utils/fast-mode.ts";
 import { jsonValueSchema } from "../utils/json.ts";
-import { loadWorkspaceMcpServers } from "../utils/mcp-servers.ts";
 import { addMessage, nextTimestamp, titleFromPrompt } from "../utils/messages.ts";
 import { discoverModelOptions } from "../utils/model-options.ts";
 import { sessionSelectLabels } from "../utils/model-state.ts";
@@ -59,7 +58,6 @@ export class ProviderRuntime {
   #permissionMode: PermissionMode = "restricted";
   #connections = new Map<string, AcpConnection>();
   #createConnection: (callbacks: AcpCallbacks) => AcpConnection;
-  #loadMcpServers: typeof loadWorkspaceMcpServers;
   #tokens = new Map<string, string>();
   #stoppingProfiles = new Map<string, Promise<void>>();
   #turnTokens = new Map<string, string>();
@@ -72,12 +70,10 @@ export class ProviderRuntime {
     catalogs: Record<string, ProviderModelCatalog>,
     hooks: RuntimeHooks,
     createConnection = (callbacks: AcpCallbacks) => new AcpConnection(callbacks),
-    loadMcpServers = loadWorkspaceMcpServers,
   ) {
     this.#catalogs = catalogs;
     this.#hooks = hooks;
     this.#createConnection = createConnection;
-    this.#loadMcpServers = loadMcpServers;
     for (const [profileId, catalog] of Object.entries(catalogs)) {
       this.#baseModels.set(profileId, catalog.models);
     }
@@ -230,13 +226,11 @@ export class ProviderRuntime {
     });
 
     try {
-      const mcpServers = await this.#loadMcpServers(cwd);
       await connection.connect({
         cwd,
         command: profile.command,
         args: profile.args,
         profileId: profile.id,
-        mcpServers,
       });
       if (discovered.models.length === 0) {
         throw new Error(`${profile.label} did not advertise any models.`);
@@ -421,7 +415,6 @@ export class ProviderRuntime {
 
     this.#connections.set(key, connection);
     try {
-      const mcpServers = await this.#loadMcpServers(thread.cwd);
       await connection.connect({
         cwd: thread.cwd,
         command: profile.command,
@@ -429,7 +422,6 @@ export class ProviderRuntime {
         profileId: profile.id,
         threadId: thread.id,
         sessionId: existingSessionId,
-        mcpServers,
       });
       if (!isCurrent()) {
         await connection.stop();

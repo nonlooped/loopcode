@@ -1,5 +1,3 @@
-import type { McpServer } from "@agentclientprotocol/sdk";
-
 export type ConnectionStatus = "disconnected" | "connecting" | "ready" | "stopped" | "error";
 
 export type TurnStatus = "idle" | "running" | "failed" | "blocked";
@@ -289,7 +287,6 @@ export interface ConnectRequest {
   profileId?: string;
   threadId?: string;
   sessionId?: string;
-  mcpServers?: McpServer[];
 }
 
 export interface PermissionOption {

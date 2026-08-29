@@ -437,8 +437,7 @@ void test("uses the official SDK to initialize, create a session, and route upda
     fake.transport,
   );
 
-  const mcpServers = [{ type: "http", name: "docs", url: "https://example.com/mcp", headers: [] }];
-  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [], mcpServers });
+  await connection.connect({ cwd: "C:\\workspace", command: "agent", args: [] });
   await connection.setConfigOption("fast_mode", true);
   await connection.prompt([{ type: "text", text: "Hello" }]);
 
@@ -461,7 +460,7 @@ void test("uses the official SDK to initialize, create a session, and route upda
   assert.equal(initialized.version, "1.2.3");
   assert.deepEqual(fake.sent.find((message) => message.method === "session/new")?.params, {
     cwd: "C:\\workspace",
-    mcpServers,
+    mcpServers: [],
   });
   assert.deepEqual(
     fake.sent.find((message) => message.method === "session/set_config_option")?.params,
@@ -679,7 +678,6 @@ void test("prefers resuming an existing session without replaying history", asyn
     command: "agent",
     args: [],
     sessionId: "existing-session",
-    mcpServers: [{ name: "local", command: "server", args: [], env: [] }],
   });
 
   assert.equal(
@@ -689,7 +687,7 @@ void test("prefers resuming an existing session without replaying history", asyn
   assert.deepEqual(fake.sent.find((message) => message.method === "session/resume")?.params, {
     sessionId: "existing-session",
     cwd: "C:\\workspace",
-    mcpServers: [{ name: "local", command: "server", args: [], env: [] }],
+    mcpServers: [],
   });
   assert.equal(ready.sessionId, "existing-session");
 });

@@ -200,7 +200,7 @@ export class AcpConnection {
           sessionState = await this.#context.request(acp.methods.agent.session.resume, {
             sessionId,
             cwd: request.cwd,
-            mcpServers: request.mcpServers ?? [],
+            mcpServers: [],
           });
         } else if (initialized.agentCapabilities?.loadSession) {
           method = "session/load";
@@ -209,7 +209,7 @@ export class AcpConnection {
             sessionState = await this.#context.request(acp.methods.agent.session.load, {
               sessionId,
               cwd: request.cwd,
-              mcpServers: request.mcpServers ?? [],
+              mcpServers: [],
             });
           } finally {
             this.#loadingSession = false;
@@ -221,7 +221,7 @@ export class AcpConnection {
         method = "session/new";
         const session = await this.#context.request(acp.methods.agent.session.new, {
           cwd: request.cwd,
-          mcpServers: request.mcpServers ?? [],
+          mcpServers: [],
         });
         sessionId = session.sessionId;
         this.#sessionId = sessionId;
