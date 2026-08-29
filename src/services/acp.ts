@@ -6,6 +6,7 @@ import type {
   AcpErrorDetails,
   ConnectRequest,
   ConnectionStatus,
+  GoalAction,
   PermissionFileChange,
   PermissionMode,
   PermissionRequest,
@@ -87,7 +88,7 @@ export interface AcpCallbacks {
 export interface AcpSessionInfo extends AcpModelState {
   harnessId: string;
   sessionId: string;
-  goalActions?: import("../types/index.ts").GoalAction[];
+  goalActions?: GoalAction[];
   goalControlMethod?: string;
 }
 
@@ -330,11 +331,7 @@ export class AcpConnection {
     return this.setConfigOption(configId, valueType === "string" ? String(value) : value);
   }
 
-  goal(
-    action: import("../types/index.ts").GoalAction,
-    objective?: string,
-    method = "_session/goal",
-  ) {
+  goal(action: GoalAction, objective: string | undefined, method: string) {
     return this.#requireContext().request(method, {
       sessionId: this.#requireSessionId(),
       action,

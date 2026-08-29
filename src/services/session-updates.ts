@@ -84,7 +84,6 @@ const goalSchema = z.object({
   tokensUsed: z.number().optional(),
   timeBudgetSeconds: z.number().nullable().optional(),
   timeUsedSeconds: z.number().optional(),
-  controlMethod: z.string(),
 });
 const metadataSchema = z.object({
   goal: z.union([goalSchema, z.null()]).optional(),

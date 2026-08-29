@@ -72,7 +72,6 @@ export interface GoalState {
   tokensUsed?: number;
   timeBudgetSeconds?: number | null;
   timeUsedSeconds?: number;
-  controlMethod: string;
 }
 
 export interface QuotaState {

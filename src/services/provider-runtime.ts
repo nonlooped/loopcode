@@ -7,6 +7,7 @@ import type {
   PermissionRequest,
   PromptPart,
   QuestionAnswer,
+  GoalAction,
   ProviderModelCatalog,
   ProviderSessionState,
   SessionSelectId,
@@ -793,13 +794,10 @@ export class ProviderRuntime {
     return this.connection(thread.id, thread.profileId)?.cancel();
   }
 
-  async controlGoal(
-    thread: ThreadState,
-    action: import("../types/index.ts").GoalAction,
-    objective?: string,
-  ) {
+  async controlGoal(thread: ThreadState, action: GoalAction, objective?: string) {
     const provider = thread.providers[thread.profileId];
-    if (!provider.goalActions?.includes(action)) return;
+    // goalActions and goalControlMethod are set together by the agent's goal capability.
+    if (!provider.goalActions?.includes(action) || !provider.goalControlMethod) return;
     const connection = this.connection(thread.id, thread.profileId);
     if (!connection) throw new Error("Connect the provider before changing its goal");
     await connection.goal(action, objective?.trim(), provider.goalControlMethod);
