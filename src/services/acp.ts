@@ -21,6 +21,8 @@ type RpcId = acp.JsonRpcId;
 
 type PermissionResponse = acp.RequestPermissionResponse;
 
+// ponytail: claiming JetBrains' undocumented AIR client unlocks failures, terminal output, and
+// subagent transcripts. If they disappear, check this first because unsupported claims fail silently.
 const clientCapabilities: acp.ClientCapabilities = {
   plan: {},
   session: { configOptions: { boolean: {} }, compaction: {} },
