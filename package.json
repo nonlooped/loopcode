@@ -48,7 +48,7 @@
     "bits-ui": "^2.19.0",
     "material-icon-theme": "^5.37.0",
     "shiki": "^4.4.3",
-    "svelte": "^5.56.10",
+    "svelte": "^5.57.0",
     "tailwindcss": "^4.3.3",
     "zod": "4.4.3"
   },
